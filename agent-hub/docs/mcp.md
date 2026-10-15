@@ -6,7 +6,7 @@ After the initial `cd`, run build and launch commands from `agent-hub/mcp/`.
 
 Backend-neutral MCP interface for discovering and messaging live agents.
 Discovery and messaging use `list_agents` and `send_message`. Pi spawning and task
-management use `spawn_agent`, `spawn_agent_task`, `list_agent_tasks` and `agent_task`
+management use `spawn_agent`, `list_agent_tasks` and `agent_task`
 through the separately started [spawner supervisor](../spawner/README.md).
 Uses the official stable v1 `@modelcontextprotocol/sdk`.
 
@@ -211,12 +211,12 @@ is implemented; other `agent_type` values return `UNSUPPORTED_HARNESS`.
 | Tool | Required | Optional |
 | --- | --- | --- |
 | `spawn_agent` | `agent_type: "pi"` | `prompt`, `cwd`, `model`, `name` |
-| `spawn_agent_task` | `agent_type: "pi"`, `prompt` | `cwd`, `model`, `name` |
 | `list_agent_tasks` | — | — |
 | `agent_task` | `action: "check" | "fetch_answer" | "cancel"`, `task_id` | — |
 
 Interactive children are real background tmux TUIs and stay open after their
-initial task settles. Headless children shut down after settlement. Spawning
+initial task settles. MCP spawning always uses this mode; headless spawning is not
+exposed. Launch mode and tmux metadata are omitted from MCP task results. Spawning
 returns after startup, not after the task finishes. A task record with a startup
 failure is returned with `status: "failed"`; inspect task status rather than
 assuming a successful tool invocation implies a running child.

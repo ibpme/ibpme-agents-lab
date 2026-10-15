@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createAgentsServer } from '../src/server.js';
@@ -14,22 +16,30 @@ import { startListener } from '@agent-hub/pi/listener';
 
 test('MCP spawns in the background, fetches results and automatically delivers without send_message', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'mcp-spawn-'));
+  const execute = promisify(execFile);
+  const tmuxSocket = join(directory, 'tmux.sock');
+  await execute('tmux', ['-S', tmuxSocket, '-f', '/dev/null', 'new-session', '-d', '-s', 'test']);
   const received: any[] = [];
   const listener = await startListener(message => received.push(message));
   const startedAt = (await listProcesses()).get(process.pid)!.startedAt;
   const id = `agt_${createHash('sha256').update(JSON.stringify(['pi', process.pid, startedAt])).digest('hex').slice(0, 16)}`;
   await writeFile(join(directory, 'registry-health.json'), JSON.stringify({ version: 1, state: 'running', updatedAt: Date.now(), lastSuccessfulProcessDiscoveryAt: Date.now() }));
   await writeFile(join(directory, 'agents.jsonl'), JSON.stringify({ schemaVersion: 1, harness: 'pi', observedAt: Date.now(), process: { pid: process.pid, startedAt }, session: { id: 'original', mode: 'interactive' }, activity: { state: 'idle' }, messaging: { transport: 'unix', protocol: 'pi-listener-v2', path: listener.path, reportedAt: Date.now() } }) + '\n');
-  const supervisor = await startSupervisor({ directory, registryDirectory: directory, pi: fileURLToPath(new URL('../../spawner/test/fake-pi.mjs', import.meta.url)), pollInterval: 20 });
+  const supervisor = await startSupervisor({ directory, registryDirectory: directory, pi: fileURLToPath(new URL('../../spawner/test/fake-pi.mjs', import.meta.url)), pollInterval: 20, tmuxSocket, tmuxSession: 'test' });
   const server = createAgentsServer({ registryDirectory: directory, spawnerDirectory: directory, callerAgentId: id });
   const client = new Client({ name: 'spawn-test', version: '1' });
   const [a,b] = InMemoryTransport.createLinkedPair();
   await server.connect(b); await client.connect(a);
-  t.after(async () => { await client.close(); await server.close(); await supervisor.close(); await listener.close(); await rm(directory, { recursive: true, force: true }); });
-  const spawned = await client.callTool({ name: 'spawn_agent_task', arguments: { agent_type: 'pi', cwd: directory, prompt: 'slow' } });
+  t.after(async () => { await client.close(); await server.close(); await supervisor.close(); await listener.close(); await execute('tmux', ['-S', tmuxSocket, 'kill-server']).catch(() => {}); await rm(directory, { recursive: true, force: true }); });
+  const spawned = await client.callTool({ name: 'spawn_agent', arguments: { agent_type: 'pi', cwd: directory, prompt: 'slow' } });
   assert.equal(spawned.isError, undefined);
   const task = spawned.structuredContent as any;
   assert.equal(task.status, 'running');
+  const persisted = JSON.parse(await readFile(join(directory, 'tasks', task.task_id, 'task.json'), 'utf8'));
+  assert.equal(persisted.input.mode, 'interactive');
+  assert.ok(persisted.pane);
+  assert.equal(task.mode, undefined);
+  assert.equal(task.tmux, undefined);
   assert.equal(received.length, 0);
   const deadline = Date.now() + 5000;
   while (!received.length && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
@@ -38,4 +48,13 @@ test('MCP spawns in the background, fetches results and automatically delivers w
   assert.match(received[0].content, /Final answer/);
   const fetched = await client.callTool({ name: 'agent_task', arguments: { task_id: task.task_id, action: 'fetch_answer' } });
   assert.equal((fetched.structuredContent as any).answer.text, 'Final answer');
+  const listed = await client.callTool({ name: 'list_agent_tasks', arguments: {} });
+  const checked = await client.callTool({ name: 'agent_task', arguments: { task_id: task.task_id, action: 'check' } });
+  const cancelled = await client.callTool({ name: 'agent_task', arguments: { task_id: task.task_id, action: 'cancel' } });
+  for (const response of [spawned, fetched, listed, checked, cancelled]) {
+    assert.doesNotMatch(JSON.stringify(response), /"mode"|"tmux"|interactive|headless/);
+  }
+  assert.equal((listed.structuredContent as any).tasks[0].task_id, task.task_id);
+  const { stdout } = await execute('tmux', ['-S', tmuxSocket, 'display-message', '-p', '-t', persisted.pane, '#{pane_dead}']);
+  assert.equal(stdout.trim(), '0');
 });
