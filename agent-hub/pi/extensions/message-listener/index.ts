@@ -29,6 +29,7 @@ export default function messageListener(pi: ExtensionAPI): void {
     try {
       listener = await startListener(message => {
         if (shutdown || !listener) throw new Error("Listener is stopping");
+        if (message.expectedSessionId !== undefined && message.expectedSessionId !== context?.sessionManager.getSessionId()) throw new Error("Recipient session changed");
         pi.sendUserMessage(message.content, { deliverAs: message.deliverAs, expandPromptTemplates: false });
       });
       if (shutdown) { await stop(); return; }

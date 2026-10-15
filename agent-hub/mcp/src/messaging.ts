@@ -19,7 +19,7 @@ const rowSchema = z.object({
   messaging: z.object({ transport: z.literal('unix'), protocol: z.literal('pi-listener-v2'), path: z.string().refine(p => isAbsolute(p) && !p.includes('\0') && Buffer.byteLength(p) <= 100), reportedAt: timestamp }).optional(),
 });
 type Agent = z.infer<typeof rowSchema>;
-export interface MessagingOptions { registryDirectory?: string; callerAgentId?: string; callerPid?: number | null }
+export interface MessagingOptions { registryDirectory?: string; callerAgentId?: string; callerPid?: number | null; spawnerDirectory?: string }
 export class MessagingError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
@@ -75,6 +75,12 @@ export function createMessaging(options: MessagingOptions = {}) {
     return undefined;
   }
   return {
+    async caller() {
+      const rows = await readAgents();
+      const self = await identifyCaller(rows) ?? fail('CALLER_UNAVAILABLE', 'Caller identity could not be determined.');
+      if (self.harness !== 'pi' || !self.session.id) fail('CALLER_UNAVAILABLE', 'Spawning currently requires a Pi parent with a published session ID.');
+      return { agentId: agentId(self), pid: self.process.pid, startedAt: self.process.startedAt, sessionId: self.session.id! };
+    },
     async listAgents() {
       const rows = await readAgents();
       const live = await Promise.all(rows.map(async a => { try { await verify(a); return a; } catch { return undefined; } }));

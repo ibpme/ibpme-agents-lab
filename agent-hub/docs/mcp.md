@@ -5,7 +5,9 @@
 After the initial `cd`, run build and launch commands from `agent-hub/mcp/`.
 
 Backend-neutral MCP interface for discovering and messaging live agents.
-Two tools are provided: `list_agents` and `send_message`.
+Discovery and messaging use `list_agents` and `send_message`. Pi spawning and task
+management use `spawn_agent`, `spawn_agent_task`, `list_agent_tasks` and `agent_task`
+through the separately started [spawner supervisor](../spawner/README.md).
 Uses the official stable v1 `@modelcontextprotocol/sdk`.
 
 ## Development and launch
@@ -14,6 +16,7 @@ Requires Node.js 22+ and npm on macOS or Linux.
 
 ```bash
 cd agent-hub/mcp
+npm --prefix ../spawner ci
 npm ci
 npm run build
 npm run typecheck
@@ -199,3 +202,31 @@ This is trusted, same-OS-user messaging, not an authenticated cross-user service
 Registry verification proves process liveness, not endpoint ownership or authority
 of the caller. An accepted message can trigger a model turn and tools with the
 receiver's permissions. Do not expose/proxy either transport to untrusted callers.
+
+## Background spawning and task tools
+
+The [spawner supervisor](../spawner/README.md) must be started separately. Only Pi
+is implemented; other `agent_type` values return `UNSUPPORTED_HARNESS`.
+
+| Tool | Required | Optional |
+| --- | --- | --- |
+| `spawn_agent` | `agent_type: "pi"` | `prompt`, `cwd`, `model`, `name` |
+| `spawn_agent_task` | `agent_type: "pi"`, `prompt` | `cwd`, `model`, `name` |
+| `list_agent_tasks` | — | — |
+| `agent_task` | `action: "check" | "fetch_answer" | "cancel"`, `task_id` | — |
+
+Interactive children are real background tmux TUIs and stay open after their
+initial task settles. Headless children shut down after settlement. Spawning
+returns after startup, not after the task finishes. A task record with a startup
+failure is returned with `status: "failed"`; inspect task status rather than
+assuming a successful tool invocation implies a running child.
+
+The supervisor captures the final answer from harness lifecycle events and sends
+a follow-up to the original parent Pi session without asking the child model to
+call `send_message`. Later manual prompts in an interactive child do not notify
+the parent. Results remain stored when notification cannot be delivered.
+
+Task tool access is scoped to the current MCP session; child execution and result
+storage are not. Spawning requires an identified Pi caller with a published
+session ID. Task handles from a disconnected MCP session are not transferred to
+new sessions. See the spawner guide for artifact access and recovery.

@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { createServer } from 'node:net';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import { notifyParent } from '../dist/delivery.js';
+import { atomic, processStart } from '../dist/io.js';
+import type { Task } from '../src/types.ts';
+
+test('notifies the verified parent with a stable ID and receiver-side session guard', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'spawn-delivery-'));
+  const messages: any[] = [];
+  const path = join(directory, 'listener.sock');
+  const server = createServer(socket => socket.once('data', data => {
+    const message = JSON.parse(data.toString()); messages.push(message);
+    socket.end(JSON.stringify({ version: 2, type: 'ack', id: message.id, ok: true, status: 'accepted' }) + '\n');
+  }));
+  await new Promise<void>(resolve => server.listen(path, resolve));
+  t.after(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); });
+  const startedAt = (await processStart(process.pid))!;
+  const id = `agt_${createHash('sha256').update(JSON.stringify(['pi', process.pid, startedAt])).digest('hex').slice(0, 16)}`;
+  const row = { harness: 'pi', process: { pid: process.pid, startedAt }, session: { id: 'original' }, messaging: { protocol: 'pi-listener-v2', path, reportedAt: Date.now() } };
+  await atomic(join(directory, 'registry-health.json'), { state: 'running', updatedAt: Date.now(), lastSuccessfulProcessDiscoveryAt: Date.now() });
+  const snapshot = () => writeFile(join(directory, 'agents.jsonl'), JSON.stringify(row) + '\n');
+  await snapshot();
+  const task = { id: 'task_example', input: { parent: { agentId: id, pid: process.pid, startedAt, sessionId: 'original' } }, notification: 'Stored completion content' } as Task;
+  await notifyParent(task, directory); await notifyParent(task, directory);
+  assert.equal(messages.length, 2);
+  assert.deepEqual(messages[0], messages[1]);
+  assert.equal(messages[0].expectedSessionId, 'original');
+  assert.equal(messages[0].deliverAs, 'followUp');
+  row.session.id = 'replacement'; await snapshot();
+  await assert.rejects(notifyParent(task, directory), /changed session/);
+  assert.equal(messages.length, 2);
+  row.session.id = 'original'; row.process.startedAt = 0; await snapshot();
+  await assert.rejects(notifyParent(task, directory), /exited/);
+  assert.equal(messages.length, 2);
+});

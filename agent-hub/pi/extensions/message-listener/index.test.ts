@@ -14,7 +14,7 @@ async function setup(t: test.TestContext, mode = "tui") {
   const messages: any[] = [];
   const statuses = new Map<string, string>();
   const notices: string[] = [];
-  const ctx = { mode, ui: { setStatus: (key: string, value: string) => statuses.set(key, value), notify: (value: string) => notices.push(value) } } as unknown as ExtensionContext;
+  const ctx = { mode, sessionManager: { getSessionId: () => "current-session" }, ui: { setStatus: (key: string, value: string) => statuses.set(key, value), notify: (value: string) => notices.push(value) } } as unknown as ExtensionContext;
   extension({
     on: (name: string, handler: Function) => handlers.set(name, handler),
     registerCommand: (name: string, command: any) => commands.set(name, command),
@@ -73,4 +73,19 @@ test("concurrent toggles and shutdown leave no advertised socket", async t => {
   const h = await setup(t);
   await Promise.all([h.command("off"), h.command("on"), h.fire("session_shutdown")]);
   assert.equal(h.endpoints.at(-1), null);
+});
+
+test("session-targeted delivery rejects another session before injection", async t => {
+  const h = await setup(t);
+  const endpoint = h.endpoints.at(-1);
+  const ack = await send(endpoint.path, { version: 2, type: "message", id: "guarded", content: "task finished", expectedSessionId: "other-session" });
+  assert.equal(ack.ok, false);
+  assert.equal(h.messages.length, 0);
+});
+
+test("session-targeted delivery accepts the current session", async t => {
+  const h = await setup(t);
+  const ack = await send(h.endpoints.at(-1).path, { version: 2, type: "message", id: "matching-session", content: "task finished", expectedSessionId: "current-session" });
+  assert.equal(ack.ok, true);
+  assert.equal(h.messages.length, 1);
 });

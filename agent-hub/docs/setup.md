@@ -11,6 +11,7 @@ Tooling for observing and messaging live coding agents on one machine.
 |---|---|
 | `registry/` | `agents-registry`: background daemon writing live agent snapshots (`agents.jsonl`) |
 | `mcp/` | `agents-mcp`: MCP server (stdio and Streamable HTTP) for listing and messaging agents |
+| `spawner/` | explicitly launched supervisor for background Pi TUIs and headless tasks |
 | `pi/` | pi package: `/agents` browser, `message-listener` and `registry-publisher` extensions |
 | `agents-browser/` | standalone TUI and tmux popup launcher |
 
@@ -40,6 +41,7 @@ Outside tmux, `/agents` keeps the native Pi overlay.
 
 ```bash
 cd registry && npm install && npm test
+cd spawner && npm install && npm test
 cd mcp && npm install && npm test
 cd pi && bun install && bun run check
 cd agents-browser && bun install && bun run check

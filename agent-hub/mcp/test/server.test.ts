@@ -51,8 +51,10 @@ for (const call of calls) {
     t.after(connection.close);
     const result = await connection.client.callTool(call);
     assert.equal(result.isError, true);
-    assert.deepEqual(result.structuredContent, { error: { code: 'NOT_IMPLEMENTED', tool: call.name } });
-    assert.match(JSON.stringify(result.content), /not implemented/i);
+    const error = (result.structuredContent as any).error;
+    assert.equal(error.code, call.name.startsWith('spawn_') ? 'UNSUPPORTED_HARNESS' : 'INTERNAL_ERROR');
+    assert.ok(error.message);
+    assert.doesNotMatch(JSON.stringify(result.content), /not implemented/i);
   });
 }
 

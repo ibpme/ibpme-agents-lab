@@ -157,3 +157,14 @@ The [`agents-mcp` server](mcp.md) routes `send_message` to this listener
 using the envelope and ACK protocol above. It formats sender identity and the message ID
 into the opaque `content` string; the listener never interprets it. See the MCP guide for
 the header format, addressing and error codes.
+
+## Session-targeted supervisor delivery
+
+The optional v2 envelope field `expectedSessionId` restricts delivery to that Pi
+session. The listener checks it immediately before calling the delivery API and
+rejects a mismatched session rather than injecting into another conversation.
+The spawner uses this for completion notifications. Existing ordinary messages
+omit it and retain their previous behavior. The field participates in the message
+fingerprint, so changing it under a remembered message ID is rejected.
+This guard does not make accepted queued messages durable across later crashes or
+session replacement.
