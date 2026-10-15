@@ -12,7 +12,7 @@ const temp = mkdtempSync(join(tmpdir(), "agents-lab-loading-"));
 try {
   const agentDir = join(temp, "agent");
   mkdirSync(join(agentDir, "extensions"), { recursive: true });
-  symlinkSync(root, join(agentDir, "extensions", "ibpme-agents-lab"), "dir");
+  symlinkSync(root, join(agentDir, "extensions", "ibpme-pi-extensions"), "dir");
   const loader = new DefaultResourceLoader({
     cwd: temp,
     agentDir,

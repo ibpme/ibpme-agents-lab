@@ -5,7 +5,7 @@ pi extensions, one directory each under `extensions/`, loaded as a single packag
 ## Install
 
 ```bash
-pi/install.sh            # link this package into ~/.pi/agent/extensions/ibpme-agents-lab
+pi/install.sh            # link this package into ~/.pi/agent/extensions/ibpme-pi-extensions
 pi/install.sh --remove   # remove the link
 ```
 
