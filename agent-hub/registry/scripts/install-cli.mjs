@@ -8,7 +8,7 @@ const defaultCli = resolve(dirname(fileURLToPath(import.meta.url)), '../dist/cli
 const help = `Usage: node scripts/install-cli.mjs <install|uninstall>
 
 Install a symlink at ~/.local/bin/agents-registry pointing to this checkout's
-built CLI. Run npm ci && npm run build first. No service is installed or started.
+built CLI. Run npm ci && npm run build from agent-hub/ first. No service is installed or started.
 Uninstall removes only this checkout's symlink, preserving state and logs.`;
 
 export function installCli(action, { home = homedir(), cli = defaultCli } = {}) {
@@ -26,7 +26,7 @@ export function installCli(action, { home = homedir(), cli = defaultCli } = {}) 
   }
   let mode;
   try { mode = statSync(target).mode; } catch (error) {
-    if (error.code === 'ENOENT') throw new Error('Built CLI not found. Run npm ci && npm run build first.');
+    if (error.code === 'ENOENT') throw new Error('Built CLI not found. Run npm ci && npm run build from agent-hub/ first.');
     throw error;
   }
   chmodSync(target, mode | 0o111);

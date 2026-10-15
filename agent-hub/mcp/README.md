@@ -1,13 +1,15 @@
 # agents MCP server
 
 Backend-neutral MCP tools for listing and messaging live agents:
-`list_agents` and `send_message`. Requires Node.js 22+ and npm.
+`list_agents` and `send_message`. Requires Node.js 22.18+ and npm.
 
-From this directory:
+From the repository root:
 
 ```bash
+cd agent-hub
 npm ci
 npm run build
+cd mcp
 node dist/cli.js                              # stdio
 # Or: node dist/cli.js --transport http --port 3000
 ```

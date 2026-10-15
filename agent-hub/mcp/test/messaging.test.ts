@@ -11,8 +11,8 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createAgentsServer } from '../src/server.js';
-import { startListener } from '../../pi/extensions/message-listener/listener.ts';
-import type { IncomingMessage } from '../../pi/extensions/message-listener/protocol.ts';
+import { startListener } from '@agent-hub/pi/listener';
+import type { IncomingMessage } from '@agent-hub/pi/listener/protocol';
 
 async function setup(t: import('node:test').TestContext, callerAgentId?: string, callerPid: number | null = process.pid) {
   const directory = await mkdtemp(join(tmpdir(), 'agents-mcp-'));

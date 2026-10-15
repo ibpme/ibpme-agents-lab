@@ -1,11 +1,11 @@
 {
-  "name": "agent-hub-pi",
+  "name": "@agent-hub/pi",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test extensions/*/*.test.ts",
-    "check": "bun run typecheck && bun run test"
+    "check": "npm run typecheck && npm test"
   },
   "pi": {
     "extensions": [
@@ -19,9 +19,7 @@
     "@earendil-works/pi-ai": "1.1.0",
     "@earendil-works/pi-coding-agent": "1.1.0",
     "@earendil-works/pi-tui": "1.1.0",
-    "@types/node": "24.12.4",
-    "typebox": "1.3.17",
-    "typescript": "5.9.3"
+    "typebox": "1.3.17"
   },
   "peerDependencies": {
     "@earendil-works/pi-agent-core": "*",
@@ -29,5 +27,18 @@
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*",
     "typebox": "*"
+  },
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "@agent-hub/registry": "0.1.0",
+    "@agent-hub/browser": "0.1.0"
+  },
+  "exports": {
+    "./spawn-lifecycle": "./extensions/spawn-lifecycle/index.ts",
+    "./listener": "./extensions/message-listener/listener.ts",
+    "./listener/protocol": "./extensions/message-listener/protocol.ts"
   }
 }

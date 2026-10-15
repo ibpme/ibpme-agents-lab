@@ -1,0 +1,31 @@
+{
+  "name": "@agent-hub/workspace",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0",
+    "npm": ">=10"
+  },
+  "packageManager": "npm@11.19.0",
+  "workspaces": [
+    "registry",
+    "agents-browser",
+    "pi",
+    "spawner",
+    "mcp"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "pretypecheck": "npm run build",
+    "typecheck": "npm run typecheck --workspaces",
+    "pretest": "npm run build",
+    "test": "npm run test:packages && npm run test --workspaces",
+    "check": "npm run typecheck && npm test",
+    "test:packages": "node --test scripts/packages.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "5.9.3"
+  }
+}

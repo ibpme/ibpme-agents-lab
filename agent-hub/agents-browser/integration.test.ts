@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { performPaneAction } from "./tmux-actions.ts";
-import { run, listProcesses, ancestryDistance } from "../registry/src/discovery/processes.ts";
-import type { Runner } from "../registry/src/types.ts";
+import { run, listProcesses, ancestryDistance } from "@agent-hub/registry/processes";
+import type { Runner } from "@agent-hub/registry/types";
 import type { AgentSnapshot } from "./reader.ts";
 async function discover(socket: string, runner: Runner, claudePid?: number): Promise<AgentSnapshot[]> {
   const processes = await listProcesses(runner);

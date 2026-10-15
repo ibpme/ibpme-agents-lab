@@ -7,13 +7,15 @@ are shared with the native browser.
 
 ## Setup
 
-Requires Bun, tmux 3.2+ for popups, and the adjacent `registry/` source and schemas.
-Pi and its dependencies are not required for standalone use. From the repository root:
+Requires Node.js 22.18+, npm 10+, Bun 1.3+, and tmux 3.2+ for popups.
+The browser consumes the registry package APIs and schemas; a running Pi process
+is not required for standalone use. From the repository root:
 
 ```bash
-cd agent-hub/agents-browser
-bun install
-bun run cli:install
+cd agent-hub
+npm ci
+npm run build
+npm run cli:install --workspace @agent-hub/browser
 ```
 
 The installer creates `~/.local/bin/agents-browser` as an absolute symlink to this
@@ -29,7 +31,7 @@ agents-browser --directory /path/to/registry
 agents-browser --help
 ```
 
-To uninstall, run `bun run cli:uninstall` from `agent-hub/agents-browser/`.
+To uninstall, run `npm run cli:uninstall` from `agent-hub/agents-browser/`.
 It removes only this checkout's link, preserving the source and registry state.
 Neither install nor uninstall starts the browser or daemon.
 
@@ -71,8 +73,9 @@ browser is read-only for pane actions.
 ## Checks
 
 ```bash
-cd agent-hub/agents-browser
-bun run check
+cd agent-hub
+npm run build
+npm run check --workspace @agent-hub/browser
 ```
 
 ## Code organization

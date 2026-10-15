@@ -15,9 +15,10 @@ Install the package with `pi install <path-to>/agent-hub/pi`, then `/reload` exi
 sessions. Start the registry explicitly from the repository root:
 
 ```bash
-cd agent-hub/registry
-npm install
+cd agent-hub
+npm ci
 npm run build
+cd registry
 node dist/cli.js start --background
 ```
 
@@ -46,7 +47,7 @@ pi -e ./agent-hub/pi/extensions/agents/index.ts
 
 Inside tmux, `/agents` launches the standalone browser in a 90% tmux popup instead
 of Pi's overlay. Install its dependencies with
-`cd agent-hub/agents-browser && bun install` and ensure Bun is on Pi/tmux's PATH.
+`cd agent-hub && npm ci && npm run build` and ensure Bun is on Pi/tmux's PATH.
 Outside tmux, `/agents` retains its native overlay.
 
 The browser can also launch independently from any shell or a tmux keybinding;
@@ -217,8 +218,7 @@ Snapshot types and schema come from `agent-hub/registry`; the reader has no depe
 on its build output or daemon installation. Ajv is installed with the shared agents-browser package.
 
 ```bash
-(cd agent-hub/agents-browser && bun run check)
-(cd agent-hub/pi && bun run check)
+(cd agent-hub && npm run check)
 ```
 
 Tests cover file-backed reader states, invalid data, selection, responsive rendering,

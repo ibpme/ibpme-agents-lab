@@ -132,7 +132,7 @@ export async function startSupervisor(options: SupervisorOptions) {
     }
   }
   async function launch(task: Task): Promise<void> {
-    const extension = options.extension ?? fileURLToPath(new URL('../../pi/extensions/spawn-lifecycle/index.ts', import.meta.url));
+    const extension = options.extension ?? fileURLToPath(new URL(import.meta.resolve('@agent-hub/pi/spawn-lifecycle')));
     await stat(extension);
     const args = ['--extension', extension, '--session-dir', join(task.directory, 'sessions'), '--session-id', task.id];
     if (task.input.model) args.push('--model', task.input.model);

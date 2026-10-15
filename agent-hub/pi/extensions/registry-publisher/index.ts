@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { MessagingEndpoint, ProcessIdentity, PublishMessage } from "../../../registry/src/types.ts";
+import type { MessagingEndpoint, ProcessIdentity, PublishMessage } from "@agent-hub/registry/types";
 import { LISTENER_CHANGED_EVENT, LISTENER_QUERY_EVENT, isListenerEndpoint } from "../contracts/listener.ts";
 
 const execute = promisify(execFile);

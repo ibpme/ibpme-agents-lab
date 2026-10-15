@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { performPaneAction } from "./tmux-actions.ts";
 import type { AgentSnapshot } from "./reader.ts";
-import type { Runner } from "../registry/src/types.ts";
+import type { Runner } from "@agent-hub/registry/types";
 
 const agent: AgentSnapshot = { schemaVersion: 1, harness: "pi", observedAt: 1800000000000, process: { pid: 301, startedAt: Date.parse("2026-10-09T09:39:50Z") }, session: { mode: "interactive" }, activity: { state: "idle", source: "process-only" }, pane: { server: "/tmp/socket", sessionId: "$2", sessionName: "agent", windowIndex: "2", paneIndex: "0", id: "%2", cwd: "/work" } };
 const origin = { server: "/tmp/socket", paneId: "%0" };

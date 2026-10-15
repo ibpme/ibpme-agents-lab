@@ -2,8 +2,8 @@
 
 [Documentation index](README.md) · [Agent hub](../README.md)
 
-Setup examples start at the repository root. Run the development commands
-independently from `agent-hub/`.
+Setup examples start at the repository root. Run workspace development commands
+from `agent-hub/`.
 
 Tooling for observing and messaging live coding agents on one machine.
 
@@ -21,28 +21,31 @@ Nothing here starts or installs itself. See the [registry](registry.md) and
 ## Install the pi extensions
 
 ```bash
-(cd agent-hub/agents-browser && bun install) # shared browser dependencies
-(cd agent-hub/pi && bun install)             # Pi dependencies and types
+(cd agent-hub && npm ci && npm run build)
 pi install /absolute/path/to/ibpme-agents-lab/agent-hub/pi
 ```
 
 `pi.extensions` in `pi/package.json` lists `agents`, `message-listener` and `registry-publisher`. The extensions
-import shared code from `../registry` and `../agents-browser`, so install from a
+import declared `@agent-hub/registry` and `@agent-hub/browser` APIs, so install from a
 checkout of this repository, not a copy of `pi/` alone. Use `pi remove` to uninstall.
 
 Inside tmux, `/agents` opens a standalone popup. Ensure Bun is on the PATH
 inherited by Pi/tmux. See the
 [standalone browser guide](../agents-browser/README.md) for shell usage and a tmux
-keybinding. Run `bun run cli:install` from `agent-hub/agents-browser/` to install
-`~/.local/bin/agents-browser`; `bun run cli:uninstall` removes this checkout's link.
+keybinding. Run `npm run cli:install` from `agent-hub/agents-browser/` to install
+`~/.local/bin/agents-browser`; `npm run cli:uninstall` removes this checkout's link.
 Outside tmux, `/agents` keeps the native Pi overlay.
 
 ## Develop
 
 ```bash
-cd registry && npm install && npm test
-cd spawner && npm install && npm test
-cd mcp && npm install && npm test
-cd pi && bun install && bun run check
-cd agents-browser && bun install && bun run check
+cd agent-hub
+npm ci
+npm run check
+
+# After building prerequisites, target one component:
+npm test --workspace @agent-hub/mcp
+npm run typecheck --workspace @agent-hub/pi
 ```
+
+See [workspace conventions](workspace.md) for package APIs and build ordering.

@@ -7,7 +7,7 @@ const defaultCli = fileURLToPath(new URL("./agents-browser", import.meta.url));
 const help = `Usage: bun run install.ts <install|uninstall>
 
 Install a symlink at ~/.local/bin/agents-browser pointing to this checkout's
-launcher. Run bun install first. Keep the checkout available after installation.
+launcher. Run npm ci && npm run build from agent-hub/ first. Keep the checkout available after installation.
 Uninstall removes only this checkout's symlink. No browser or daemon is started.`;
 
 export function installCli(action: string, { home = homedir(), cli = defaultCli }: { home?: string; cli?: string } = {}): string {

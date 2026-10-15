@@ -19,15 +19,15 @@ neither is enabled automatically.
 
 ## Install and build
 
-Requires Node.js 22+ and npm on macOS or Linux. Discovery uses `ps`; Claude
+Requires Node.js 22.18+ and npm on macOS or Linux. Discovery uses `ps`; Claude
 and tmux discovery additionally require their respective executables on `PATH`.
 
 ```bash
-cd agent-hub/registry
-npm install
+cd agent-hub
+npm ci
 npm run build
-npm test
-npm run typecheck
+npm test --workspace @agent-hub/registry
+npm run typecheck --workspace @agent-hub/registry
 ```
 
 ## Install the CLI on Linux or macOS
@@ -35,10 +35,10 @@ npm run typecheck
 Install from a permanent checkout, as your regular user (no sudo):
 
 ```bash
-cd /absolute/path/to/ibpme-agents-lab/agent-hub/registry
+cd /absolute/path/to/ibpme-agents-lab/agent-hub
 npm ci
 npm run build
-npm run cli:install
+npm run cli:install --workspace @agent-hub/registry
 ```
 
 This creates **`~/.local/bin/agents-registry`** as a symlink to this checkout's
@@ -73,8 +73,8 @@ requires explicit socket configuration. Start the registry from the appropriate
 shell environment and supply the socket paths at launch. The existing explicit
 foreground and detached-background modes remain supported.
 
-To update, stop the registry, update the checkout, run `npm ci && npm run build`,
-and run `npm run cli:install` again before restarting with your socket options.
+To update, stop the registry, update the checkout, run `npm ci && npm run build` from `agent-hub/`,
+and run `npm run cli:install --workspace @agent-hub/registry` again before restarting with your socket options.
 If moving the checkout, uninstall its old symlink before moving it.
 
 To remove only this checkout's CLI symlink:

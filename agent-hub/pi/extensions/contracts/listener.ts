@@ -1,4 +1,4 @@
-import type { MessagingEndpoint } from "../../../registry/src/types.ts";
+import type { MessagingEndpoint } from "@agent-hub/registry/types";
 
 export const LISTENER_CHANGED_EVENT = "message-listener:changed";
 export const LISTENER_QUERY_EVENT = "message-listener:query";

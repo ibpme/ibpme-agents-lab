@@ -1,23 +1,32 @@
 {
-  "name": "agents-browser",
+  "name": "@agent-hub/browser",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --experimental-strip-types --test *.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check": "bun run typecheck && bun run test",
+    "check": "npm run typecheck && npm test",
     "cli:install": "bun run install.ts install",
     "cli:uninstall": "bun run install.ts uninstall"
   },
   "dependencies": {
     "@earendil-works/pi-tui": "1.1.0",
-    "ajv": "8.20.0"
-  },
-  "devDependencies": {
-    "@types/node": "24.12.4",
-    "typescript": "5.9.3"
+    "ajv": "8.20.0",
+    "@agent-hub/registry": "0.1.0"
   },
   "bin": {
     "agents-browser": "./agents-browser"
+  },
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=22.18.0",
+    "bun": ">=1.3.0"
+  },
+  "exports": {
+    "./browser": "./browser.ts",
+    "./reader": "./reader.ts",
+    "./tmux-actions": "./tmux-actions.ts",
+    "./view": "./view.ts",
+    "./popup": "./popup.ts"
   }
 }

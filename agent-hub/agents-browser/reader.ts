@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import type { AgentSnapshot, Health } from "../registry/src/types.ts";
+import type { AgentSnapshot, Health } from "@agent-hub/registry/types";
 export type { AgentSnapshot };
 
 export interface RegistryView {
@@ -14,7 +14,7 @@ export interface RegistryView {
 }
 
 const validateAgent = new Ajv2020().compile<AgentSnapshot>(JSON.parse(readFileSync(
-  new URL("../registry/schemas/agent-snapshot.schema.json", import.meta.url), "utf8",
+  new URL(import.meta.resolve("@agent-hub/registry/schemas/agent-snapshot.schema.json")), "utf8",
 )));
 const timestamp = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 const validHealth = (value: unknown): value is Health => {

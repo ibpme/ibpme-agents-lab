@@ -8,15 +8,14 @@ report completion.
 
 ## Build and start
 
-Requires Node.js 22+, Pi 1.1+ (`agent_settled` support), and tmux for interactive
+Requires Node.js 22.18+, Pi 1.1+ (`agent_settled` support), and tmux for interactive
 children. Install from this repository checkout; the supervisor explicitly loads
-`../pi/extensions/spawn-lifecycle/index.ts`. It is not a globally installed extension.
+the `@agent-hub/pi/spawn-lifecycle` package export. It is not a globally installed extension.
 
 From the repository root:
 
 ```sh
-(cd agent-hub/spawner && npm ci && npm run build)
-(cd agent-hub/mcp && npm ci && npm run build)
+(cd agent-hub && npm ci && npm run build)
 
 # Use a tmux server and session you explicitly choose.
 SOCKET=/absolute/path/to/tmux.sock

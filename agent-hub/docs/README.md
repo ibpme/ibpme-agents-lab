@@ -5,6 +5,7 @@
 | Guide | Contents |
 |---|---|
 | [Setup and development](setup.md) | Component overview, Pi package installation, development commands |
+| [Workspace conventions](workspace.md) | Package APIs, dependency boundaries, runtime profiles, and root checks |
 | [Registry](registry.md) | CLI installation, explicit launch, tmux discovery, state, architecture, publishers, schemas, reader interface |
 | [Agent spawner](spawner.md) | Background Pi TUIs, completion capture and automatic parent delivery |
 | [MCP server](mcp.md) | Launch, agent identity, sender identification, tools, message envelope, errors, security |

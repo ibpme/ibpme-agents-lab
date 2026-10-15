@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import type { Origin } from "./tmux-actions.ts";
-import type { Runner } from "../registry/src/types.ts";
+import type { Runner } from "@agent-hub/registry/types";
 
 const execute = promisify(execFile);
 export const launcher = fileURLToPath(new URL("./agents-browser", import.meta.url));

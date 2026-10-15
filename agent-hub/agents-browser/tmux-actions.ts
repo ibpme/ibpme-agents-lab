@@ -1,5 +1,5 @@
-import { ancestryDistance, listProcesses, run } from "../registry/src/discovery/processes.ts";
-import type { Runner } from "../registry/src/types.ts";
+import { ancestryDistance, listProcesses, run } from "@agent-hub/registry/processes";
+import type { Runner } from "@agent-hub/registry/types";
 import type { AgentSnapshot } from "./reader.ts";
 
 export interface Origin { server: string; paneId: string; client?: string }

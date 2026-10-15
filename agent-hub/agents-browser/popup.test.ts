@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { launcher, openPopup, shellQuote } from "./popup.ts";
-import type { Runner } from "../registry/src/types.ts";
+import type { Runner } from "@agent-hub/registry/types";
 
 const origin = { server: "/tmp/socket with spaces", paneId: "%7" };
 

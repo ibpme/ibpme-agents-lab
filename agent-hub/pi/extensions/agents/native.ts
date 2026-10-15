@@ -1,6 +1,6 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { OverlayOptions } from "@earendil-works/pi-tui";
-import { createBrowser, type BrowserDependencies } from "../../../agents-browser/browser.ts";
+import { createBrowser, type BrowserDependencies } from "@agent-hub/browser/browser";
 
 export function overlayOptions(terminal: { columns: number; rows: number }): OverlayOptions {
   return {

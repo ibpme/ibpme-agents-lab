@@ -1,14 +1,15 @@
 # agents-registry
 
 Machine-local discovery and live snapshots for Pi and Claude agents.
-Requires Node.js 22+ and npm on Linux or macOS.
+Requires Node.js 22.18+ and npm on Linux or macOS.
 
-From this directory:
+From the repository root:
 
 ```bash
+cd agent-hub
 npm ci
 npm run build
-npm run cli:install
+npm run cli:install --workspace @agent-hub/registry
 ```
 
 With `~/.local/bin` on `PATH`:

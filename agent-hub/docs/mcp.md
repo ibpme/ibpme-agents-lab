@@ -12,13 +12,13 @@ Uses the official stable v1 `@modelcontextprotocol/sdk`.
 
 ## Development and launch
 
-Requires Node.js 22+ and npm on macOS or Linux.
+Requires Node.js 22.18+ and npm on macOS or Linux.
 
 ```bash
-cd agent-hub/mcp
-npm --prefix ../spawner ci
+cd agent-hub
 npm ci
 npm run build
+cd mcp
 npm run typecheck
 npm test
 

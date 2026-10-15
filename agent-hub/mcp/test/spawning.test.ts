@@ -8,15 +8,15 @@ import test from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createAgentsServer } from '../src/server.js';
-import { startSupervisor } from '../../spawner/dist/supervisor.js';
-import { processStart } from '../../spawner/dist/io.js';
-import { startListener } from '../../pi/extensions/message-listener/listener.ts';
+import { startSupervisor } from '@agent-hub/spawner/supervisor';
+import { listProcesses } from '@agent-hub/registry/processes';
+import { startListener } from '@agent-hub/pi/listener';
 
 test('MCP spawns in the background, fetches results and automatically delivers without send_message', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'mcp-spawn-'));
   const received: any[] = [];
   const listener = await startListener(message => received.push(message));
-  const startedAt = (await processStart(process.pid))!;
+  const startedAt = (await listProcesses()).get(process.pid)!.startedAt;
   const id = `agt_${createHash('sha256').update(JSON.stringify(['pi', process.pid, startedAt])).digest('hex').slice(0, 16)}`;
   await writeFile(join(directory, 'registry-health.json'), JSON.stringify({ version: 1, state: 'running', updatedAt: Date.now(), lastSuccessfulProcessDiscoveryAt: Date.now() }));
   await writeFile(join(directory, 'agents.jsonl'), JSON.stringify({ schemaVersion: 1, harness: 'pi', observedAt: Date.now(), process: { pid: process.pid, startedAt }, session: { id: 'original', mode: 'interactive' }, activity: { state: 'idle' }, messaging: { transport: 'unix', protocol: 'pi-listener-v2', path: listener.path, reportedAt: Date.now() } }) + '\n');

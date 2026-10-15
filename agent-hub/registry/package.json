@@ -1,11 +1,15 @@
 {
-  "name": "agents-registry",
+  "name": "@agent-hub/registry",
   "version": "0.1.0",
   "private": true,
   "description": "Machine-local Pi and Claude agent registry daemon",
   "type": "module",
-  "engines": { "node": ">=22" },
-  "bin": { "agents-registry": "dist/cli.js" },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "bin": {
+    "agents-registry": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
@@ -15,6 +19,26 @@
     "cli:install": "node scripts/install-cli.mjs install",
     "cli:uninstall": "node scripts/install-cli.mjs uninstall"
   },
-  "dependencies": { "ajv": "^8.17.1", "proper-lockfile": "^4.1.2" },
-  "devDependencies": { "@types/node": "^22.0.0", "@types/proper-lockfile": "^4.1.4", "tsx": "^4.20.0", "typescript": "^5.9.0" }
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "proper-lockfile": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/proper-lockfile": "^4.1.4"
+  },
+  "exports": {
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
+    "./processes": {
+      "types": "./dist/discovery/processes.d.ts",
+      "import": "./dist/discovery/processes.js"
+    },
+    "./schemas/*": "./schemas/*"
+  }
 }

@@ -1,9 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { openBrowser } from "./native.ts";
-import { readRegistry, registryDirectory } from "../../../agents-browser/reader.ts";
-import { performPaneAction } from "../../../agents-browser/tmux-actions.ts";
-import { clean } from "../../../agents-browser/view.ts";
-import { openPopup } from "../../../agents-browser/popup.ts";
+import { readRegistry, registryDirectory } from "@agent-hub/browser/reader";
+import { performPaneAction } from "@agent-hub/browser/tmux-actions";
+import { clean } from "@agent-hub/browser/view";
+import { openPopup } from "@agent-hub/browser/popup";
 
 export default function agentsExtension(pi: ExtensionAPI): void {
   pi.registerCommand("agents", {

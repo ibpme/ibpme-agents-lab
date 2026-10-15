@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { PublishMessage } from "../../../registry/src/types.ts";
+import type { PublishMessage } from "@agent-hub/registry/types";
 import extension from "./index.ts";
 
 async function setup(t: test.TestContext) {

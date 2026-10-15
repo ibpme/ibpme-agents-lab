@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { createBrowser } from "../../../agents-browser/browser.ts";
-import type { RegistryView } from "../../../agents-browser/reader.ts";
+import { createBrowser } from "@agent-hub/browser/browser";
+import type { RegistryView } from "@agent-hub/browser/reader";
 import { openBrowser } from "./native.ts";
 
 const theme = { fg: (_tone: string, text: string) => text, bold: (text: string) => text };
