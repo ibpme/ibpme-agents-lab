@@ -1,0 +1,36 @@
+{
+  "name": "agent-hub-pi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test extensions/*/*.test.ts",
+    "check": "bun run typecheck && bun run test"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/agents/index.ts",
+      "./extensions/message-listener/index.ts",
+      "./extensions/registry-publisher/index.ts"
+    ]
+  },
+  "dependencies": {
+    "ajv": "8.20.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-agent-core": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0",
+    "@types/node": "24.12.4",
+    "typebox": "1.3.17",
+    "typescript": "5.9.3"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  }
+}
