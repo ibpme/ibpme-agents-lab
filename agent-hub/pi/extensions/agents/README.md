@@ -173,25 +173,10 @@ killed; attaching to it is a verified no-op.
 
 The browser has no job-store dependency, job history/results, job ownership,
 job/process deduplication, cancel/acknowledge/background controls, or spawning.
-Managed children appear like any other registry agent.
 
-The old `/diagnostics:claude-endpoints` command and endpoint reader/prober have
-been removed. Only canonical registry listener advertisements are consumed; legacy
-endpoint records are not read, and no messaging socket paths are displayed or dialed.
-
-The existing opt-in Claude status-line capture scripts under `scripts/` are
-retained unchanged for compatibility with installed wrappers. They write legacy
-model/endpoint records, **not** registry publications. The new browser does not
-consume them. To publish Claude models to the registry, use its separate
-[opt-in status-line publisher](../../../registry/README.md#optional-claude-status-line-model-publisher).
-To restore the original legacy status line:
-
-```bash
-node agent-hub/pi/extensions/agents/scripts/install-claude-statusline.mjs --uninstall
-```
-
-Use the original `--settings` argument if installed at a custom location. Existing
-legacy records are not automatically deleted.
+Claude model names reach the registry through its separate
+[opt-in status-line publisher](../../../registry/README.md#optional-claude-status-line-model-publisher);
+this extension only reads registry snapshots.
 
 ## Implementation and checks
 
