@@ -31,7 +31,7 @@ test('MCP spawns in the background, fetches results and automatically delivers w
   const [a,b] = InMemoryTransport.createLinkedPair();
   await server.connect(b); await client.connect(a);
   t.after(async () => { await client.close(); await server.close(); await supervisor.close(); await listener.close(); await execute('tmux', ['-S', tmuxSocket, 'kill-server']).catch(() => {}); await rm(directory, { recursive: true, force: true }); });
-  const spawned = await client.callTool({ name: 'spawn_agent', arguments: { agent_type: 'pi', cwd: directory, prompt: 'slow' } });
+  const spawned = await client.callTool({ name: 'spawn_agent', arguments: { harness: 'pi', cwd: directory, prompt: 'slow' } });
   assert.equal(spawned.isError, undefined);
   const task = spawned.structuredContent as any;
   assert.equal(task.status, 'running');

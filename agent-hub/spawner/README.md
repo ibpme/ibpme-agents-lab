@@ -80,13 +80,13 @@ when their child is no longer in use.
 The existing tools now use this supervisor:
 
 ```json
-{"name":"spawn_agent","arguments":{"agent_type":"pi","cwd":"/repo","prompt":"Review the current changes","name":"Reviewer"}}
+{"name":"spawn_agent","arguments":{"harness":"pi","cwd":"/repo","prompt":"Review the current changes","name":"Reviewer"}}
 ```
 
 `spawn_agent` creates a background TUI. `prompt` is optional: without it the TUI is
 idle and manual work never produces an initial-task completion notification.
 `spawn_agent_task` requires a prompt and creates a headless child instead.
-Both accept optional `model` and `name`; only `agent_type: "pi"` is implemented.
+Both accept optional `model` and `name`; only `harness: "pi"` is implemented.
 The working directory defaults to the MCP server's working directory.
 
 A successful startup returns, for example:

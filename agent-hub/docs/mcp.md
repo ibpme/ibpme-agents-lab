@@ -206,11 +206,11 @@ receiver's permissions. Do not expose/proxy either transport to untrusted caller
 ## Background spawning and task tools
 
 The [spawner supervisor](../spawner/README.md) must be started separately. Only Pi
-is implemented; other `agent_type` values return `UNSUPPORTED_HARNESS`.
+is implemented; other `harness` values return `UNSUPPORTED_HARNESS`.
 
 | Tool | Required | Optional |
 | --- | --- | --- |
-| `spawn_agent` | `agent_type: "pi"` | `prompt`, `cwd`, `model`, `name` |
+| `spawn_agent` | `harness: "pi"` | `prompt`, `cwd`, `model`, `name` |
 | `list_agent_tasks` | — | — |
 | `agent_task` | `action: "check" | "fetch_answer" | "cancel"`, `task_id` | — |
 

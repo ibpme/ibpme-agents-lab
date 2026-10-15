@@ -9,7 +9,7 @@ import type { MessagingOptions } from './messaging.js';
 
 const nonBlank = z.string().min(1).regex(/\S/, 'Must contain a non-whitespace character');
 const spawnFields = {
-  agent_type: nonBlank.describe('Backend-neutral agent type or provider identifier.'),
+  harness: nonBlank.describe('Agent harness, currently pi.'),
   cwd: nonBlank.optional().describe('Working directory; defaults to the MCP server working directory.'),
   model: nonBlank.max(256).optional().describe('Optional Pi model selector.'),
   name: nonBlank.max(256).optional().describe('Optional agent name.'),
@@ -49,7 +49,7 @@ export function registerAgentTools(server: McpServer, options: MessagingOptions 
   const spawner = createSpawnerClient(options.spawnerDirectory);
   const owner = randomUUID();
   async function spawn(input: SpawnAgentInput) {
-    if (input.agent_type !== 'pi') throw new MessagingError('UNSUPPORTED_HARNESS', 'Only agent_type pi is implemented.');
+    if (input.harness !== 'pi') throw new MessagingError('UNSUPPORTED_HARNESS', 'Only harness pi is implemented.');
     const parent = await messaging.caller();
     return spawner.request({ action: 'spawn', owner, input: {
       harness: 'pi', mode: 'interactive', cwd: resolve(input.cwd ?? process.cwd()), parent,

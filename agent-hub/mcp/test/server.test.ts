@@ -5,7 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createAgentsServer } from '../src/server.js';
 
 const calls = [
-  { name: 'spawn_agent', arguments: { agent_type: 'any-backend', prompt: 'Start here' } },
+  { name: 'spawn_agent', arguments: { harness: 'any-backend', prompt: 'Start here' } },
   { name: 'list_agent_tasks', arguments: {} },
   ...['check', 'fetch_answer', 'cancel'].map(action => ({
     name: 'agent_task', arguments: { action, task_id: 'task-1' },
@@ -32,7 +32,7 @@ test('discovery exposes the agents interface and session-scoped job descriptions
     'agent_task', 'list_agent_tasks', 'list_agents', 'send_message', 'spawn_agent',
   ]);
   assert.doesNotMatch(JSON.stringify({ instructions: connection.client.getInstructions(), tools }), /interactive|headless|tmux|spawn_agent_task/i);
-  const removed = await connection.client.callTool({ name: 'spawn_agent_task', arguments: { agent_type: 'pi', prompt: 'Review' } });
+  const removed = await connection.client.callTool({ name: 'spawn_agent_task', arguments: { harness: 'pi', prompt: 'Review' } });
   assert.equal(removed.isError, true);
   for (const tool of tools) {
     assert.equal(tool.inputSchema.type, 'object');
@@ -42,6 +42,9 @@ test('discovery exposes the agents interface and session-scoped job descriptions
       assert.match(tool.description!, /session/i);
     }
   }
+  const spawnSchema = tools.find(tool => tool.name === 'spawn_agent')!.inputSchema;
+  assert.deepEqual(spawnSchema.required, ['harness']);
+  assert.equal(spawnSchema.properties?.agent_type, undefined);
   assert.deepEqual(tools.find(tool => tool.name === 'agent_task')?.inputSchema.required, ['action', 'task_id']);
   assert.equal(tools.find(tool => tool.name === 'list_agent_tasks')?.annotations?.readOnlyHint, true);
   assert.equal(tools.find(tool => tool.name === 'agent_task')?.annotations?.readOnlyHint, false);
@@ -63,8 +66,9 @@ for (const call of calls) {
 for (const call of [
   { name: 'send_message', arguments: { agent_id: '', message: 'hello' } },
   { name: 'send_message', arguments: { agent_id: 'agent' } },
-  { name: 'spawn_agent', arguments: { agent_type: 'pi', prompt: '   ' } },
-  { name: 'spawn_agent', arguments: { agent_type: 'pi', cwd: '' } },
+  { name: 'spawn_agent', arguments: { harness: 'pi', prompt: '   ' } },
+  { name: 'spawn_agent', arguments: { harness: 'pi', cwd: '' } },
+  { name: 'spawn_agent', arguments: { agent_type: 'pi' } },
   { name: 'list_agent_tasks', arguments: { session_id: 'other-session' } },
   { name: 'agent_task', arguments: { action: 'list', task_id: 'task-1' } },
   { name: 'agent_task', arguments: { action: 'cancel' } },
