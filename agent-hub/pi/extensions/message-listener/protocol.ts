@@ -27,7 +27,7 @@ function text(value: unknown, max = 256): value is string {
 export function parseMessage(value: unknown): IncomingMessage {
   const m = object(value, ["version", "type", "id", "content", "deliverAs", "expectedSessionId"]);
   if (m.version !== 2 || m.type !== "message" || !text(m.id) || !text(m.content, MAX_MESSAGE_BYTES)) throw new Error("Invalid version, type, id or content");
-  const deliverAs = m.deliverAs === undefined ? "followUp" : m.deliverAs;
+  const deliverAs = m.deliverAs === undefined ? "steer" : m.deliverAs;
   if (deliverAs !== "steer" && deliverAs !== "followUp") throw new Error("Invalid deliverAs");
   if (m.expectedSessionId !== undefined && !text(m.expectedSessionId)) throw new Error("Invalid expectedSessionId");
   return { version: 2, type: "message", id: m.id, content: m.content, deliverAs, ...(typeof m.expectedSessionId === "string" ? { expectedSessionId: m.expectedSessionId } : {}) };

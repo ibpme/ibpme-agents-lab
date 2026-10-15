@@ -25,7 +25,7 @@ export async function notifyParent(task: Task, registryDirectory?: string): Prom
   const id = `completion_${task.id}`;
   const ack = await exchange(row.messaging.path, {
     version: 2, type: 'message', id, expectedSessionId: parent.sessionId,
-    content: task.notification, deliverAs: 'followUp',
+    content: task.notification, deliverAs: 'steer',
   }, 6000, 65536);
   if (ack.version !== 2 || ack.type !== 'ack' || ack.id !== id || !ack.ok || !['accepted', 'duplicate'].includes(ack.status)) throw new Error(ack.error ?? 'Invalid delivery ACK');
 }

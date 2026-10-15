@@ -28,13 +28,13 @@ async function setup(t: test.TestContext, deliver: (value: any) => void = () => 
   return listener;
 }
 
-test("private socket accepts fragmented UTF-8 JSON and defaults to followUp", async t => {
+test("private socket accepts fragmented UTF-8 JSON and defaults to steer", async t => {
   const received: any[] = [];
   const listener = await setup(t, value => received.push(value));
   assert.equal((await stat(listener.path)).mode & 0o777, 0o600);
   assert.equal((await stat(listener.directory)).mode & 0o777, 0o700);
   assert.deepEqual(await request(listener.path, JSON.stringify(message) + "\n"), { version: 2, type: "ack", id: "one", ok: true, status: "accepted" });
-  assert.deepEqual(received, [{ ...message, deliverAs: "followUp" }]);
+  assert.deepEqual(received, [{ ...message, deliverAs: "steer" }]);
   await listener.close();
   await assert.rejects(access(listener.path));
   await listener.close();
@@ -71,7 +71,7 @@ test("a delivery failure gets a negative ack and may be retried", async t => {
 test("equivalent envelope key order and default delivery mode deduplicate", async t => {
   const listener = await setup(t);
   await request(listener.path, JSON.stringify(message) + "\n");
-  const reordered = { content: message.content, id: message.id, type: message.type, version: 2, deliverAs: "followUp" };
+  const reordered = { content: message.content, id: message.id, type: message.type, version: 2, deliverAs: "steer" };
   assert.equal((await request(listener.path, JSON.stringify(reordered) + "\n")).status, "duplicate");
 });
 
@@ -94,4 +94,11 @@ test("invalid UTF-8 is rejected rather than silently replaced in content", async
 test("an explicit null delivery mode is rejected rather than defaulted", async t => {
   const listener = await setup(t);
   assert.equal((await request(listener.path, JSON.stringify({ ...message, deliverAs: null }) + "\n")).ok, false);
+});
+
+test("explicit followUp remains available for configured senders", async t => {
+  const received: any[] = [];
+  const listener = await setup(t, value => received.push(value));
+  assert.equal((await request(listener.path, JSON.stringify({ ...message, deliverAs: "followUp" }) + "\n")).status, "accepted");
+  assert.equal(received[0].deliverAs, "followUp");
 });

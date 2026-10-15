@@ -18,7 +18,6 @@ const spawnFields = {
 export const sendMessageSchema = z.strictObject({
   agent_id: nonBlank.max(256).describe('Recipient agent_id from list_agents; names are labels, not addresses.'),
   message_id: nonBlank.max(256).optional().describe('Optional unique message ID. Reuse with identical payload for retry after an ambiguous failure.'),
-  deliver_as: z.enum(['steer', 'followUp']).optional().describe('Default followUp queues after the current turn; steer interrupts at the next steering boundary.'),
   message: nonBlank.describe('Message to deliver to the agent.'),
 });
 export const spawnAgentSchema = z.strictObject({

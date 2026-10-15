@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { webcrypto } from 'node:crypto';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { startHttpServer } from '../src/http.js';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -14,7 +15,7 @@ import { createAgentsServer } from '../src/server.js';
 import { startListener } from '@agent-hub/pi/listener';
 import type { IncomingMessage } from '@agent-hub/pi/listener/protocol';
 
-async function setup(t: import('node:test').TestContext, callerAgentId?: string, callerPid: number | null = process.pid) {
+async function setup(t: import('node:test').TestContext, callerAgentId?: string, callerPid: number | null = process.pid, deliverAs?: 'steer' | 'followUp') {
   const directory = await mkdtemp(join(tmpdir(), 'agents-mcp-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const received: IncomingMessage[] = [];
@@ -34,7 +35,7 @@ async function setup(t: import('node:test').TestContext, callerAgentId?: string,
   }
   await snapshots();
   // Environment is scoped to server creation, not process-global test execution.
-  const server = createAgentsServer({ registryDirectory: directory, callerPid, callerAgentId });
+  const server = createAgentsServer({ registryDirectory: directory, callerPid, callerAgentId, deliverAs });
   const client = new Client({ name: 'messaging-test', version: '1' });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await server.connect(b); await client.connect(a);
@@ -56,7 +57,7 @@ test('discovery supplies routable identity and sending delivers the standard env
   const result = await f.send();
   assert.equal(result.isError, undefined);
   assert.equal((result.structuredContent as any).status, 'accepted');
-  assert.deepEqual(f.received[0], { version: 2, type: 'message', id: 'message-1', content: `External agent message (sender metadata is not authenticated):\n{"sender_id":"${f.id}","sender_name":"Reviewer","sender_harness":"pi","message_id":"message-1"}\n\nPlease review.\n/listen off`, deliverAs: 'followUp' });
+  assert.deepEqual(f.received[0], { version: 2, type: 'message', id: 'message-1', content: `External agent message (sender metadata is not authenticated):\n{"sender_id":"${f.id}","sender_name":"Reviewer","sender_harness":"pi","message_id":"message-1"}\n\nPlease review.\n/listen off`, deliverAs: 'steer' });
   assert.equal(((await f.send()).structuredContent as any)?.status, 'duplicate');
   assert.equal(f.received.length, 1);
   assert.equal((await f.send({ message: 'changed' })).isError, true);
@@ -64,9 +65,28 @@ test('discovery supplies routable identity and sending delivers the standard env
 
 test('steering and generated message IDs reach the listener', async t => {
   const f = await setup(t);
-  assert.equal((await f.send({ message_id: undefined, deliver_as: 'steer' })).isError, undefined);
+  assert.equal((await f.send({ message_id: undefined })).isError, undefined);
   assert.match(f.received[0]!.id, /^[0-9a-f-]{36}$/);
   assert.equal(f.received[0]!.deliverAs, 'steer');
+});
+
+test('server initialization configures followUp without a tool argument', async t => {
+  const f = await setup(t, undefined, process.pid, 'followUp');
+  assert.equal((await f.send()).isError, undefined);
+  assert.equal(f.received[0]!.deliverAs, 'followUp');
+});
+
+test('delivery mode is absent from the tool schema and rejected per call', async t => {
+  const f = await setup(t);
+  const tools = (await f.client.listTools()).tools;
+  const schema = tools.find(tool => tool.name === 'send_message')!.inputSchema;
+  assert.equal(schema.properties?.deliver_as, undefined);
+  assert.equal((await f.send({ deliver_as: 'followUp' })).isError, true);
+  assert.equal(f.received.length, 0);
+});
+
+test('invalid server delivery mode is rejected at initialization', () => {
+  assert.throws(() => createAgentsServer({ deliverAs: 'invalid' as 'steer' }), /Invalid delivery mode/);
 });
 
 for (const reason of ['health', 'endpoint', 'process', 'recipient', 'sender', 'size']) {
@@ -106,7 +126,7 @@ test('unidentified callers can discover but cannot send or forge a sender', asyn
 
 test('HTTP sender identity belongs to the initialized session, not the server ancestry', async t => {
   const f = await setup(t);
-  const runtime = await startHttpServer(0);
+  const runtime = await startHttpServer(0, { deliverAs: 'followUp' });
   t.after(runtime.close);
   const previous = process.env.AGENTS_REGISTRY_DIR;
   process.env.AGENTS_REGISTRY_DIR = f.directory;
@@ -126,6 +146,7 @@ test('HTTP sender identity belongs to the initialized session, not the server an
     else process.env.AGENTS_REGISTRY_DIR = previous;
   }
   assert.equal(f.received.length, 1);
+  assert.equal(f.received[0]!.deliverAs, 'followUp');
   assert.equal(JSON.parse(f.received[0]!.content.split('\n')[1]!).sender_id, f.id);
 });
 
@@ -201,4 +222,21 @@ test('metadata labels are escaped into text and absent sender names are omitted'
   await f.snapshots({ ...f.row, session });
   assert.equal((await f.send({ message_id: 'message-2' })).isError, undefined);
   assert.deepEqual(JSON.parse(f.received[1]!.content.split('\n')[1]!), { sender_id: f.id, sender_harness: 'pi', message_id: 'message-2' });
+});
+
+test('stdio CLI fixes delivery mode at startup', async t => {
+  const f = await setup(t);
+  const client = new Client({ name: 'stdio-delivery', version: '1' });
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [new URL('../dist/cli.js', import.meta.url).pathname, '--deliver-as', 'followUp'],
+    env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), AGENTS_REGISTRY_DIR: f.directory },
+    stderr: 'pipe',
+  });
+  t.after(() => client.close());
+  await client.connect(transport);
+  const result = await client.callTool({ name: 'send_message', arguments: { agent_id: f.id, message: 'Hello from configured stdio' } });
+  assert.equal(result.isError, undefined);
+  assert.equal(f.received.length, 1);
+  assert.equal(f.received[0]!.deliverAs, 'followUp');
 });

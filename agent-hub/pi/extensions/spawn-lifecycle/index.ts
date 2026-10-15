@@ -60,7 +60,7 @@ export default function spawnLifecycle(pi: ExtensionAPI): void {
         state.phase = 'running';
         persist();
         try {
-          pi.sendUserMessage(task.input.prompt!, { deliverAs: 'followUp', expandPromptTemplates: false });
+          pi.sendUserMessage(task.input.prompt!, { deliverAs: 'steer', expandPromptTemplates: false });
           idleCheck = setTimeout(() => {
             if (state.phase === 'running' && !state.started && ctx.isIdle()) finish('failed', 'Initial prompt was handled without starting an agent run');
           }, 5000);

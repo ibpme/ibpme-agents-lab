@@ -23,10 +23,20 @@ npm run typecheck
 npm test
 
 # stdout is exclusively MCP JSON-RPC; launch node directly, not npm start
-node dist/cli.js                         # stdio
+node dist/cli.js                         # stdio, steering delivery
+node dist/cli.js --deliver-as followUp    # fixed follow-up delivery
 node dist/cli.js --transport http --port 3000  # loopback /mcp
 npm run dev -- --transport http --port 3000
 ```
+
+`--deliver-as steer|followUp` applies to `send_message` for both transports and
+is fixed at process startup. HTTP sessions all inherit the server setting; it
+is not a per-request header or model-controlled input. In library integrations,
+use `createAgentsServer({ deliverAs: 'followUp' })` or
+`startHttpServer(3000, { deliverAs: 'followUp' })`. Invalid modes fail startup.
+Automatic spawn-completion notifications remain steering messages, independent
+of this MCP message setting. Restart/reconnect MCP clients to refresh the tool
+schema after upgrading; old calls containing `deliver_as` are rejected.
 
 SIGINT, SIGTERM and stdio EOF trigger cleanup, with a five-second shutdown
 fallback. Diagnostics go to stderr. Nothing installs MCP configuration or starts
@@ -106,13 +116,15 @@ claim, **not authentication**. Library integrations may pass `callerAgentId` to
 {
   "agent_id": "agt_68810ac40dab088f",
   "message": "Please review the latest change.",
-  "message_id": "unique-id-for-this-message",
-  "deliver_as": "followUp"
+  "message_id": "unique-id-for-this-message"
 }
 ```
 
 Only `agent_id` and `message` are required. `message_id` defaults to a UUID;
-`deliver_as` defaults to `followUp`, or can be `steer`. All input objects reject
+delivery mode is fixed at MCP server startup, defaulting to `steer` (the next
+steering boundary). Use `--deliver-as followUp` to queue messages after the current
+turn instead. Delivery mode is not exposed to the model: `deliver_as` is no longer
+a tool argument. All input objects reject
 unknown fields, including attempts to supply `sender_id`, `from`, `replyTo` or a
 socket path. Strings must be nonblank; message content is preserved literally.
 
@@ -137,7 +149,7 @@ and sends one newline-terminated UTF-8 JSON object to the recipient's Unix socke
   "type": "message",
   "id": "unique-id-for-this-message",
   "content": "External agent message (sender metadata is not authenticated):\n{\"sender_id\":\"agt_6c927c93e66ed4ae\",\"sender_name\":\"Reviewer\",\"sender_harness\":\"pi\",\"message_id\":\"unique-id-for-this-message\"}\n\nPlease review the latest change.",
-  "deliverAs": "followUp"
+  "deliverAs": "steer"
 }
 ```
 
@@ -182,7 +194,7 @@ also change the envelope, so a retry may be rejected rather than deduplicated.
 | Tool | Required | Optional |
 | --- | --- | --- |
 | `list_agents` | — | — |
-| `send_message` | `agent_id`, `message` | `message_id`, `deliver_as` |
+| `send_message` | `agent_id`, `message` | `message_id` |
 
 Operational failures return `isError: true` and
 `structuredContent.error` with `code` and `message`: `REGISTRY_UNAVAILABLE`,
@@ -222,7 +234,7 @@ failure is returned with `status: "failed"`; inspect task status rather than
 assuming a successful tool invocation implies a running child.
 
 The supervisor captures the final answer from harness lifecycle events and sends
-a follow-up to the original parent Pi session without asking the child model to
+a steering message to the original parent Pi session without asking the child model to
 call `send_message`. Later manual prompts in an interactive child do not notify
 the parent. Results remain stored when notification cannot be delivered.
 

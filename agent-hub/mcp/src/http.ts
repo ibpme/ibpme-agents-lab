@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { Request, Response } from 'express';
 import { createAgentsServer } from './server.js';
+import type { MessagingOptions } from './messaging.js';
 
 interface Session {
   server: McpServer;
@@ -16,7 +17,9 @@ function errorResponse(res: Response, status: number, message: string, code = -3
   res.status(status).json({ jsonrpc: '2.0', error: { code, message }, id: null });
 }
 
-export async function startHttpServer(port = 3000): Promise<{ url: string; close: () => Promise<void> }> {
+export async function startHttpServer(port = 3000, options: Pick<MessagingOptions, 'deliverAs'> = {}): Promise<{ url: string; close: () => Promise<void> }> {
+  const deliverAs = options.deliverAs ?? 'steer';
+  if (deliverAs !== 'steer' && deliverAs !== 'followUp') throw new Error('Invalid delivery mode; expected steer or followUp');
   const app = createMcpExpressApp({ host: '127.0.0.1' });
   const sessions = new Map<string, Session>();
   const activeServers = new Set<McpServer>();
@@ -56,7 +59,7 @@ export async function startHttpServer(port = 3000): Promise<{ url: string; close
       errorResponse(res, 400, 'Invalid X-Agent-Id');
       return;
     }
-    const server = createAgentsServer({ callerPid: null, ...(typeof callerId === 'string' ? { callerAgentId: callerId } : {}) });
+    const server = createAgentsServer({ deliverAs, callerPid: null, ...(typeof callerId === 'string' ? { callerAgentId: callerId } : {}) });
     const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
       sessionIdGenerator: randomUUID,
       onsessioninitialized: id => { sessions.set(id, { server, transport }); },

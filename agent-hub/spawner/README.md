@@ -137,13 +137,13 @@ old task handles. Results remain accessible at their artifact paths.
 ## Completion semantics
 
 1. The extension submits the initial prompt literally, with prompt-template
-   expansion disabled, after session startup.
+   expansion disabled and `deliverAs: "steer"`, after session startup.
 2. It records finalized assistant messages from `message_end`.
 3. It waits for `agent_settled`, not `agent_end`. Retries, compaction recovery,
    steering and queued follow-ups are included before settlement.
 4. It writes `completion.json` atomically and marks reporting done.
 5. The supervisor persists the completion and exact notification before delivery.
-6. It injects a follow-up through the original parent's listener. No child MCP
+6. It injects a steering message through the original parent's listener. No child MCP
    tool call is involved.
 
 An interactive TUI stays open. Later manual prompts **do not** report to the parent.
@@ -169,7 +169,7 @@ labelled external content. Delivery retries use a stable completion ID and exact
 the same payload. `delivery: "accepted"` means listener acceptance, not durable
 model processing. Listener deduplication is bounded/in-memory; this is **not an
 exactly-once guarantee**. Parent crashes or queue clearing can still lose an
-accepted follow-up. Results remain durable regardless of delivery.
+accepted message. Results remain durable regardless of delivery.
 
 Unavailable delivery remains recorded and retries while the supervisor runs.
 There is no TTL/backoff policy yet (default reconciliation interval: two seconds).

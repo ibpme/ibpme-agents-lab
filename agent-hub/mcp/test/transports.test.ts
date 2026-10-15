@@ -25,7 +25,7 @@ test('CLI documents both transports and rejects invalid options without stdout n
   assert.equal(help.status, 0);
   assert.match(help.stdout, /stdio/);
   assert.match(help.stdout, /http/);
-  for (const args of [['--transport', 'sse'], ['--port', 'nope'], ['--port', '65536'], ['--unknown']]) {
+  for (const args of [['--transport', 'sse'], ['--port', 'nope'], ['--port', '65536'], ['--unknown'], ['--deliver-as', 'invalid']]) {
     const result = spawnSync(process.execPath, [cliPath, ...args], { encoding: 'utf8' });
     assert.equal(result.status, 1);
     assert.equal(result.stdout, '');

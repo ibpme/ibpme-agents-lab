@@ -30,7 +30,7 @@ test('notifies the verified parent with a stable ID and receiver-side session gu
   assert.equal(messages.length, 2);
   assert.deepEqual(messages[0], messages[1]);
   assert.equal(messages[0].expectedSessionId, 'original');
-  assert.equal(messages[0].deliverAs, 'followUp');
+  assert.equal(messages[0].deliverAs, 'steer');
   row.session.id = 'replacement'; await snapshot();
   await assert.rejects(notifyParent(task, directory), /changed session/);
   assert.equal(messages.length, 2);

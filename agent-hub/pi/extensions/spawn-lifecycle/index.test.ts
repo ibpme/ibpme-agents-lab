@@ -31,7 +31,7 @@ const assistant = (text: string, stopReason = 'stop') => ({ message: { role: 'as
 test('initial task reports only at settlement, not agent_end, and later prompts never overwrite the result', async t => {
   const h = setup(t);
   h.fire('session_start'); await delay();
-  assert.deepEqual(h.messages, [['Initial task', { deliverAs: 'followUp', expandPromptTemplates: false }]]);
+  assert.deepEqual(h.messages, [['Initial task', { deliverAs: 'steer', expandPromptTemplates: false }]]);
   h.fire('agent_start');
   h.fire('message_end', assistant('intermediate'));
   h.fire('agent_end');

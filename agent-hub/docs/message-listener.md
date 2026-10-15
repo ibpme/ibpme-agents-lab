@@ -35,7 +35,7 @@ including the newline are limited to 64 KiB. Unknown fields are rejected.
   "type": "message",
   "id": "a-unique-message-id",
   "content": "Please review the latest change.",
-  "deliverAs": "followUp"
+  "deliverAs": "steer"
 }
 ```
 
@@ -47,7 +47,7 @@ including the newline are limited to 64 KiB. Unknown fields are rejected.
   responsible for any model-facing headers they want to include.
 - `from` and `replyTo` are not transport fields and are rejected. The listener
   does not connect to a reply endpoint or automatically forward model responses.
-- `deliverAs` is `steer` or `followUp`, defaulting to `followUp`. Both start a turn
+- `deliverAs` is `steer` or `followUp`, defaulting to `steer`. Both start a turn
   when Pi is idle. While busy, steering is delivered at Pi's next steering
   boundary; follow-ups wait for queued follow-up delivery. Pi's queue settings
   determine whether queued messages are consumed individually or together.
@@ -146,7 +146,7 @@ socket.on('data', chunk => process.stdout.write(chunk));
 socket.on('connect', () => socket.end(JSON.stringify({
   version: 2, type: 'message', id: randomUUID(),
   content: 'Summarize your current progress.',
-  deliverAs: 'followUp',
+  deliverAs: 'steer',
 }) + '\n'));
 JS
 ```

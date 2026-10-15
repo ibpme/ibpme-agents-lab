@@ -19,7 +19,7 @@ const rowSchema = z.object({
   messaging: z.object({ transport: z.literal('unix'), protocol: z.literal('pi-listener-v2'), path: z.string().refine(p => isAbsolute(p) && !p.includes('\0') && Buffer.byteLength(p) <= 100), reportedAt: timestamp }).optional(),
 });
 type Agent = z.infer<typeof rowSchema>;
-export interface MessagingOptions { registryDirectory?: string; callerAgentId?: string; callerPid?: number | null; spawnerDirectory?: string }
+export interface MessagingOptions { registryDirectory?: string; callerAgentId?: string; callerPid?: number | null; spawnerDirectory?: string; deliverAs?: 'steer' | 'followUp' }
 export class MessagingError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
@@ -31,6 +31,8 @@ const agentId = (a: Agent): string => {
 const fresh = (time: number): boolean => time <= Date.now() + 5000 && Date.now() - time <= 20000;
 
 export function createMessaging(options: MessagingOptions = {}) {
+  const deliverAs = options.deliverAs ?? 'steer';
+  if (deliverAs !== 'steer' && deliverAs !== 'followUp') throw new Error('Invalid delivery mode; expected steer or followUp');
   const directory = resolve(options.registryDirectory ?? process.env.AGENTS_REGISTRY_DIR ?? join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'agents-registry'));
   async function readAgents(): Promise<Agent[]> {
     try {
@@ -95,7 +97,7 @@ export function createMessaging(options: MessagingOptions = {}) {
       const destination = endpoint(recipient) ?? fail('MESSAGING_UNAVAILABLE', 'Recipient has no fresh messaging endpoint.');
       const messageId = input.message_id ?? randomUUID();
       const content = formatAgentMessage(messageId, { id: agentId(sender), ...(sender.session.name ? { name: sender.session.name } : {}), harness: sender.harness }, input.message);
-      const envelope = { version: 2, type: 'message', id: messageId, content, deliverAs: input.deliver_as ?? 'followUp' };
+      const envelope = { version: 2, type: 'message', id: messageId, content, deliverAs };
       const frame = Buffer.from(JSON.stringify(envelope) + '\n');
       if (frame.length > 65536) fail('MESSAGE_TOO_LARGE', 'Encoded message exceeds the 64 KiB listener limit.');
       const status = await deliver(destination.path, frame, messageId);
