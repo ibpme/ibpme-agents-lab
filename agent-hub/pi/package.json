@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@agent-hub/registry": "0.1.0",
-    "@agent-hub/browser": "0.1.0"
+    "@agent-hub/viewer": "0.1.0"
   },
   "exports": {
     "./spawn-lifecycle": "./extensions/spawn-lifecycle/index.ts",

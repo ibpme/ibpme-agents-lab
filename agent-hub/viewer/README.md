@@ -1,4 +1,4 @@
-# Standalone agents-browser
+# Standalone agents-viewer
 
 Browse the same live registry and persisted Pi/Claude transcripts as `/agents`,
 without starting Pi. The daemon must already be running; this browser never starts
@@ -15,23 +15,23 @@ is not required for standalone use. From the repository root:
 cd agent-hub
 npm ci
 npm run build
-npm run cli:install --workspace @agent-hub/browser
+npm run cli:install --workspace @agent-hub/viewer
 ```
 
-The installer creates `~/.local/bin/agents-browser` as an absolute symlink to this
+The installer creates `~/.local/bin/agents-viewer` as an absolute symlink to this
 checkout's launcher and makes it executable. Re-running it is safe; existing files
 or symlinks belonging to another checkout are never overwritten. Keep the repository
 available; this is a source launcher, not a relocatable binary. Ensure Bun and `~/.local/bin`
 are on the PATH inherited by tmux (restart/update the server environment if needed).
 
 ```bash
-agents-browser                    # 90% tmux popup; direct TUI outside tmux
-agents-browser --direct           # use this terminal, including inside tmux
-agents-browser --directory /path/to/registry
-agents-browser --help
+agents-viewer                    # 90% tmux popup; direct TUI outside tmux
+agents-viewer --direct           # use this terminal, including inside tmux
+agents-viewer --directory /path/to/registry
+agents-viewer --help
 ```
 
-To uninstall, run `npm run cli:uninstall` from `agent-hub/agents-browser/`.
+To uninstall, run `npm run cli:uninstall` from `agent-hub/viewer/`.
 It removes only this checkout's link, preserving the source and registry state.
 Neither install nor uninstall starts the browser or daemon.
 
@@ -44,7 +44,7 @@ Add to `~/.tmux.conf`, replacing the executable with an absolute path if it is
 not on your tmux server's PATH:
 
 ```tmux
-bind-key a run-shell -b 'agents-browser --socket "#{socket_path}" --pane "#{pane_id}" --client "#{client_name}"'
+bind-key a run-shell -b 'agents-viewer --socket "#{socket_path}" --pane "#{pane_id}" --client "#{client_name}"'
 ```
 
 Reload the tmux config, then use **prefix + a** from any shell or agent. The
@@ -75,7 +75,7 @@ browser is read-only for pane actions.
 ```bash
 cd agent-hub
 npm run build
-npm run check --workspace @agent-hub/browser
+npm run check --workspace @agent-hub/viewer
 ```
 
 ## Code organization

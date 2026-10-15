@@ -19,7 +19,7 @@ test("rejects invalid or incomplete arguments", () => {
   }
 });
 test("popup shell arguments round-trip without expansion", () => {
-  for (const value of ["normal", "with spaces", "a'b", "$(touch /tmp/never-agents-browser); \" $HOME", "a\nb"]) {
+  for (const value of ["normal", "with spaces", "a'b", "$(touch /tmp/never-agents-viewer); \" $HOME", "a\nb"]) {
     assert.equal(execFileSync("sh", ["-c", `printf %s ${shellQuote(value)}`], { encoding: "utf8" }), value);
   }
 });

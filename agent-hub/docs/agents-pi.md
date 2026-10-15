@@ -51,7 +51,7 @@ of Pi's overlay. Install its dependencies with
 Outside tmux, `/agents` retains its native overlay.
 
 The browser can also launch independently from any shell or a tmux keybinding;
-see [agents-browser setup](../agents-browser/README.md). It preserves the original
+see [agents-viewer setup](../viewer/README.md). It preserves the original
 pane/socket/client for actions and closes after attaching. Standalone transcripts
 use persisted files only, not the invoking Pi process's in-memory branch. Popup
 colors use the terminal ANSI palette rather than Pi's active theme.
@@ -207,7 +207,7 @@ The thin Pi extension at `agent-hub/pi/extensions/agents/` contains:
 - `index.ts`: command registration and runtime configuration.
 - `native.ts`: Pi overlay adapter, theme injection, and in-memory session access.
 
-Shared implementation and tests live in `agent-hub/agents-browser/`:
+Shared implementation and tests live in `agent-hub/viewer/`:
 - `reader.ts`: canonical snapshot schema validation and health classification.
 - `browser.ts`: modal state, refresh, navigation, confirmations, action dispatch.
 - `view.ts` / `theme.ts`: list/details, responsive framing, action eligibility, theme contract.
@@ -215,7 +215,7 @@ Shared implementation and tests live in `agent-hub/agents-browser/`:
 - `tmux-actions.ts`: numeric identity/ancestry checks and pane operations.
 
 Snapshot types and schema come from `agent-hub/registry`; the reader has no dependency
-on its build output or daemon installation. Ajv is installed with the shared agents-browser package.
+on its build output or daemon installation. Ajv is installed with the shared agents-viewer package.
 
 ```bash
 (cd agent-hub && npm run check)

@@ -32,12 +32,12 @@ workspace root. Runtime dependencies belong to the packages that use them.
 | Directory | Package | Public API |
 |---|---|---|
 | `registry/` | `@agent-hub/registry` | `/client`, `/types`, `/processes`, `/schemas/*` |
-| `agents-browser/` | `@agent-hub/browser` | `/browser`, `/reader`, `/tmux-actions`, `/view`, `/popup` |
+| `viewer/` | `@agent-hub/viewer` | `/browser`, `/reader`, `/tmux-actions`, `/view`, `/popup` |
 | `pi/` | `@agent-hub/pi` | `/listener`, `/listener/protocol`, `/spawn-lifecycle` |
 | `spawner/` | `@agent-hub/spawner` | root client API, `/supervisor` |
 | `mcp/` | `@agent-hub/mcp` | CLI only; no library exports |
 
-CLI names remain `agents-registry`, `agents-browser`, `agents-spawner`, and
+CLI names are `agents-registry`, `agents-viewer`, `agents-spawner`, and
 `agents-mcp`. Packages are private and intended for this checkout; the workspace
 conversion does not make them independently publishable or relocatable.
 

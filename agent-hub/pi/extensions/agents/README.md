@@ -16,4 +16,4 @@ See the **[browser guide](../../../docs/agents-pi.md)** for all controls, listen
 indicators, transcript behavior, freshness checks, and pane-action safeguards.
 
 This directory is a thin launcher and native-overlay adapter. The shared browser
-implementation and tests live in [`agent-hub/agents-browser`](../../../agents-browser/README.md).
+implementation and tests live in [`agent-hub/viewer`](../../../viewer/README.md).

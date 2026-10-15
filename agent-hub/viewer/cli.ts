@@ -4,7 +4,7 @@ import { openPopup } from "./popup.ts";
 try {
   const options = parseOptions(process.argv.slice(2));
   if (options.help) {
-    console.log(`Usage: agents-browser [--direct] [--directory PATH]
+    console.log(`Usage: agents-viewer [--direct] [--directory PATH]
                       [--socket PATH --pane %ID [--client NAME]]
 
 Inside tmux, opens a 90% popup. Outside tmux, runs directly.
@@ -18,6 +18,6 @@ Inside tmux, opens a 90% popup. Outside tmux, runs directly.
     await runBrowser(options.origin, options.directory);
   }
 } catch (error) {
-  console.error(`agents-browser: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`agents-viewer: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 }

@@ -5,7 +5,7 @@ import type { Origin } from "./tmux-actions.ts";
 import type { Runner } from "@agent-hub/registry/types";
 
 const execute = promisify(execFile);
-export const launcher = fileURLToPath(new URL("./agents-browser", import.meta.url));
+export const launcher = fileURLToPath(new URL("./agents-viewer", import.meta.url));
 export const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
 
 const run: Runner = async (command, args) => (await execute(command, args)).stdout;

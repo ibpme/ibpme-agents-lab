@@ -8,7 +8,7 @@ Observe and message live Pi and Claude coding agents on one machine.
 | `mcp/` | Discover, message and spawn agents through MCP | [MCP server](docs/mcp.md) |
 | `spawner/` | Supervise background Pi TUIs and headless tasks | [Spawner](spawner/README.md) |
 | `pi/` | `/agents` browser, listener, and registry publisher | [Setup](docs/setup.md#install-the-pi-extensions) |
-| `agents-browser/` | Standalone terminal browser and tmux popup launcher | [Setup](agents-browser/README.md) |
+| `viewer/` | Standalone terminal browser and tmux popup launcher | [Setup](viewer/README.md) |
 
 ## Quick start
 
@@ -39,8 +39,9 @@ architecture, and development checks.
 ## Workspace development
 
 `agent-hub/` is a private npm workspace with one root lockfile. Install
-dependencies here, not separately in each component. Existing directories and CLI
-names are unchanged; package names consistently use the `@agent-hub/` scope.
+dependencies here, not separately in each component. Package names consistently
+use the `@agent-hub/` scope; the standalone viewer lives in `viewer/` and runs
+as `agents-viewer`.
 
 ```bash
 cd agent-hub

@@ -3,17 +3,17 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const defaultCli = fileURLToPath(new URL("./agents-browser", import.meta.url));
+const defaultCli = fileURLToPath(new URL("./agents-viewer", import.meta.url));
 const help = `Usage: bun run install.ts <install|uninstall>
 
-Install a symlink at ~/.local/bin/agents-browser pointing to this checkout's
+Install a symlink at ~/.local/bin/agents-viewer pointing to this checkout's
 launcher. Run npm ci && npm run build from agent-hub/ first. Keep the checkout available after installation.
 Uninstall removes only this checkout's symlink. No browser or daemon is started.`;
 
 export function installCli(action: string, { home = homedir(), cli = defaultCli }: { home?: string; cli?: string } = {}): string {
   if (action !== "install" && action !== "uninstall") throw new Error(help);
   const target = resolve(cli);
-  const link = join(home, ".local/bin/agents-browser");
+  const link = join(home, ".local/bin/agents-viewer");
   let existing: ReturnType<typeof lstatSync> | undefined;
   try { existing = lstatSync(link); } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;

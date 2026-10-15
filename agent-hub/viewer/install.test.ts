@@ -10,10 +10,10 @@ import { installCli } from "./install.ts";
 async function fixture(t: TestContext) {
   const home = await mkdtemp(join(tmpdir(), "browser cli-"));
   t.after(() => rm(home, { recursive: true, force: true }));
-  const cli = join(home, "checkout with spaces/agents-browser");
+  const cli = join(home, "checkout with spaces/agents-viewer");
   await mkdir(dirname(cli), { recursive: true });
   await writeFile(cli, '#!/bin/sh\nprintf "%s\\n" "$@"\n', { mode: 0o644 });
-  return { home, cli, link: join(home, ".local/bin/agents-browser") };
+  return { home, cli, link: join(home, ".local/bin/agents-viewer") };
 }
 
 test("installer creates an executable link, forwards arguments, and supports reinstall", async t => {
@@ -66,7 +66,7 @@ test("missing launcher cannot install but its own dangling link can be removed",
 test("installed real launcher resolves checkout through the symlink", async t => {
   const { home, link } = await fixture(t);
   installCli("install", { home });
-  assert.match(execFileSync(link, ["--help"], { encoding: "utf8" }), /Usage: agents-browser/);
+  assert.match(execFileSync(link, ["--help"], { encoding: "utf8" }), /Usage: agents-viewer/);
 });
 
 test("installer command supports help and rejects invalid actions", () => {

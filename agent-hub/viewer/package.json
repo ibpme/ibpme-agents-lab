@@ -1,5 +1,5 @@
 {
-  "name": "@agent-hub/browser",
+  "name": "@agent-hub/viewer",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,7 @@
     "@agent-hub/registry": "0.1.0"
   },
   "bin": {
-    "agents-browser": "./agents-browser"
+    "agents-viewer": "./agents-viewer"
   },
   "version": "0.1.0",
   "engines": {
