@@ -1,6 +1,6 @@
 # ibpme-agents-lab
 
-A collection of reusable agent skills.
+A collection of reusable agent skills and pi extensions.
 
 ## Skills
 
@@ -10,6 +10,12 @@ A collection of reusable agent skills.
 - **indonesian-language-guidelines** — Apply Indonesian writing and localization guidelines.
 - **prompt-sharpen** — Refine prompts for coding agents.
 - **to-full-markdown** — Convert documents to detail-preserving Markdown.
+
+## Pi extensions
+
+See [pi/README.md](pi/README.md). Install with `pi/install.sh`.
+
+## Install skills
 
 Install interactively:
 

@@ -1,0 +1,304 @@
+import { LOADED_SKILLS_STATUS_KEY, MODE_STATUS_KEY, SSH_STATUS_KEY } from "../contracts/status-keys.ts";
+import { REASONING_TOKENS_LIVE_EVENT, isReasoningTokensLivePayload } from "../contracts/events.ts";
+/**
+ * Colorful Status Line Extension
+ *
+ * Replaces the built-in footer with a more colorful one: colored token
+ * stats, a colored context-usage bar, a colored git branch, and a colored
+ * model/thinking-level indicator. Enabled by default; toggle with
+ * /statusline.
+ */
+
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+
+import { toolStatuses } from "../shared/tool-status.ts";
+
+const BAR_WIDTH = 10;
+
+/** Extension statuses hoisted onto line 2 instead of the trailing status line. */
+const INLINE_STATUS_KEYS = [MODE_STATUS_KEY] as const;
+
+function sanitizeStatus(text: string): string {
+  return text
+    .replace(/[\r\n\t]/g, " ")
+    .replace(/ +/g, " ")
+    .trim();
+}
+
+function formatTokens(count: number): string {
+  if (count < 1000) return `${count}`;
+  if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
+  if (count < 1000000) return `${Math.round(count / 1000)}k`;
+  return `${(count / 1000000).toFixed(1)}M`;
+}
+
+function formatCwd(cwd: string, home: string | undefined): string {
+  if (!home) return cwd;
+  if (cwd === home) return "~";
+  if (cwd.startsWith(`${home}/`)) return `~${cwd.slice(home.length)}`;
+  return cwd;
+}
+
+function contextColor(percent: number): "success" | "warning" | "error" {
+  if (percent > 70) return "error";
+  if (percent > 40) return "warning";
+  return "success";
+}
+
+function thinkingColor(level: string) {
+  switch (level) {
+    case "minimal":
+      return "thinkingMinimal" as const;
+    case "low":
+      return "thinkingLow" as const;
+    case "medium":
+      return "thinkingMedium" as const;
+    case "high":
+      return "thinkingHigh" as const;
+    case "xhigh":
+      return "thinkingXhigh" as const;
+    case "max":
+      return "thinkingMax" as const;
+    default:
+      return "thinkingOff" as const;
+  }
+}
+
+export default function statusLineExtension(pi: ExtensionAPI) {
+  let enabled = true;
+  let activeTui: { requestRender(): void } | undefined;
+  let liveReasoning: number | undefined;
+
+  const unsubscribeReasoning = pi.events.on(REASONING_TOKENS_LIVE_EVENT, (data) => {
+    if (!isReasoningTokensLivePayload(data)) return;
+    liveReasoning = data.tokens;
+    activeTui?.requestRender();
+  });
+
+  function install(ctx: ExtensionContext) {
+    ctx.ui.setFooter((tui, theme, footerData) => {
+      activeTui = tui;
+      const unsub = footerData.onBranchChange(() => tui.requestRender());
+      let lastToolStatus = "";
+      // Background MCP connections do not expose a public registry-change
+      // event. Poll only the labels, and repaint only when they change.
+      const toolRefresh = setInterval(() => {
+        const current = JSON.stringify(toolStatuses(pi, theme));
+        if (current !== lastToolStatus) {
+          lastToolStatus = current;
+          tui.requestRender();
+        }
+      }, 1000);
+      toolRefresh.unref();
+
+      return {
+        dispose() {
+          clearInterval(toolRefresh);
+          unsub();
+          if (activeTui === tui) activeTui = undefined;
+        },
+        invalidate() {},
+        render(width: number): string[] {
+          let cost = 0;
+          let lastUsage: AssistantMessage["usage"] | undefined;
+          for (const e of ctx.sessionManager.getBranch()) {
+            if (e.type === "message" && e.message.role === "assistant") {
+              const m = e.message as AssistantMessage;
+              lastUsage = m.usage;
+              cost += m.usage.cost.total;
+            }
+          }
+
+          // --- Line 1: cwd + git branch + session name ---
+          const home = process.env.HOME || process.env.USERPROFILE;
+          const pwd = formatCwd(ctx.sessionManager.getCwd(), home);
+          const branch = footerData.getGitBranch();
+          const sessionName = ctx.sessionManager.getSessionName();
+
+          const extensionStatuses = footerData.getExtensionStatuses();
+          let line1 = theme.fg("accent", theme.bold(pwd));
+          if (branch) {
+            line1 +=
+              theme.fg("dim", " on ") + theme.fg("success", `⎇ ${branch}`);
+          }
+          const sshStatus = extensionStatuses.get(SSH_STATUS_KEY);
+          if (sshStatus) {
+            line1 += theme.fg("dim", " · ") + sanitizeStatus(sshStatus);
+          }
+          if (sessionName) {
+            line1 += theme.fg("dim", " • ") + theme.fg("muted", sessionName);
+          }
+          const suggestionStatus = extensionStatuses.get("prompt-suggestions");
+          if (suggestionStatus) {
+            const suggestions = truncateToWidth(sanitizeStatus(suggestionStatus), width, theme.fg("dim", "..."));
+            line1 = truncateToWidth(line1, Math.max(0, width - visibleWidth(suggestions) - 1), theme.fg("dim", "..."));
+            line1 += " ".repeat(Math.max(0, width - visibleWidth(line1) - visibleWidth(suggestions))) + suggestions;
+          } else {
+            line1 = truncateToWidth(line1, width, theme.fg("dim", "..."));
+          }
+
+          // --- Line 2: token stats + context bar + model ---
+          const statParts: string[] = [];
+          const tokenParts: string[] = [];
+          if (lastUsage?.input)
+            tokenParts.push(theme.fg("accent", `↑${formatTokens(lastUsage.input)}`));
+          if (lastUsage?.output)
+            tokenParts.push(theme.fg("success", `↓${formatTokens(lastUsage.output)}`));
+          if (lastUsage?.cacheRead)
+            tokenParts.push(theme.fg("muted", `R${formatTokens(lastUsage.cacheRead)}`));
+          if (lastUsage?.cacheWrite)
+            tokenParts.push(theme.fg("muted", `W${formatTokens(lastUsage.cacheWrite)}`));
+          if (tokenParts.length) statParts.push(tokenParts.join(" "));
+
+          const activityParts: string[] = [];
+          const agentStats = extensionStatuses.get("agent-stats");
+          if (agentStats) activityParts.push(sanitizeStatus(agentStats));
+
+          const usingSubscription = ctx.model
+            ? ctx.modelRegistry.isUsingOAuth(ctx.model)
+            : false;
+          if (cost || usingSubscription) {
+            activityParts.push(
+              theme.fg(
+                "warning",
+                `$${cost.toFixed(3)}${usingSubscription ? " (sub)" : ""}`,
+              ),
+            );
+          }
+
+          if (activityParts.length) statParts.push(activityParts.join(" "));
+
+          const contextUsage = ctx.getContextUsage();
+          const contextWindow =
+            contextUsage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
+          const percent = contextUsage?.percent ?? 0;
+          const color = contextColor(percent);
+          const filled = Math.round((Math.min(100, percent) / 100) * BAR_WIDTH);
+          const bar =
+            theme.fg(color, "█".repeat(filled)) +
+            theme.fg("dim", "░".repeat(BAR_WIDTH - filled));
+          const percentText =
+            contextUsage?.percent != null ? `${percent.toFixed(0)}%` : "?";
+          const usedTokens = contextUsage?.tokens ?? 0;
+          statParts.push(
+            `${bar} ${theme.fg(color, percentText)}${theme.fg("dim", ` ${formatTokens(usedTokens)}/${formatTokens(contextWindow)}`)}`,
+          );
+
+          const reasoningStatus = extensionStatuses.get("reasoning-tokens");
+          if (reasoningStatus) {
+            const latestTokens = liveReasoning ?? lastUsage?.reasoning;
+            const latestReasoning = latestTokens === undefined
+              ? ""
+              : theme.fg("dim", ` (+${formatTokens(latestTokens)})`);
+            statParts.push(sanitizeStatus(reasoningStatus) + latestReasoning);
+          }
+
+          const tools = toolStatuses(pi, theme);
+          lastToolStatus = JSON.stringify(tools);
+
+          // Prepended (in reverse) rather than appended so the width
+          // truncation below eats the stats before it eats these badges.
+          for (let index = INLINE_STATUS_KEYS.length - 1; index >= 0; index--) {
+            const inlineStatus = extensionStatuses.get(INLINE_STATUS_KEYS[index]);
+            if (inlineStatus) {
+              statParts.unshift(
+                sanitizeStatus(inlineStatus) + "  " + tools.indicators,
+              );
+            }
+          }
+
+          let statsLeft = statParts.join(theme.fg("dim", " · "));
+
+          const modelName = ctx.model?.id || "no-model";
+          const modelLabel = ctx.model
+            ? `${ctx.model.provider}/${modelName}`
+            : modelName;
+          let rightSide = theme.fg("accent", theme.bold(modelLabel));
+          if (ctx.model?.reasoning) {
+            const level = pi.getThinkingLevel() || "off";
+            rightSide +=
+              theme.fg("dim", " • ") + theme.fg(thinkingColor(level), level);
+          }
+
+          const rightSideWidth = visibleWidth(rightSide);
+          const minPadding = 2;
+          let line2: string;
+          if (rightSideWidth >= width) {
+            // Keep the model visible even on very narrow terminals. The model
+            // label is the only part allowed to lose content in this case.
+            line2 = truncateToWidth(rightSide, width, theme.fg("dim", "..."));
+          } else {
+            // The model/thinking indicator is the primary status. Truncate the
+            // stats to the space left by it rather than dropping it entirely.
+            const statsWidth = width - minPadding - rightSideWidth;
+            const visibleStats = truncateToWidth(
+              statsLeft,
+              statsWidth,
+              theme.fg("dim", "..."),
+            );
+            const padding = " ".repeat(
+              Math.max(0, width - visibleWidth(visibleStats) - rightSideWidth),
+            );
+            line2 = visibleStats + padding + rightSide;
+          }
+
+          const lines = [line1, line2];
+
+          const rest = Array.from(extensionStatuses.entries())
+            .filter(([key]) => ![LOADED_SKILLS_STATUS_KEY, SSH_STATUS_KEY, "tools", "mcp-tools", "reasoning-tokens", "agent-stats", "prompt-suggestions", ...INLINE_STATUS_KEYS].includes(key))
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([, text]) => sanitizeStatus(text));
+          {
+            const skillStatus = extensionStatuses.get(LOADED_SKILLS_STATUS_KEY);
+            const left = [tools.tools, ...(skillStatus ? [sanitizeStatus(skillStatus)] : []), ...(tools.mcp ? [tools.mcp] : []), ...rest].join(theme.fg("dim", " · "));
+            lines.push(
+              truncateToWidth(left, width, theme.fg("dim", "...")),
+            );
+          }
+
+          return lines;
+        },
+      };
+    });
+  }
+
+  function uninstall(ctx: ExtensionContext) {
+    ctx.ui.setFooter(undefined);
+  }
+
+  pi.on("turn_start", async () => {
+    liveReasoning = undefined;
+    activeTui?.requestRender();
+  });
+
+  pi.on("session_shutdown", async () => {
+    unsubscribeReasoning();
+  });
+
+  pi.on("model_select", async () => {
+    activeTui?.requestRender();
+  });
+
+  pi.registerCommand("statusline", {
+    description: "Toggle the colorful status line",
+    handler: async (_args, ctx) => {
+      enabled = !enabled;
+      if (enabled) {
+        install(ctx);
+        ctx.ui.notify("Colorful status line enabled", "info");
+      } else {
+        uninstall(ctx);
+        ctx.ui.notify("Default status line restored", "info");
+      }
+    },
+  });
+
+  pi.on("session_start", async (_event, ctx) => {
+    if (enabled) install(ctx);
+  });
+}

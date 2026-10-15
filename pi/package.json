@@ -1,0 +1,52 @@
+{
+  "name": "ibpme-agents-lab-pi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.mjs",
+    "test:loading": "node scripts/test-loading.mjs",
+    "check": "bun run typecheck && bun run test && bun run test:loading"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-agent-core": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0",
+    "@types/node": "24.12.4",
+    "typebox": "1.3.17",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "grok-mermaid": "0.2.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/alias/index.ts",
+      "./extensions/loaded-skills/index.ts",
+      "./extensions/permission-gate/index.ts",
+      "./extensions/prompt-suggestions/index.ts",
+      "./extensions/protected-paths/index.ts",
+      "./extensions/question/index.ts",
+      "./extensions/readmd/index.ts",
+      "./extensions/reasoning-tokens/index.ts",
+      "./extensions/ssh/index.ts",
+      "./extensions/stash/index.ts",
+      "./extensions/status-line/index.ts",
+      "./extensions/stylish-tools/index.ts",
+      "./extensions/system-prompt/index.ts",
+      "./extensions/thinking-cycle-backward/index.ts",
+      "./extensions/thinking-style/index.ts",
+      "./extensions/tool-call-stats/index.ts",
+      "./extensions/tool-set/index.ts",
+      "./extensions/usage/index.ts"
+    ]
+  }
+}
