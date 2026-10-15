@@ -3,18 +3,20 @@ import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { spawnerDirectory } from './client.js';
 import { startSupervisor } from './supervisor.js';
+import { prepareTmux } from './tmux.js';
 const { values } = parseArgs({ options: {
   'tmux-socket': { type: 'string' }, 'tmux-session': { type: 'string' },
   'recover-lock': { type: 'boolean' }, pi: { type: 'string' }, directory: { type: 'string' }, help: { type: 'boolean' },
 } });
 if (values.help) {
-  console.log('Usage: agents-spawner [--directory PATH] [--pi PATH] [--recover-lock] [--tmux-socket PATH --tmux-session NAME]\nRuns in the foreground. Start explicitly under tmux or your own process manager.');
+  console.log('Usage: agent-spawn [--directory PATH] [--pi PATH] [--recover-lock] [--tmux-socket PATH] [--tmux-session NAME]\nUses the current tmux server/session when inside tmux; otherwise creates a dedicated server/session.\nFlags override the inferred defaults. Runs in the foreground.');
 } else {
+  const directory = resolve(values.directory ?? spawnerDirectory());
+  const tmux = await prepareTmux({ directory, socket: values['tmux-socket'], session: values['tmux-session'] });
   const runtime = await startSupervisor({
-    directory: resolve(values.directory ?? spawnerDirectory()), pi: values.pi,
-    tmuxSocket: values['tmux-socket'], tmuxSession: values['tmux-session'], recoverLock: values['recover-lock'],
+    directory, pi: values.pi, ...tmux, recoverLock: values['recover-lock'],
   });
-  console.error('agents-spawner ready');
+  console.error(`agent-spawn ready (tmux socket: ${tmux.tmuxSocket}, session: ${tmux.tmuxSession})`);
   let closing = false;
   const shutdown = async () => {
     if (closing) return;

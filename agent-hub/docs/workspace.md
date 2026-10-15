@@ -37,7 +37,7 @@ workspace root. Runtime dependencies belong to the packages that use them.
 | `spawner/` | `@agent-hub/spawner` | root client API, `/supervisor` |
 | `mcp/` | `@agent-hub/mcp` | CLI only; no library exports |
 
-CLI names are `agents-registry`, `agents-viewer`, `agents-spawner`, and
+CLI names are `agents-registry`, `agents-viewer`, `agent-spawn`, and
 `agents-mcp`. Packages are private and intended for this checkout; the workspace
 conversion does not make them independently publishable or relocatable.
 

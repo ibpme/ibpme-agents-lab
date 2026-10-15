@@ -16,13 +16,20 @@ From the repository root:
 
 ```sh
 (cd agent-hub && npm ci && npm run build)
+(cd agent-hub && npm run cli:install --workspace @agent-hub/spawner)
 
-# Use a tmux server and session you explicitly choose.
-SOCKET=/absolute/path/to/tmux.sock
-tmux -S "$SOCKET" new-session -d -s agents
-node agent-hub/spawner/dist/cli.js \
-  --tmux-socket "$SOCKET" --tmux-session agents
+# Inside tmux: use the current server and session.
+# Outside tmux: create or reuse a dedicated server and session.
+agent-spawn
+
+# Override either or both defaults.
+agent-spawn --tmux-socket /absolute/path/to/tmux.sock --tmux-session agents
 ```
+
+The installer creates `~/.local/bin/agent-spawn` as an absolute symlink to this
+checkout's built CLI. Keep the checkout available and `~/.local/bin` on PATH.
+`npm run cli:uninstall --workspace @agent-hub/spawner` (from `agent-hub/`) removes
+only this checkout's link, preserving task state. Installation starts no process.
 
 The supervisor runs in the foreground. Start it inside a separate tmux window or
 under your own process manager. Nothing starts automatically. `--pi /path/to/pi`
@@ -30,8 +37,17 @@ overrides the executable; otherwise `pi` is found using the supervisor's PATH.
 The child inherits normal Pi configuration, credentials, tools and trust behavior.
 This does **not** automatically approve project configuration or bypass prompts.
 
-Headless-only deployments can omit the tmux options. Interactive requests then
-fail explicitly. The selected tmux server/session must already exist.
+The CLI infers the socket from `$TMUX` and detects the current session using
+`$TMUX_PANE` when available. Outside tmux, it creates or reuses a server at
+`<spawner-directory>/tmux.sock` with session `agent-spawn`. `--tmux-socket` and
+`--tmux-session` override their respective defaults; a different socket defaults
+to session `agent-spawn` rather than inheriting a session from the original server.
+Missing sessions are created detached. The chosen socket and session are printed
+at startup. Stopping the supervisor leaves the tmux server/session and children
+running. Attach with `tmux -S <socket> attach-session -t <session>`.
+
+The programmatic supervisor API still supports headless-only operation without
+tmux options; automatic tmux setup is performed only by the CLI.
 
 The registry and parent Pi listener must also be running for automatic completion
 delivery. Install/reload the updated listener: it must support `expectedSessionId`.
