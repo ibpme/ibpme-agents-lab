@@ -12,8 +12,8 @@
     "test": "npm run build && tsx --test tests/*.test.ts tests/*.test.mjs",
     "start": "node dist/cli.js",
     "dev": "tsx src/cli.ts",
-    "service:install": "node scripts/service.mjs install",
-    "service:uninstall": "node scripts/service.mjs uninstall"
+    "cli:install": "node scripts/install-cli.mjs install",
+    "cli:uninstall": "node scripts/install-cli.mjs uninstall"
   },
   "dependencies": { "ajv": "^8.17.1", "proper-lockfile": "^4.1.2" },
   "devDependencies": { "@types/node": "^22.0.0", "@types/proper-lockfile": "^4.1.4", "tsx": "^4.20.0", "typescript": "^5.9.0" }

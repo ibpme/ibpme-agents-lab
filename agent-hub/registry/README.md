@@ -7,9 +7,10 @@ Node.js process joins discovery observations and publisher updates, then writes
 This is a current-state snapshot, not an append-only event log. It has no Pi SDK
 dependency and does not require an open Pi session. Nothing is installed automatically. The optional Pi publisher below is part of the
 `agent-hub/pi` package; it does not start or install the daemon. The Pi
-`/agents` browser reads its snapshots and health. The optional service installer below
-configures OS startup explicitly. Claude hooks and status-line model publishing have separate opt-in
-installers; neither is enabled automatically.
+`/agents` browser reads its snapshots and health. The optional CLI installer below
+only creates a symlink; it does not start the registry or configure OS startup.
+Claude hooks and status-line model publishing have separate opt-in installers;
+neither is enabled automatically.
 
 ## Install and build
 
@@ -24,137 +25,81 @@ npm test
 npm run typecheck
 ```
 
-## Install as a user service (Linux and macOS)
+## Install the CLI on Linux or macOS
 
-The service installer supports **systemd user services on Linux** and **launchd
-LaunchAgents on macOS**. Run it as the same regular user who runs your agents,
-**not with sudo**. This is intentionally not a root system-wide daemon: discovery,
-state, and publishers belong to your user account.
-
-First install and build from a permanent checkout:
+Install from a permanent checkout, as your regular user (no sudo):
 
 ```bash
 cd /absolute/path/to/ibpme-agents-lab/agent-hub/registry
 npm ci
 npm run build
-
-# If you previously started a standalone background writer, stop it first.
-# Only run this stop command if that writer is running:
-# node dist/cli.js stop
-
-# Inspect the generated configuration without modifying anything:
-npm run service:install -- --dry-run
-
-# Install, enable startup at login, and start now:
-npm run service:install
-node dist/cli.js status
+npm run cli:install
 ```
 
-The checkout, `node_modules`, and built `dist` directory must remain available.
-The installer captures the current **absolute Node executable**, **PATH**, runtime
-directory, and discovery options. Run it from a shell where `node`, `claude`, and
-`tmux` resolve correctly. Login services do not source your shell startup files.
-If using a Node version manager, reinstall the service before removing that Node
-version. Reinstall after moving the checkout or changing PATH/options; reinstalling
-stops the old managed service and replaces its configuration.
+This creates **`~/.local/bin/agents-registry`** as a symlink to this checkout's
+`dist/cli.js` and makes the built CLI executable. It does not copy the application,
+start a process, or install a systemd service or launchd agent. Keep the checkout,
+`node_modules`, and `dist` available. The CLI uses `node` from your current `PATH`.
+Existing files or symlinks belonging to another checkout are not overwritten.
+Reinstalling the same checkout is safe.
 
-Optional discovery configuration (same flags as `start`):
+Ensure `~/.local/bin` is on your shell's `PATH`. For example, add this to your
+shell configuration (`~/.bashrc` for Bash or `~/.zshrc` for Zsh), then reload it:
 
 ```bash
-npm run service:install -- \
-  --directory /absolute/short/state/path \
-  --interval 5000 \
-  --activity-ttl 20000 \
-  --tmux-socket /absolute/path/to/tmux/socket
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-`--tmux-socket` is repeatable. The runtime directory defaults to
-`AGENTS_REGISTRY_DIR`, then `$XDG_STATE_HOME/agents-registry`, then
-`~/.local/state/agents-registry` on both platforms. Configure readers and publishers
-to use that same directory. A custom directory in these examples also requires
-`--directory` when running the CLI's `status` command.
-
-The service manager supervises a **foreground** writer, restarts it after failures,
-and sends SIGTERM for graceful shutdown. Crash restart attempts are spaced at
-least 35 seconds apart to allow the 30-second writer lease to expire. A service
-manager reporting a running process is not a registry health check; also use
-`node dist/cli.js status`. Do not start a separate `--background` writer alongside
-the service. Use the service manager commands below to stop/restart managed writers,
-not the CLI's `stop` command.
-
-### Linux: systemd user service
-
-Requires a running systemd user manager (not merely a Linux host, container, or
-WSL environment). The installer writes:
-
-```text
-${XDG_CONFIG_HOME:-~/.config}/systemd/user/agents-registry.service
-```
-
-Manage it with:
+Verify and launch explicitly with the required tmux sockets:
 
 ```bash
-systemctl --user status agents-registry.service
-systemctl --user restart agents-registry.service
-systemctl --user stop agents-registry.service
-systemctl --user start agents-registry.service
-journalctl --user -u agents-registry.service -f
+agents-registry --help
+agents-registry start --background --tmux-socket /absolute/path/to/tmux/socket
+agents-registry status
+agents-registry stop
 ```
 
-By default it starts at login. To start at boot **without logging in** and keep
-the user service manager alive after logout, enable lingering (may require an
-administrator, depending on the machine's policy):
+Repeat `--tmux-socket` for multiple servers. To obtain the current server's socket
+from inside tmux, use `tmux display-message -p '#{socket_path}'`. There is no
+automatic tmux server discovery, and `TMUX` is not implicitly used.
+
+**OS-managed services and autostart are not supported yet**, because tmux discovery
+requires explicit socket configuration. Start the registry from the appropriate
+shell environment and supply the socket paths at launch. The existing explicit
+foreground and detached-background modes remain supported.
+
+To update, stop the registry, update the checkout, run `npm ci && npm run build`,
+and run `npm run cli:install` again before restarting with your socket options.
+If moving the checkout, uninstall its old symlink before moving it.
+
+To remove only this checkout's CLI symlink:
 
 ```bash
-sudo loginctl enable-linger "$USER"
+npm run cli:uninstall
 ```
 
-Only that optional system administration step uses sudo, not the installer or
-`systemctl --user` commands. Lingering affects all your user services. Login-only
-home mounts or encrypted homes may prevent boot-time startup.
+Uninstall does not stop a running registry or remove snapshots, state, or logs.
+It refuses to remove unrelated files or links, and can remove its own dangling
+link even if the build is missing.
 
-### macOS: launchd LaunchAgent
-
-Run the installer from a terminal in your logged-in macOS GUI session. It writes:
-
-```text
-~/Library/LaunchAgents/io.agent-hub.agents-registry.plist
-```
-
-Manage it with:
+If you used the previous service installer, disable and remove its service before
+switching to explicit CLI launches. On Linux:
 
 ```bash
-launchctl print "gui/$(id -u)/io.agent-hub.agents-registry"
-launchctl kickstart -k "gui/$(id -u)/io.agent-hub.agents-registry"
+systemctl --user disable --now agents-registry.service
+rm "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/agents-registry.service"
+systemctl --user daemon-reload
+```
 
-# Stop/unload until next login (or until reinstalled):
+On macOS, from your logged-in GUI session:
+
+```bash
 launchctl bootout "gui/$(id -u)/io.agent-hub.agents-registry"
-
-# Start again after bootout:
-launchctl bootstrap "gui/$(id -u)" \
-  "$HOME/Library/LaunchAgents/io.agent-hub.agents-registry.plist"
+rm "$HOME/Library/LaunchAgents/io.agent-hub.agents-registry.plist"
 ```
 
-A LaunchAgent starts at user login, **not before login**, and does not continue
-after logout. A machine-wide LaunchDaemon is deliberately not installed. Logs
-are `service.stdout.log` and `service.stderr.log` in the registry runtime directory;
-log rotation is not provided. A forced `kickstart -k` can leave a stale writer
-lease, so allow up to the crash-recovery interval for the service to recover.
-
-### Uninstall or update
-
-```bash
-# Stop, disable/unload, and remove the managed service definition:
-npm run service:uninstall
-```
-
-State, snapshots, and logs are preserved. Existing service files without the
-installer's ownership marker are not overwritten or removed. Uninstall does not
-reverse Linux lingering, since other user services may rely on it.
-
-For source updates, stop the service using the platform commands above, update
-the checkout, run `npm ci && npm run build`, then run `npm run service:install`
-again. No build or dependency installation happens automatically in the installer.
+Only remove service definitions you installed for this registry. These migration
+steps are unnecessary if you never installed a service.
 
 ## Explicit launch
 
