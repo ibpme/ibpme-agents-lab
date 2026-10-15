@@ -12,7 +12,8 @@
     "viewer",
     "pi",
     "spawner",
-    "mcp"
+    "mcp",
+    "service"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",

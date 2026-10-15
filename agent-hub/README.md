@@ -4,6 +4,7 @@ Observe and message live Pi and Claude coding agents on one machine.
 
 | Component | Purpose | Guide |
 |---|---|---|
+| `service/` | Unified registry + supervisor lifecycle and configuration | [Service](service/README.md) |
 | `registry/` | Discover agents and write live snapshots | [Registry](docs/registry.md) |
 | `mcp/` | Discover, message and spawn agents through MCP | [MCP server](docs/mcp.md) |
 | `spawner/` | Supervise background Pi TUIs and headless tasks | [Spawner](spawner/README.md) |
@@ -19,19 +20,21 @@ Pi tmux popups additionally require Bun 1.3+ on PATH. From the repository root:
 cd agent-hub
 npm ci
 npm run build
-npm run cli:install --workspace @agent-hub/registry
+npm run cli:install --workspace @agent-hub/service
 ```
 
 With `~/.local/bin` on `PATH`, launch explicitly:
 
 ```bash
-agents-registry start --background --tmux-socket /absolute/path/to/tmux/socket
-agents-registry status
-agents-registry stop
+agent-hub start --background
+agent-hub status
+agent-hub stop
 ```
 
-Nothing starts automatically; OS-managed services are not supported yet. Tmux
-socket paths must be supplied explicitly. Repeat `--tmux-socket` for multiple servers.
+Nothing starts automatically; OS-managed services are not installed. The unified
+service uses the current tmux server/session, or creates a dedicated one outside
+tmux. The registry watches that server automatically. Repeat `--tmux-socket` to
+watch additional servers; the first selects the spawning server.
 
 See **[docs/](docs/README.md)** for installation, Pi setup, protocols, security,
 architecture, and development checks.

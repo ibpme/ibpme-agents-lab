@@ -1,5 +1,11 @@
 # agent-hub
 
+The recommended runtime is the [unified service](../service/README.md), which
+starts the registry and spawn supervisor together with shared configuration.
+Install with `npm run cli:install --workspace @agent-hub/service` from `agent-hub/`,
+then run `agent-hub start --background`. Existing Pi extensions and MCP clients
+continue using their existing registry and spawner directories.
+
 [Documentation index](README.md) · [Agent hub](../README.md)
 
 Setup examples start at the repository root. Run workspace development commands

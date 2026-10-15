@@ -1,5 +1,9 @@
 # agents-registry
 
+For one shared start/stop/status lifecycle and configuration, use the
+[unified agent-hub service](../service/README.md). Standalone commands below
+remain available; stop them before starting the hub against the same directories.
+
 [Documentation index](README.md) · [Agent hub](../README.md)
 
 Unless noted otherwise, run commands from `agent-hub/registry/`; source paths

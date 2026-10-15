@@ -1,5 +1,9 @@
 # Agent spawner
 
+For shared configuration and one start/stop/status lifecycle, use the
+[unified service](../service/README.md). The standalone supervisor below remains
+available for development; never run both against the same spawner directory.
+
 A separately started, same-user supervisor for background Pi children. Interactive
 children are **real Pi TUIs in detached tmux windows**, not RPC clients or terminal
 emulations. Headless children use RPC with a detached pipe owner. Both run the same

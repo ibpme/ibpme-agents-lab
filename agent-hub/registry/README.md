@@ -1,5 +1,9 @@
 # agents-registry
 
+For the recommended combined registry + supervisor lifecycle, use the
+[unified service](../service/README.md). The standalone CLI below remains available
+for registry-only deployments; do not run it against a registry owned by the hub.
+
 Machine-local discovery and live snapshots for Pi and Claude agents.
 Requires Node.js 22.18+ and npm on Linux or macOS.
 

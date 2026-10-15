@@ -14,6 +14,10 @@
     "./supervisor": {
       "types": "./dist/supervisor.d.ts",
       "import": "./dist/supervisor.js"
+    },
+    "./tmux": {
+      "types": "./dist/tmux.d.ts",
+      "import": "./dist/tmux.js"
     }
   },
   "bin": {

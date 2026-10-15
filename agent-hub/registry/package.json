@@ -39,6 +39,10 @@
       "types": "./dist/discovery/processes.d.ts",
       "import": "./dist/discovery/processes.js"
     },
-    "./schemas/*": "./schemas/*"
+    "./schemas/*": "./schemas/*",
+    "./daemon": {
+      "types": "./dist/daemon.d.ts",
+      "import": "./dist/daemon.js"
+    }
   }
 }
