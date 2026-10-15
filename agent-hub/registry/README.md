@@ -168,9 +168,8 @@ globally unique process identifier. `observedAt`, `reportedAt`, and daemon healt
 timestamps use millisecond-resolution clock readings.
 
 Publishers can obtain numeric process identities through the exported
-`listProcesses()` helper in `dist/discovery/processes.js`. Date strings are no
-longer accepted as `process.startedAt`. Rebuild and restart an existing writer
-to use the numeric format; startup discovery replaces its old snapshot.
+`listProcesses()` helper in `dist/discovery/processes.js`. Date strings are not
+accepted as `process.startedAt`.
 
 - Pi processes are recognized by their command or known Node/Bun entrypoint.
 - Claude sessions come from `claude agents --json` and must have a live PID in
@@ -500,15 +499,7 @@ to that endpoint. Its process verification proves liveness, not endpoint
 ownership. Check registry health and process identity and handle connection
 failures. Missing registry service does not prevent the listener from operating.
 
-Rebuild/restart the daemon and reload Pi's listener/publisher together to use
-`pi-listener-v2`. The listener now accepts an opaque content string within a
-minimal version-2 delivery envelope; MCP formats sender metadata into that text.
-The registry's strict endpoint schemas reject old `pi-listener-v1` advertisements.
-This does not change registry snapshot or publisher message versions.
-
-Rebuild/restart an existing daemon to support the messaging field. The schema
-version stays `1`; older consumers using strict schemas must update before
-reading snapshots containing messaging endpoints. Claude publishers cannot
+The schema version is `1`. Claude publishers cannot
 advertise endpoints, and Claude's internal messaging paths remain undisclosed.
 
 ## Reader interface

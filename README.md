@@ -13,7 +13,12 @@ A collection of reusable agent skills and pi extensions.
 
 ## Pi extensions
 
-See [pi/README.md](pi/README.md). Install with `pi/install.sh`.
+See [pi/README.md](pi/README.md) for the extension collection (installed with `pi/install.sh`).
+
+## Agent hub
+
+See [agent-hub/README.md](agent-hub/README.md) for the agents registry, MCP server and the pi extensions
+that use them (installed with `pi install`).
 
 ## Install skills
 

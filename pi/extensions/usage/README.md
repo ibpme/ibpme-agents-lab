@@ -1,8 +1,7 @@
 # Account usage
 
 Our own Pi extension; no external usage package or runtime dependency.
-Run `/reload` after editing it. It is included in the package manifest and
-uses the existing package symlink, so no resync is needed.
+Run `/reload` after editing it.
 
 ## Commands
 

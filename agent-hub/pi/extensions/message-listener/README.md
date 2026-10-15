@@ -12,8 +12,8 @@ RPC, JSON and print modes do not open a listener.
 ```
 
 The footer shows `● listening`, `○ listener off`, or `! listener error` through
-Pi's extension-status API. This works in the default footer and the repository's
-custom footer without taking over another extension's UI. The toggle lasts for
+Pi's extension-status API. This works in the default footer and in custom footers without
+taking over another extension's UI. The toggle lasts for
 this extension runtime; `/reload` and a new process return to enabled. Session
 replacement closes the old socket and creates a new one if enabled. Disabling
 stops new receipts; it does not cancel messages already handed to Pi.
@@ -50,11 +50,6 @@ including the newline are limited to 64 KiB. Unknown fields are rejected.
 Slash commands, skill expansion, and prompt-template expansion are disabled for
 socket input; `/listen off` sent as content is literal text, not a local command.
 Even a string that resembles a metadata header is not interpreted by the listener.
-
-This is a coordinated upgrade from v1: old envelopes are rejected rather than
-silently reinterpreted. Reload the listener and publisher, rebuild/restart the
-registry daemon and MCP server, and update manual clients together. The advertised
-protocol becomes `pi-listener-v2`; registry snapshot/publisher versions stay `1`.
 
 ### ACKs and retries
 
@@ -121,12 +116,8 @@ registration after daemon restarts. Turning off publishes `messaging: null`;
 publisher shutdown also attempts a bounded explicit clear. Missing/rejected
 registry requests never prevent local listening. The daemon is not auto-started.
 
-Endpoint advertisements expire under the registry's activity TTL (20 seconds
-by default), protecting against missing clears or disabled publishers. Expiry
-appears on the next snapshot write. Readers should also check registry health,
-reverify process identity, and handle socket connection failures; a snapshot is
-not a guarantee of a reachable endpoint. Rebuild and restart the daemon to load
-the updated schemas/store. Older strict snapshot readers must also be updated.
+Advertisement expiry, freshness and reader obligations are described in the
+[registry README](../../../registry/README.md#optional-pi-messaging-endpoint).
 
 To load only the listener and publisher from the repository root:
 
@@ -157,31 +148,7 @@ JS
 
 ## Agents MCP integration
 
-The [`agents-mcp` server](../../../mcp/README.md) routes `send_message` to
-this listener using the existing envelope and ACK protocol. `list_agents`
-exposes short opaque process-lifetime addresses (`agt_` + 16 hex characters),
-display names, the caller's `self_agent_id`, and messaging availability.
-Addresses are derived from harness, PID and process start time; the underlying
-identity remains checked for liveness and PID reuse. Names are labels, not
-routing keys.
-
-MCP formats the caller's identity and message ID into the content string:
-
-```text
-External agent message (sender metadata is not authenticated):
-{"sender_id":"agt_6c927c93e66ed4ae","sender_name":"Reviewer","sender_harness":"pi","message_id":"a-unique-message-id"}
-
-Please review the latest change.
-```
-
-`sender_name` is omitted when unavailable. JSON serialization escapes labels so
-newlines in a name cannot inject extra header lines. The body is preserved as
-supplied. The caller is inferred from stdio process ancestry or configured at
-HTTP initialization, never selected by the model in tool arguments. This still
-does not authenticate sender metadata.
-
-To reply, address the content header's `sender_id` with `send_message`, which
-resolves a fresh registry endpoint. No response is automatically sent, and a
-sender without a listener cannot receive replies. `message_id` maps to transport
-`id` and the content header's `message_id`; `deliver_as` maps to `deliverAs`
-(default `followUp`). All metadata formatting belongs to MCP, not this listener.
+The [`agents-mcp` server](../../../mcp/README.md) routes `send_message` to this listener
+using the envelope and ACK protocol above. It formats sender identity and the message ID
+into the opaque `content` string; the listener never interprets it. See the MCP README for
+the header format, addressing and error codes.

@@ -195,12 +195,3 @@ This is trusted, same-OS-user messaging, not an authenticated cross-user service
 Registry verification proves process liveness, not endpoint ownership or authority
 of the caller. An accepted message can trigger a model turn and tools with the
 receiver's permissions. Do not expose/proxy either transport to untrusted callers.
-
-## Coordinated v2 upgrade
-
-There is no v1 compatibility adapter. Reload Pi's listener and registry publisher,
-rebuild/restart the registry daemon and MCP server, and update manual socket
-clients together. Endpoints now advertise `pi-listener-v2`; old transport
-requests and ACKs are rejected. Registry snapshot and publisher message versions
-remain `1`, but their strict endpoint schemas now require the v2 protocol label.
-An old v1 snapshot makes MCP report `REGISTRY_UNAVAILABLE` until refreshed.
