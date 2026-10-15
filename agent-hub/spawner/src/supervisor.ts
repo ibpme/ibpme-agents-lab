@@ -141,7 +141,7 @@ export async function startSupervisor(options: SupervisorOptions) {
       if (!options.tmuxSocket || !isAbsolute(options.tmuxSocket) || !options.tmuxSession) throw new Error('Interactive spawning requires supervisor --tmux-socket and --tmux-session');
       const script = join(task.directory, 'launch.sh');
       await writeFile(script, `#!/bin/sh\nexport PATH=${quote(process.env.PATH ?? '')}\nexport AGENT_HUB_SPAWN_DIR=${quote(task.directory)}\nexec ${[options.pi ?? 'pi', ...args].map(quote).join(' ')}\n`, { mode: 0o700 });
-      const { stdout } = await execute('tmux', ['-S', options.tmuxSocket, 'new-window', '-d', '-P', '-F', '#{pane_id}', '-t', options.tmuxSession, '-n', task.input.name ?? task.id, '-c', task.input.cwd, `exec ${quote(script)}`], { timeout: 5000 });
+      const { stdout } = await execute('tmux', ['-S', options.tmuxSocket, 'new-window', '-d', '-P', '-F', '#{pane_id}', '-t', `${options.tmuxSession}:`, '-n', task.input.name ?? task.id, '-c', task.input.cwd, `exec ${quote(script)}`], { timeout: 5000 });
       const pane = stdout.trim();
       if (!/^%\d+$/.test(pane)) throw new Error('Invalid tmux pane ID');
       task.pane = pane;
