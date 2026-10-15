@@ -1,30 +1,34 @@
 # agent-hub
 
-Tooling for observing and messaging live coding agents on one machine.
+Observe and message live Pi and Claude coding agents on one machine.
 
-| Directory | Purpose |
-|---|---|
-| `registry/` | `agents-registry`: background daemon writing live agent snapshots (`agents.jsonl`) |
-| `mcp/` | `agents-mcp`: MCP server (stdio and Streamable HTTP) for listing and messaging agents |
-| `pi/` | pi package: `/agents` browser, `message-listener` and `registry-publisher` extensions |
+| Component | Purpose | Guide |
+|---|---|---|
+| `registry/` | Discover agents and write live snapshots | [Registry](docs/registry.md) |
+| `mcp/` | List and message agents through MCP | [MCP server](docs/mcp.md) |
+| `pi/` | `/agents` browser, listener, and registry publisher | [Setup](docs/setup.md#install-the-pi-extensions) |
 
-Nothing here starts or installs itself. See each directory's README for setup.
+## Quick start
 
-## Install the pi extensions
-
-```bash
-cd agent-hub/pi && bun install     # dependencies (ajv, pi types)
-pi install /absolute/path/to/ibpme-agents-lab/agent-hub/pi
-```
-
-`pi.extensions` in `pi/package.json` lists `agents`, `message-listener` and `registry-publisher`. The extensions
-import types and discovery code from `../registry`, so install from a checkout of this repository, not a copy of
-`pi/` alone. Use `pi remove` to uninstall.
-
-## Develop
+Requires Node.js 22+ and npm on Linux or macOS. From the repository root:
 
 ```bash
-cd registry && npm install && npm test
-cd mcp && npm install && npm test
-cd pi && bun install && bun run check
+cd agent-hub/registry
+npm ci
+npm run build
+npm run cli:install
 ```
+
+With `~/.local/bin` on `PATH`, launch explicitly:
+
+```bash
+agents-registry start --background --tmux-socket /absolute/path/to/tmux/socket
+agents-registry status
+agents-registry stop
+```
+
+Nothing starts automatically; OS-managed services are not supported yet. Tmux
+socket paths must be supplied explicitly. Repeat `--tmux-socket` for multiple servers.
+
+See **[docs/](docs/README.md)** for installation, Pi setup, protocols, security,
+architecture, and development checks.

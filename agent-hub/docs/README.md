@@ -1,0 +1,14 @@
+# Agent hub documentation
+
+[Agent hub overview and quick start](../README.md)
+
+| Guide | Contents |
+|---|---|
+| [Setup and development](setup.md) | Component overview, Pi package installation, development commands |
+| [Registry](registry.md) | CLI installation, explicit launch, tmux discovery, state, architecture, publishers, schemas, reader interface |
+| [MCP server](mcp.md) | Launch, agent identity, sender identification, tools, message envelope, errors, security |
+| [Pi agent browser](agents-pi.md) | Setup, controls, listener indicators, transcript preview, freshness, pane actions, checks |
+| [Pi message listener](message-listener.md) | Controls, v2 protocol, ACKs, retries, socket security, registry and MCP integration |
+
+Registry, MCP, and Pi consumers must use the same runtime directory. Nothing
+installs or starts automatically, and OS-managed services are not supported yet.
