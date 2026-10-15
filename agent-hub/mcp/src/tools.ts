@@ -28,7 +28,7 @@ export const spawnAgentSchema = z.strictObject({
 });
 export const listAgentTasksSchema = z.strictObject({});
 export const agentTaskSchema = z.strictObject({
-  action: z.enum(['check', 'fetch_answer', 'cancel']).describe('Inspect status, fetch the answer, or request cancellation.'),
+  action: z.enum(['check', 'fetch_answer', 'cancel']).describe('check: status; fetch_answer: recover a missing answer; cancel: stop current work.'),
   task_id: nonBlank.describe('Task ID returned by spawn_agent in this MCP session.'),
 });
 
@@ -118,7 +118,7 @@ export function registerAgentTools(server: McpServer, options: MessagingOptions 
 
   server.registerTool('agent_task', {
     title: 'Manage an agent task',
-    description: 'Check status, fetch the initial task answer, or cancel current work for an agent task in this MCP session. Cancellation does not close the agent.',
+    description: 'Manage tasks in this MCP session. Answers arrive automatically; fetch only if missing. Poll with check. Cancel stops work, not the agent.',
     inputSchema: agentTaskSchema,
     // A single tool includes cancellation, so annotations must cover the mutating action.
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
