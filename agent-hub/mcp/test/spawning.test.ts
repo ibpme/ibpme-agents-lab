@@ -27,25 +27,39 @@ test(`MCP spawns and delivers automatically (injectParentContext=${injectParentC
   const id = `agt_${createHash('sha256').update(JSON.stringify(['pi', process.pid, startedAt])).digest('hex').slice(0, 16)}`;
   await writeFile(join(directory, 'registry-health.json'), JSON.stringify({ version: 1, state: 'running', updatedAt: Date.now(), lastSuccessfulProcessDiscoveryAt: Date.now() }));
   await writeFile(join(directory, 'agents.jsonl'), JSON.stringify({ schemaVersion: 1, harness: 'pi', observedAt: Date.now(), process: { pid: process.pid, startedAt }, session: { id: 'original', mode: 'interactive' }, activity: { state: 'idle' }, messaging: { transport: 'unix', protocol: 'pi-listener-v2', path: listener.path, reportedAt: Date.now() } }) + '\n');
-  const routingConfig = injectParentContext === true ? { routing: { enabled: true, default_profile: 'general', classifier: { model: 'jev-latest', timeout_ms: 3000 }, profiles: [{ id: 'general', harness: 'pi' as const, provider: 'test', model: 'routed-model', effort: 'medium' as const, description: 'General tasks', append_system_prompt: 'Private profile instructions' }] } } : undefined;
-  const supervisor = await startSupervisor({ directory, routingConfig, routingDependencies: { classify: async () => 'general', validateProfile: async () => undefined }, registryDirectory: directory, pi: fileURLToPath(new URL('../../spawner/test/fake-pi.mjs', import.meta.url)), pollInterval: 20, tmuxSocket, tmuxSession: 'test' });
+  const routedHints: Array<string | undefined> = [];
+  const routingConfig = injectParentContext === true ? { routing: { enabled: true, default_profile: 'general', classifier: { model: 'jev-latest', timeout_ms: 3000 }, profiles: [{ id: 'general', harness: 'pi' as const, provider: 'test', model: 'routed-model', effort: 'medium' as const, description: 'General tasks', append_system_prompt: 'Private profile instructions' }, { id: 'deep', harness: 'pi' as const, provider: 'test', model: 'deep-model', effort: 'high' as const, description: 'Complex tasks' }] } } : undefined;
+  const supervisor = await startSupervisor({ directory, routingConfig, routingDependencies: { classify: async (_prompt, _config, _signal, hint) => { routedHints.push(hint); return 'general'; }, validateProfile: async () => undefined }, registryDirectory: directory, pi: fileURLToPath(new URL('../../spawner/test/fake-pi.mjs', import.meta.url)), pollInterval: 20, tmuxSocket, tmuxSession: 'test' });
   const server = await createConfiguredAgentsServer({ registryDirectory: directory, spawnerDirectory: directory, callerAgentId: id, injectParentContext });
   const client = new Client({ name: 'spawn-test', version: '1' });
   const [a,b] = InMemoryTransport.createLinkedPair();
   await server.connect(b); await client.connect(a);
   t.after(async () => { await client.close(); await server.close(); await supervisor.close(); await listener.close(); await execute('tmux', ['-S', tmuxSocket, 'kill-server']).catch(() => {}); await rm(directory, { recursive: true, force: true }); });
-  const schema = (await client.listTools()).tools.find(tool => tool.name === 'spawn_agent')!.inputSchema;
+  const spawnTool = (await client.listTools()).tools.find(tool => tool.name === 'spawn_agent')!;
+  assert.doesNotMatch(spawnTool.description!, /supervisor may automatically/);
+  const schema = spawnTool.inputSchema;
+  assert.equal(schema.properties?.routing_hint !== undefined, !!routingConfig);
   assert.equal(schema.properties?.model === undefined, !!routingConfig);
+  if (!routingConfig) {
+    const rejected = await client.callTool({ name: 'spawn_agent', arguments: { harness: 'pi', prompt: 'task', routing_hint: 'Should not be accepted' } });
+    assert.equal(rejected.isError, true);
+  }
+  const legacyHint = await client.callTool({ name: 'spawn_agent', arguments: { harness: 'pi', prompt: 'task', agentHint: 'Legacy argument' } });
+  assert.equal(legacyHint.isError, true);
   if (routingConfig) {
     const rejected = await client.callTool({ name: 'spawn_agent', arguments: { harness: 'pi', model: 'caller-model', prompt: 'task' } });
     assert.equal(rejected.isError, true);
   }
-  const spawned = await client.callTool({ name: 'spawn_agent', arguments: { harness: 'pi', cwd: directory, prompt: 'slow' } });
+  const spawned = await client.callTool({ name: 'spawn_agent', arguments: { harness: 'pi', cwd: directory, prompt: 'slow', ...(routingConfig ? { routing_hint: 'The user values a careful implementation' } : {}) } });
   assert.equal(spawned.isError, undefined);
   const task = spawned.structuredContent as any;
   assert.equal(task.status, 'running');
   const persisted = JSON.parse(await readFile(join(directory, 'tasks', task.task_id, 'task.json'), 'utf8'));
   assert.equal(persisted.input.mode, 'interactive');
+  assert.equal(persisted.input.prompt, 'slow');
+  assert.equal(persisted.input.routing_hint, routingConfig ? 'The user values a careful implementation' : undefined);
+  assert.deepEqual(routedHints, routingConfig ? ['The user values a careful implementation'] : []);
+  assert.doesNotMatch(JSON.stringify(spawned), /The user values a careful implementation/);
   if (routingConfig) {
     assert.equal(task.execution.model, 'routed-model');
     assert.equal(task.routing.profile, 'general');

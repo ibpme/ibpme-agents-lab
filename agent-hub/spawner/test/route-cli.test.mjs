@@ -70,9 +70,12 @@ test('dry-run reports unknown models, incompatible effort, and unavailable defau
 
 test('dry-run routes through real SDK to a mock endpoint and prints selected settings only', async t => {
   const h = await fixture(t);
+  const states = [];
   const server = createServer((req, res) => {
-    req.resume();
+    let data = '';
+    req.on('data', chunk => { data += chunk; });
     req.on('end', () => {
+      states.push(JSON.parse(data).state);
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ model: 'jev-latest', answers: { profile: { type: 'choice', choice: 'deep', confidence: 1, probabilities: { general: 0, deep: 1 } } }, usage: { input_tokens: 1, output_tokens: 1 } }));
     });
@@ -81,13 +84,15 @@ test('dry-run routes through real SDK to a mock endpoint and prints selected set
   t.after(() => new Promise(resolve => server.close(resolve)));
   h.env.TYPESAFE_API_KEY = 'test-secret';
   h.env.TYPESAFE_BASE_URL = `http://127.0.0.1:${server.address().port}`;
-  const result = await h.run('Investigate this difficult issue', '--require-classifier');
+  const result = await h.run('Investigate this difficult issue', '--routing-hint', 'The user requests a thorough review', '--require-classifier');
   assert.equal(result.code, 0, result.stderr);
   const output = JSON.parse(result.stdout);
   assert.equal(output.routing.profile, 'deep');
   assert.equal(output.routing.source, 'classifier');
   assert.equal(output.execution.effort, 'high');
   assert.equal(output.execution.has_append_system_prompt, true);
+  assert.deepEqual(states, [{ delegated_task: 'Investigate this difficult issue', routing_hint: 'The user requests a thorough review' }]);
+  assert.doesNotMatch(result.stdout + result.stderr, /The user requests a thorough review/);
   assert.doesNotMatch(result.stdout + result.stderr, /Private profile instructions|test-secret/);
 });
 
@@ -96,6 +101,8 @@ test('dry-run rejects invalid config and ambiguous prompt input', async t => {
   assert.equal((await h.run('--prompt', 'task', 'second task')).code, 1);
   assert.equal((await h.run('--validate-only', '--prompt', 'task')).code, 1);
   assert.equal((await h.run('--prompt', '  ')).code, 1);
+  assert.equal((await h.run('--prompt', 'task', '--routing-hint', '  ')).code, 1);
+  assert.equal((await h.run('--validate-only', '--routing-hint', 'context')).code, 1);
   h.config.routing.default_profile = 'missing'; await h.save();
   assert.equal((await h.run('--validate-only')).code, 1);
 });
@@ -114,4 +121,30 @@ test('dry-run reads stdin and respects explicitly disabled routing', async t => 
   const result = await h.run('--prompt', 'task');
   assert.equal(result.code, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), { enabled: false, routing: null, execution: null });
+});
+
+test('single-profile dry-run skips the SDK and requires no classifier key', async t => {
+  const h = await fixture(t);
+  h.config.routing.profiles.splice(1); await h.save();
+  let requests = 0;
+  const server = createServer((_req, res) => { requests++; res.writeHead(503); res.end(); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  h.env.TYPESAFE_BASE_URL = `http://127.0.0.1:${server.address().port}`;
+  for (const key of ['', 'unused-key']) {
+    h.env.TYPESAFE_API_KEY = key;
+    const result = await h.run('--prompt', 'Implement this task', '--routing-hint', 'Use careful analysis');
+    assert.equal(result.code, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.routing.source, 'default');
+    assert.equal(output.routing.profile, 'general');
+    assert.equal(output.routing.fallback_reason, undefined);
+    assert.equal(output.execution.model, 'general-model');
+    assert.equal((await h.run('--prompt', 'Task', '--require-classifier')).code, 2);
+  }
+  assert.equal(requests, 0);
+  h.config.routing.profiles[0].model = 'missing-model'; await h.save();
+  const invalid = await h.run('--prompt', 'Task');
+  assert.equal(invalid.code, 1);
+  assert.match(invalid.stderr, /Default routing profile general unavailable: unknown_chat_model/);
 });

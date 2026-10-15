@@ -222,7 +222,7 @@ is implemented; other `harness` values return `UNSUPPORTED_HARNESS`.
 
 | Tool | Required | Optional |
 | --- | --- | --- |
-| `spawn_agent` | `harness: "pi"` | `prompt`, `cwd`, `model`, `name` |
+| `spawn_agent` | `harness: "pi"` | `prompt`, `routing_hint`, `cwd`, `model`, `name` |
 | `list_agent_tasks` | — | — |
 | `agent_task` | `action: "check" | "fetch_answer" | "cancel"`, `task_id` | — |
 
@@ -252,6 +252,24 @@ transport discover the policy and omit `model` from `spawn_agent`. The superviso
 rejects execution overrides even from direct clients or stale MCP schemas.
 Reconnect MCP sessions after changing policy. Task results include `routing` and
 resolved `execution` metadata, but not profile system-prompt additions.
+
+When routing is enabled, `spawn_agent` optionally accepts `routing_hint`: a concise summary of relevant user
+preferences (including a requested profile, provider, model, or effort) or the
+calling agent's assessment of the task. It is advisory context
+for routing, not an execution override or extra child instructions. The prompt
+remains unchanged. Omit it when the task alone is sufficient. Hints must be
+non-blank, contain no NUL, and fit within 4 KiB UTF-8. The MCP schema omits `routing_hint` when routing is disabled and instead exposes
+the optional `model` argument. Hints are not echoed in task summaries. Like the delegated
+prompt, a supplied hint is sent to TypeSafe during classification and persisted
+in the private task record.
+
+```json
+{
+  "harness": "pi",
+  "prompt": "Investigate the intermittent cache invalidation failure",
+  "routing_hint": "The user prioritizes root-cause analysis; the failure spans multiple services."
+}
+```
 
 See [routing configuration, fallback policy, and prompt testing](routing.md).
 Routing disabled preserves the optional `model` argument shown above.

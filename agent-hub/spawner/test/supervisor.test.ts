@@ -233,3 +233,39 @@ test('cancelling a task during classification does not launch or retry it', asyn
   assert.equal((await spawning).status, 'cancelled');
   await assert.rejects(readFile(join(h.directory, 'tasks', id, 'launch-args.json')), { code: 'ENOENT' });
 });
+
+test('supervisor validates routing_hint before classification or task creation', async t => {
+  let classifications = 0;
+  const h = await setup(t, false, { routingConfig: routingConfig(), routingDependencies: {
+    classify: async () => { classifications++; return 'general'; }, validateProfile: async () => undefined,
+  } });
+  for (const routing_hint of ['', '   ', 'bad\0hint', '界'.repeat(1366), 'x'.repeat(4097), 123]) {
+    await assert.rejects(h.client.request({ action: 'spawn', owner: 'owner', input: {
+      harness: 'pi', mode: 'headless', cwd: h.directory, parent: h.parent, prompt: 'Task', routing_hint: routing_hint as string,
+    } }), /Invalid routing_hint/);
+  }
+  assert.equal(classifications, 0);
+  assert.deepEqual((await h.client.request({ action: 'list', owner: 'owner' })).tasks, []);
+});
+
+test('supervisor launches the sole default profile without classification', async t => {
+  const config = routingConfig(); config.routing.profiles.splice(1);
+  let classifications = 0;
+  const h = await setup(t, false, { routingConfig: config, routingDependencies: {
+    classify: async () => { classifications++; throw new Error('Must not classify'); }, validateProfile: async () => undefined,
+  } });
+  const task = await h.client.request({ action: 'spawn', owner: 'owner', input: {
+    harness: 'pi', mode: 'headless', cwd: h.directory, parent: h.parent, prompt: 'slow', routing_hint: 'User prefers careful analysis',
+  } });
+  assert.equal(task.status, 'running');
+  assert.equal((task.routing as any).source, 'default');
+  assert.equal((task.routing as any).profile, 'general');
+  assert.equal((task.routing as any).fallback_reason, undefined);
+  assert.equal(classifications, 0);
+  const directory = join(h.directory, 'tasks', task.task_id as string);
+  const persisted = JSON.parse(await readFile(join(directory, 'task.json'), 'utf8'));
+  assert.equal(persisted.input.prompt, 'slow');
+  assert.equal(persisted.execution.append_system_prompt, 'Default profile instructions');
+  const args = JSON.parse(await readFile(join(directory, 'launch-args.json'), 'utf8'));
+  assert.deepEqual(args.slice(args.indexOf('--provider'), args.indexOf('--provider') + 6), ['--provider', 'provider-a', '--model', 'general-model', '--thinking', 'medium']);
+});

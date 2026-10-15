@@ -9,6 +9,7 @@ export interface SpawnInput {
   harness: 'pi';
   mode: 'interactive' | 'headless';
   prompt?: string;
+  routing_hint?: string;
   injectParentContext?: boolean;
   cwd: string;
   model?: string;

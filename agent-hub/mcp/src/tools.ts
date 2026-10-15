@@ -24,6 +24,7 @@ export const sendMessageSchema = z.strictObject({
 export const spawnAgentSchema = z.strictObject({
   ...spawnFields,
   prompt: nonBlank.optional().describe('Optional initial task.'),
+  routing_hint: nonBlank.max(4096).refine(value => !value.includes('\0') && Buffer.byteLength(value) <= 4096, 'Must contain no NUL and be at most 4 KiB UTF-8').optional().describe('Optional profile/model context, including user-requested provider, model, effort, or task complexity.'),
 });
 export const listAgentTasksSchema = z.strictObject({});
 export const agentTaskSchema = z.strictObject({
@@ -72,6 +73,7 @@ export function registerAgentTools(server: McpServer, options: MessagingOptions 
     const output = await spawner.request({ action: 'spawn', owner, input: {
       harness: 'pi', mode: 'interactive', cwd: resolve(input.cwd ?? process.cwd()), parent,
       ...(options.injectParentContext === true ? { injectParentContext: true } : {}),
+      ...(input.routing_hint !== undefined ? { routing_hint: input.routing_hint } : {}),
       ...(input.prompt ? { prompt: input.prompt } : {}),
       ...(input.model ? { model: input.model } : {}),
       ...(input.name ? { name: input.name } : {}),
@@ -102,10 +104,10 @@ export function registerAgentTools(server: McpServer, options: MessagingOptions 
 
   server.registerTool('spawn_agent', {
     title: 'Spawn an agent',
-    description: 'Start an agent (the supervisor may automatically select its model and effort) and return task_id, agent_id, and can_receive_messages. If messaging is not ready, poll agent_task before sending. The initial task runs asynchronously and notifies you when it finishes.',
-    inputSchema: options.routingEnabled ? spawnAgentSchema.omit({ model: true }) : spawnAgentSchema,
+    description: 'Start an agent and return task_id, agent_id, and can_receive_messages. If messaging is not ready, poll agent_task before sending. The initial task runs asynchronously and notifies you when it finishes.',
+    inputSchema: options.routingEnabled ? spawnAgentSchema.omit({ model: true }) : spawnAgentSchema.omit({ routing_hint: true }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-  }, async input => result(() => spawn(input)));
+  }, async (input: SpawnAgentInput) => result(() => spawn(input)));
 
   server.registerTool('list_agent_tasks', {
     title: 'List agent tasks',

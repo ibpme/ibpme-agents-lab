@@ -26,6 +26,14 @@ requires a physical chat entry and rejects classifier-only entries. Catalogs may
 differ between installations: use `--validate-only` to check local resolution and
 credentials. Catalog presence does not guarantee remote provider access.
 
+To enforce one fixed execution profile, keep only that profile in `profiles`
+and name it as `default_profile`. When enabled routing has exactly one profile,
+the supervisor skips System One entirely, validates the profile, and launches it
+directly. No TypeSafe key is needed and no task or hint is sent to TypeSafe.
+Routing metadata reports `source: "default"`, not a fallback. Provider credentials
+and model/effort validation are still required, and caller overrides remain
+forbidden. A supplied `routing_hint` cannot change the sole profile.
+
 The JSON shape is:
 
 ```json
@@ -147,7 +155,8 @@ node spawner/dist/route-test.js \
 ```
 
 A single quoted positional prompt is also accepted. With no prompt argument,
-the command resolves the default profile without calling System One. The npm
+the command resolves the default profile without calling System One. A single
+configured profile also bypasses System One, even when a prompt is provided. The npm
 convenience command builds first:
 
 ```bash
@@ -155,9 +164,23 @@ npm run route:test --workspace @agent-hub/spawner -- \
   --config /absolute/path/to/routing.json --prompt 'Implement a focused fix'
 ```
 
-Prompt tests send the delegated text to TypeSafe. `--validate-only` does not.
+Use optional `--routing-hint TEXT` to test supplementary routing context:
+
+```bash
+node spawner/dist/route-test.js \
+  --config /absolute/path/to/routing.json \
+  --prompt 'Investigate the cache invalidation failure' \
+  --routing-hint 'The user prioritizes root-cause analysis across services'
+```
+
+Hints are optional; no hint is synthesized when omitted. `--routing-hint` cannot be
+combined with `--validate-only`. Without an initial prompt, the default profile
+is used without classification even if a hint is supplied.
+
+With multiple profiles, prompt tests send the delegated text and any supplied
+hint to TypeSafe. Single-profile routing does not call TypeSafe. `--validate-only` does not.
 Output is JSON with routing source, profile, duration, resolved execution
-settings, and fallback details. It does not echo prompts, appended instructions,
+settings, and fallback details. It does not echo prompts, hints, appended instructions,
 or credentials. `has_append_system_prompt` indicates whether the selected
 profile adds instructions.
 
@@ -168,7 +191,7 @@ Exit codes:
 - **1:** invalid arguments/configuration, failed profile validation in
   `--validate-only`, or an unavailable default execution profile.
 - **2:** `--require-classifier` was supplied but the result was not a successful
-  classifier-selected execution profile.
+  classifier-selected execution profile (including single-profile bypass).
 
 `--validate-only` can fail because a non-default profile is unavailable even
 though actual prompt routing can successfully fall back to the default.
@@ -176,9 +199,26 @@ though actual prompt routing can successfully fall back to the default.
 ## Execution and fallback policy
 
 The supervisor classifies the delegated `prompt`, not the parent's conversation.
-System One receives task data and profile descriptions, and chooses only a
+The optional `spawn_agent.routing_hint` (or dry-run `--routing-hint`) supplies relevant
+user preferences or a concise assessment from the delegating agent. It is
+advisory, not a direct model/profile override. Hints must be non-blank, contain no
+NUL, and be at most 4 KiB UTF-8. The MCP schema only exposes `routing_hint`
+when routing is enabled; otherwise it exposes the optional `model` argument.
+Direct supervisor and dry-run hints are ignored when routing is disabled. Hints are stored
+with the original input in the private task record, but are not added to the
+child prompt or system instructions and are not exposed in task summaries.
+
+System One receives `state: { delegated_task: prompt }`, with an additional
+`routing_hint` field only when a hint is supplied. Each choice contains the profile description,
+provider, model, and effort, with the default profile marked. It chooses only a
 profile ID. It cannot generate CLI arguments or profile instructions. The
-classification instructions treat the prompt as untrusted data, but routing
+classification question focuses on scope, reasoning depth, ambiguity, and
+cross-component dependencies rather than prompt length or emphatic wording. It
+considers a supplied hint for explicit profile/provider/model/effort preferences
+and the delegating agent's assessment. It prefers matching explicit user requests
+when a configured profile satisfies them, and uses the default when no more
+specific profile clearly fits. Profile system-prompt additions are not sent to
+the classifier. Routing
 classification is not a security boundary: phrase profile descriptions clearly
 and allow only execution configurations you are willing to run.
 
@@ -189,6 +229,7 @@ When routing is enabled, caller execution overrides are rejected: this includes
 | Condition | Behavior |
 | --- | --- |
 | Valid classifier selection and executable profile | Launch selected profile |
+| Exactly one configured profile | Validate and launch default; no classification, regardless of prompt or hint |
 | No initial prompt | Validate and launch default; no classification |
 | Missing TypeSafe key | Default fallback: `classifier_unconfigured` |
 | Classifier timeout | Default fallback: `classifier_timeout` |

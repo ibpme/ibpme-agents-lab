@@ -85,7 +85,9 @@ meet its own runtime requirements.
 
 The supervisor/service can own model selection through `--routing-config PATH`.
 When enabled, MCP discovers that policy and removes caller `model` selection;
-task results report the selected profile and execution settings. Routing is
+task results report the selected profile and execution settings. An optional
+`routing_hint` spawn argument provides advisory routing context (user preferences or
+your task assessment) without changing the child prompt. Routing is
 opt-in and configured separately from this MCP server. See
 [routing setup and the prompt-based dry-run script](../docs/routing.md).
 

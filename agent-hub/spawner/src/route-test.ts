@@ -3,25 +3,27 @@ import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { createRouter, loadRoutingConfig } from './routing.js';
 
-const help = `Usage: node spawner/dist/route-test.js --config PATH [--prompt TEXT | --stdin | --validate-only] [--require-classifier]
+const help = `Usage: node spawner/dist/route-test.js --config PATH [--prompt TEXT | --stdin | --validate-only] [--routing-hint TEXT] [--require-classifier]
 
 Validate routing configuration and test a delegated prompt without spawning Pi.
-A positional prompt is also accepted. With no prompt, resolve the default profile.
+A positional prompt is also accepted. With no prompt or only one configured
+profile, resolve the default profile without calling System One.
+--routing-hint supplies optional advisory routing context, not child instructions.
 --validate-only checks all profiles against Pi's local catalog and configured auth.
---require-classifier exits 2 if a prompt used fallback instead of System 1.
-JSON output does not echo the prompt, profile system instructions, or credentials.
+--require-classifier exits 2 unless System One selected the profile.
+JSON output does not echo the prompt, agent hint, profile system instructions, or credentials.
 TYPESAFE_API_KEY authenticates System 1. A real prompt test sends text to TypeSafe.
 Build first: npm run build --workspace @agent-hub/spawner`;
 
 async function main() {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
-    config: { type: 'string' }, prompt: { type: 'string' }, stdin: { type: 'boolean' },
+    config: { type: 'string' }, 'routing-hint': { type: 'string' }, prompt: { type: 'string' }, stdin: { type: 'boolean' },
     'validate-only': { type: 'boolean' }, 'require-classifier': { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
   } });
   if (values.help) { console.log(help); return; }
   if (!values.config) throw new Error('--config PATH is required');
   if (positionals.length > 1 || [values.prompt !== undefined, positionals.length > 0, !!values.stdin].filter(Boolean).length > 1) throw new Error('Supply one prompt using --prompt, a positional argument, or --stdin');
-  if (values['validate-only'] && (values.prompt !== undefined || positionals.length || values.stdin || values['require-classifier'])) throw new Error('--validate-only cannot be combined with a prompt or --require-classifier');
+  if (values['validate-only'] && (values.prompt !== undefined || positionals.length || values.stdin || values['require-classifier'] || values['routing-hint'] !== undefined)) throw new Error('--validate-only cannot be combined with a prompt, --routing-hint, or --require-classifier');
   const config = await loadRoutingConfig(resolve(values.config));
   const router = createRouter(config);
   if (values['validate-only']) {
@@ -43,7 +45,7 @@ async function main() {
     }
     prompt = Buffer.concat(chunks).toString('utf8');
   }
-  const result = await router.route(prompt);
+  const result = await router.route(prompt, undefined, values['routing-hint']);
   const execution = result?.execution;
   console.log(JSON.stringify({
     enabled: router.enabled,

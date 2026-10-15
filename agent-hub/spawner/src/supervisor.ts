@@ -1,4 +1,4 @@
-import { createRouter, loadRoutingConfig } from './routing.js';
+import { createRouter, loadRoutingConfig, validateRoutingHint } from './routing.js';
 import type { RoutingConfig, RoutingDependencies } from './routing.js';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -39,10 +39,11 @@ function validate(request: Request, routingEnabled: boolean): void {
   if (!input || input.harness !== 'pi' || !['interactive', 'headless'].includes(input.mode)) throw new Error('Only Pi interactive/headless spawning is supported');
   if (typeof input.cwd !== 'string' || !isAbsolute(input.cwd) || input.cwd.includes('\0')) throw new Error('cwd must be absolute');
   if (input.prompt !== undefined && (typeof input.prompt !== 'string' || !input.prompt.trim() || Buffer.byteLength(input.prompt) > 256 * 1024)) throw new Error('Invalid prompt (maximum 256 KiB)');
+  validateRoutingHint(input.routing_hint);
   if (input.injectParentContext !== undefined && typeof input.injectParentContext !== 'boolean') throw new Error('injectParentContext must be a boolean');
   if (input.mode === 'headless' && !input.prompt) throw new Error('Headless tasks require a prompt');
   for (const value of [input.model, input.name]) if (value !== undefined && (typeof value !== 'string' || !value.trim() || value.includes('\0') || value.length > 256)) throw new Error('Invalid model or name');
-  const allowed = ['harness', 'mode', 'cwd', 'prompt', 'model', 'name', 'parent', 'injectParentContext'];
+  const allowed = ['harness', 'mode', 'cwd', 'prompt', 'routing_hint', 'model', 'name', 'parent', 'injectParentContext'];
   for (const key of Object.keys(input)) if (routingEnabled && !allowed.includes(key)) throw new Error(`Unknown spawn input: ${key}`);
   const p = input.parent;
   if (!p || !/^agt_[a-f0-9]{16}$/.test(p.agentId) || !Number.isSafeInteger(p.pid) || p.pid <= 0 || !Number.isSafeInteger(p.startedAt) || typeof p.sessionId !== 'string' || !p.sessionId.trim()) throw new Error('A verified parent process and session are required');
@@ -197,7 +198,7 @@ export async function startSupervisor(options: SupervisorOptions) {
       routingAborts.set(id, routingAbort);
       try {
         await save(task);
-        const routed = await router?.route(input.prompt, AbortSignal.any([shutdown.signal, routingAbort.signal]));
+        const routed = await router?.route(input.prompt, AbortSignal.any([shutdown.signal, routingAbort.signal]), input.routing_hint);
         if (routed) { task.routing = routed.routing; task.execution = routed.execution; }
         if (stopping) throw new Error('Supervisor is shutting down');
         routingAbort.signal.throwIfAborted();

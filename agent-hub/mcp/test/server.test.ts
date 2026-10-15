@@ -46,6 +46,8 @@ test('discovery exposes the agents interface and session-scoped job descriptions
   assert.deepEqual(spawnSchema.required, ['harness']);
   assert.equal(spawnSchema.properties?.agent_type, undefined);
   assert.equal(spawnSchema.properties?.injectParentContext, undefined);
+  assert.equal(spawnSchema.properties?.routing_hint, undefined);
+  assert.ok(spawnSchema.properties?.model);
   assert.deepEqual(tools.find(tool => tool.name === 'agent_task')?.inputSchema.required, ['action', 'task_id']);
   assert.equal(tools.find(tool => tool.name === 'list_agent_tasks')?.annotations?.readOnlyHint, true);
   assert.equal(tools.find(tool => tool.name === 'agent_task')?.annotations?.readOnlyHint, false);
@@ -69,6 +71,7 @@ for (const call of [
   { name: 'send_message', arguments: { agent_id: 'agent' } },
   { name: 'spawn_agent', arguments: { harness: 'pi', prompt: '   ' } },
   { name: 'spawn_agent', arguments: { harness: 'pi', cwd: '' } },
+  ...['', '   ', 'bad\0hint', '界'.repeat(1366), 123].map(routing_hint => ({ name: 'spawn_agent', arguments: { harness: 'pi', routing_hint } })),
   { name: 'spawn_agent', arguments: { agent_type: 'pi' } },
   { name: 'spawn_agent', arguments: { harness: 'pi', injectParentContext: true } },
   { name: 'list_agent_tasks', arguments: { session_id: 'other-session' } },
