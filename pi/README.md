@@ -12,6 +12,10 @@ pi/install.sh --remove   # remove the link
 The package loads as one unit: `pi.extensions` in `package.json` lists the entry points, so delete a line to
 disable an extension. Run `/reload` in pi after changes.
 
+`install.sh` also adds the entries from `keybindings.json` to `~/.pi/agent/keybindings.json` when they are missing
+(existing entries are never changed). `tool-set` registers `shift+tab`, which pi reserves for
+`app.thinking.cycle`, so that action is moved to `shift+right`; without it the tool-set shortcut is skipped.
+
 ## Extensions
 
 | Extension | Purpose | Depends on |
