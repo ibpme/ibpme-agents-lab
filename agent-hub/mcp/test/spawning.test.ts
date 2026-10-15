@@ -10,7 +10,7 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createAgentsServer } from '../src/server.js';
+import { createAgentsServer, createConfiguredAgentsServer } from '../src/server.js';
 import { startSupervisor } from '@agent-hub/spawner/supervisor';
 import { listProcesses } from '@agent-hub/registry/processes';
 import { startListener } from '@agent-hub/pi/listener';
@@ -27,18 +27,31 @@ test(`MCP spawns and delivers automatically (injectParentContext=${injectParentC
   const id = `agt_${createHash('sha256').update(JSON.stringify(['pi', process.pid, startedAt])).digest('hex').slice(0, 16)}`;
   await writeFile(join(directory, 'registry-health.json'), JSON.stringify({ version: 1, state: 'running', updatedAt: Date.now(), lastSuccessfulProcessDiscoveryAt: Date.now() }));
   await writeFile(join(directory, 'agents.jsonl'), JSON.stringify({ schemaVersion: 1, harness: 'pi', observedAt: Date.now(), process: { pid: process.pid, startedAt }, session: { id: 'original', mode: 'interactive' }, activity: { state: 'idle' }, messaging: { transport: 'unix', protocol: 'pi-listener-v2', path: listener.path, reportedAt: Date.now() } }) + '\n');
-  const supervisor = await startSupervisor({ directory, registryDirectory: directory, pi: fileURLToPath(new URL('../../spawner/test/fake-pi.mjs', import.meta.url)), pollInterval: 20, tmuxSocket, tmuxSession: 'test' });
-  const server = createAgentsServer({ registryDirectory: directory, spawnerDirectory: directory, callerAgentId: id, injectParentContext });
+  const routingConfig = injectParentContext === true ? { routing: { enabled: true, default_profile: 'general', classifier: { model: 'jev-latest', timeout_ms: 3000 }, profiles: [{ id: 'general', harness: 'pi' as const, provider: 'test', model: 'routed-model', effort: 'medium' as const, description: 'General tasks', append_system_prompt: 'Private profile instructions' }] } } : undefined;
+  const supervisor = await startSupervisor({ directory, routingConfig, routingDependencies: { classify: async () => 'general', validateProfile: async () => undefined }, registryDirectory: directory, pi: fileURLToPath(new URL('../../spawner/test/fake-pi.mjs', import.meta.url)), pollInterval: 20, tmuxSocket, tmuxSession: 'test' });
+  const server = await createConfiguredAgentsServer({ registryDirectory: directory, spawnerDirectory: directory, callerAgentId: id, injectParentContext });
   const client = new Client({ name: 'spawn-test', version: '1' });
   const [a,b] = InMemoryTransport.createLinkedPair();
   await server.connect(b); await client.connect(a);
   t.after(async () => { await client.close(); await server.close(); await supervisor.close(); await listener.close(); await execute('tmux', ['-S', tmuxSocket, 'kill-server']).catch(() => {}); await rm(directory, { recursive: true, force: true }); });
+  const schema = (await client.listTools()).tools.find(tool => tool.name === 'spawn_agent')!.inputSchema;
+  assert.equal(schema.properties?.model === undefined, !!routingConfig);
+  if (routingConfig) {
+    const rejected = await client.callTool({ name: 'spawn_agent', arguments: { harness: 'pi', model: 'caller-model', prompt: 'task' } });
+    assert.equal(rejected.isError, true);
+  }
   const spawned = await client.callTool({ name: 'spawn_agent', arguments: { harness: 'pi', cwd: directory, prompt: 'slow' } });
   assert.equal(spawned.isError, undefined);
   const task = spawned.structuredContent as any;
   assert.equal(task.status, 'running');
   const persisted = JSON.parse(await readFile(join(directory, 'tasks', task.task_id, 'task.json'), 'utf8'));
   assert.equal(persisted.input.mode, 'interactive');
+  if (routingConfig) {
+    assert.equal(task.execution.model, 'routed-model');
+    assert.equal(task.routing.profile, 'general');
+    assert.equal(persisted.execution.append_system_prompt, 'Private profile instructions');
+    assert.doesNotMatch(JSON.stringify(spawned), /Private profile instructions/);
+  }
   assert.equal(persisted.input.injectParentContext, injectParentContext === true ? true : undefined);
   assert.equal(persisted.input.parent.agentId, id);
   assert.ok(persisted.pane);

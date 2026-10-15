@@ -19,6 +19,7 @@ const usage = `agent-hub <start|status|stop> [options]
   --activity-ttl MS         Activity expiry (start only)
   --tmux-socket PATH        Repeat to watch multiple servers; first is used by spawner
   --tmux-session NAME       Spawner tmux session (start only)
+  --routing-config PATH     Supervisor model routing configuration (start only)
   --pi PATH                 Pi executable (start only)
   --recover-lock            Recover stale spawner ownership (start only)
   --registry-only           Run without the spawner (start only)
@@ -44,7 +45,7 @@ function parse(args: string[]): { command: string; background: boolean; options:
   const seen = new Set<string>();
   while (args.length) {
     const option = args.shift()!;
-    if (!['--directory', '--background', '--foreground', '--registry-directory', '--spawner-directory', '--interval', '--activity-ttl', '--tmux-socket', '--tmux-session', '--pi', '--recover-lock', '--registry-only'].includes(option)) {
+    if (!['--directory', '--background', '--foreground', '--registry-directory', '--spawner-directory', '--interval', '--activity-ttl', '--tmux-socket', '--tmux-session', '--pi', '--routing-config', '--recover-lock', '--registry-only'].includes(option)) {
       throw new Error(`Unknown option: ${option}`);
     }
     if (seen.has(option) && option !== '--tmux-socket') throw new Error(`Duplicate option: ${option}`);
@@ -60,6 +61,7 @@ function parse(args: string[]): { command: string; background: boolean; options:
       case '--directory': options.directory = resolve(value); break;
       case '--registry-directory': options.registryDirectory = resolve(value); break;
       case '--spawner-directory': options.spawnerDirectory = resolve(value); break;
+      case '--routing-config': options.routingConfigPath = resolve(value); break;
       case '--pi': options.pi = value; break;
       case '--tmux-session':
         if (value.includes(':')) throw new Error('Invalid tmux session name');
@@ -100,6 +102,7 @@ function childFlags(config: Config): string[] {
     '--interval', String(config.intervalMs), '--activity-ttl', String(config.activityTtlMs),
     ...config.tmuxServers.flatMap(socket => ['--tmux-socket', socket])];
   if (config.tmuxSession !== undefined) flags.push('--tmux-session', config.tmuxSession);
+  if (config.routingConfigPath !== undefined) flags.push('--routing-config', config.routingConfigPath);
   if (config.pi !== undefined) flags.push('--pi', config.pi);
   if (config.recoverLock) flags.push('--recover-lock');
   if (config.registryOnly) flags.push('--registry-only');

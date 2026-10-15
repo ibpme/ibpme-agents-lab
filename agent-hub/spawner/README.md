@@ -10,6 +10,23 @@ emulations. Headless children use RPC with a detached pipe owner. Both run the s
 harness-side lifecycle extension; the model never has to call `send_message` to
 report completion.
 
+## Optional model routing
+
+Use `--routing-config /absolute/path/to/routing.json` to enable supervisor-owned
+Jev System One profile routing. Profiles choose Pi provider/model/effort and can
+append system instructions. Routing is authoritative when enabled and falls
+back to a configured default when classification fails. No configuration means
+existing behavior is unchanged.
+
+See [routing configuration and prompt testing](../docs/routing.md) and the
+[example configuration](examples/routing.json). Test without spawning an agent:
+
+```bash
+# From agent-hub/ after building
+node spawner/dist/route-test.js --config /path/to/routing.json --prompt 'Your delegated task'
+node spawner/dist/route-test.js --config /path/to/routing.json --validate-only
+```
+
 ## Build and start
 
 Requires Node.js 22.18+, Pi 1.1+ (`agent_settled` support), and tmux for interactive

@@ -16,6 +16,7 @@ export default function spawnLifecycle(pi: ExtensionAPI): void {
   const directory = process.env.AGENT_HUB_SPAWN_DIR;
   if (!directory || !isAbsolute(directory)) return;
   const task = JSON.parse(readFileSync(join(directory, 'task.json'), 'utf8')) as {
+    execution?: { append_system_prompt?: string };
     input: { prompt?: string; mode: string; injectParentContext?: boolean; parent?: { agentId?: string } };
   };
   function readState(): State {
@@ -76,13 +77,16 @@ export default function spawnLifecycle(pi: ExtensionAPI): void {
     }, 250);
     poll.unref();
   });
+  const promptAdditions: string[] = [];
+  if (task.execution?.append_system_prompt?.trim()) promptAdditions.push(task.execution.append_system_prompt);
   if (task.input.injectParentContext === true && /^agt_[0-9a-f]{16}$/.test(task.input.parent?.agentId ?? '')) {
     const parentAgentId = task.input.parent!.agentId!;
+    promptAdditions.push(`## Delegation context\nparent_agent_id: ${parentAgentId}\nYou were spawned by this parent agent. If you need clarification or must report a blocker, use the agent-hub MCP send_message tool with agent_id set to ${parentAgentId} and message set to your question or update. Discover the tool through the available MCP tool discovery mechanism if it is not directly exposed. If the tool is unavailable or delivery fails, explain the limitation rather than claiming the parent was notified. A successful send means queued, not answered; do not assume a reply. Your initial task's final answer is delivered automatically to the parent, so do not send a duplicate completion message.`);
+  }
+  if (promptAdditions.length) {
     pi.on('before_agent_start', (event, ctx) => {
       if (!state.sessionId || ctx.sessionManager.getSessionId() !== state.sessionId) return;
-      return {
-        systemPrompt: `${event.systemPrompt}\n\n## Delegation context\nparent_agent_id: ${parentAgentId}\nYou were spawned by this parent agent. If you need clarification or must report a blocker, use the agent-hub MCP send_message tool with agent_id set to ${parentAgentId} and message set to your question or update. Discover the tool through the available MCP tool discovery mechanism if it is not directly exposed. If the tool is unavailable or delivery fails, explain the limitation rather than claiming the parent was notified. A successful send means queued, not answered; do not assume a reply. Your initial task's final answer is delivered automatically to the parent, so do not send a duplicate completion message.`,
-      };
+      return { systemPrompt: [event.systemPrompt, ...promptAdditions].join('\n\n') };
     });
   }
   pi.on('agent_start', () => {

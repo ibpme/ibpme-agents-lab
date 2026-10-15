@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import type { SupervisorOptions } from '../src/supervisor.ts';
+import { parseRoutingConfig } from '../dist/routing.js';
 import { startSupervisor } from '../dist/supervisor.js';
 import { atomic, execute, processStart } from '../dist/io.js';
 import { createSpawnerClient } from '../dist/client.js';
@@ -15,7 +17,7 @@ async function until(operation: () => Promise<any>, check: (value: any) => boole
   while (Date.now() < end) { const value = await operation(); if (check(value)) return value; await wait(); }
   throw new Error('Timed out waiting for task state');
 }
-async function setup(t: test.TestContext, tmux = false) {
+async function setup(t: test.TestContext, tmux = false, overrides: Partial<SupervisorOptions> = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'spawner-'));
   const tmuxSocket = join(directory, 'tmux.sock');
   if (tmux) await execute('tmux', ['-S', tmuxSocket, '-f', '/dev/null', 'new-session', '-d', '-s', 'test']);
@@ -28,6 +30,7 @@ async function setup(t: test.TestContext, tmux = false) {
       if (reject) throw new Error('Parent temporarily unavailable');
       notifications.push(structuredClone(task));
     },
+    ...overrides,
   };
   let runtime = await startSupervisor(options);
   const client = createSpawnerClient(directory);
@@ -135,4 +138,98 @@ test('explicit lock recovery refuses a live owner and can recover a dead owner',
   await atomic(join(directory, 'supervisor.lock'), { pid: 2147483647, startedAt: 0 });
   const runtime = await startSupervisor({ directory, recoverLock: true });
   await runtime.close();
+});
+
+function routingConfig() {
+  return parseRoutingConfig({ routing: { enabled: true, default_profile: 'general', profiles: [
+    { id: 'general', harness: 'pi', provider: 'provider-a', model: 'general-model', effort: 'medium', description: 'General work', append_system_prompt: 'Default profile instructions' },
+    { id: 'deep', harness: 'pi', provider: 'provider-b', model: 'deep-model', effort: 'high', description: 'Deep work', append_system_prompt: 'Deep profile instructions' },
+  ] } });
+}
+
+for (const tmux of [false, true]) {
+  test(`supervisor persists authoritative routing and launches exact profile settings (tmux=${tmux})`, async t => {
+    let classifications = 0;
+    const config = routingConfig();
+    const h = await setup(t, tmux, { routingConfig: config, routingDependencies: { classify: async () => { classifications++; return 'deep'; }, validateProfile: async () => undefined } });
+    assert.equal((await h.client.request({ action: 'capabilities', owner: 'owner' })).routing_enabled, true);
+    for (const override of [{ model: 'caller-choice' }, { provider: 'caller-choice' }, { effort: 'low' }, { profile: 'general' }, { execution: { model: 'caller-choice' } }, { append_system_prompt: 'caller instructions' }]) {
+      await assert.rejects(h.client.request({ action: 'spawn', owner: 'owner', input: { harness: 'pi', mode: tmux ? 'interactive' : 'headless', cwd: h.directory, parent: h.parent, prompt: 'task', ...override } as SpawnInput }), /overrides are forbidden|Unknown spawn input/);
+    }
+    assert.equal(classifications, 0);
+    const task = await h.spawn('slow');
+    assert.equal(classifications, 1);
+    assert.equal((task.routing as any).profile, 'deep');
+    assert.deepEqual(task.execution, { harness: 'pi', provider: 'provider-b', model: 'deep-model', effort: 'high' });
+    assert.doesNotMatch(JSON.stringify(task), /Deep profile instructions/);
+    const directory = join(h.directory, 'tasks', task.task_id as string);
+    const persisted = JSON.parse(await readFile(join(directory, 'task.json'), 'utf8'));
+    assert.equal(persisted.execution.append_system_prompt, 'Deep profile instructions');
+    assert.equal(persisted.input.model, undefined);
+    const args = JSON.parse(await readFile(join(directory, 'launch-args.json'), 'utf8'));
+    assert.deepEqual(args.slice(args.indexOf('--provider'), args.indexOf('--provider') + 6), ['--provider', 'provider-b', '--model', 'deep-model', '--thinking', 'high']);
+    config.routing.profiles[1]!.model = 'changed-after-spawn';
+    await h.restart();
+    const checked = await h.check(task.task_id as string);
+    assert.equal((checked.execution as any).model, 'deep-model');
+    assert.equal(classifications, 1);
+  });
+}
+
+test('classification time is separate from the startup handshake deadline', async t => {
+  const h = await setup(t, false, { startupTimeout: 150, routingConfig: routingConfig(), routingDependencies: {
+    classify: async () => { await wait(250); return 'general'; }, validateProfile: async () => undefined,
+  } });
+  const task = await h.spawn('slow');
+  assert.equal(task.status, 'running');
+  assert.ok((task.routing as any).duration_ms >= 250);
+});
+
+test('supervisor uses full default fallback profile and never launches an unavailable default', async t => {
+  let unavailable = false;
+  const h = await setup(t, false, { routingConfig: routingConfig(), routingDependencies: {
+    classify: async () => { throw new Error('classifier failed'); }, validateProfile: async () => unavailable ? 'unknown_chat_model' : undefined,
+  } });
+  const task = await h.spawn('slow');
+  assert.equal((task.routing as any).source, 'fallback');
+  assert.equal((task.execution as any).model, 'general-model');
+  const persisted = JSON.parse(await readFile(join(h.directory, 'tasks', task.task_id as string, 'task.json'), 'utf8'));
+  assert.equal(persisted.execution.append_system_prompt, 'Default profile instructions');
+  unavailable = true;
+  const failed = await h.spawn('task');
+  assert.equal(failed.status, 'failed');
+  const directory = join(h.directory, 'tasks', failed.task_id as string);
+  await assert.rejects(readFile(join(directory, 'launch-args.json')), { code: 'ENOENT' });
+  assert.match(JSON.parse(await readFile(join(directory, 'completion.json'), 'utf8')).error, /Default routing profile general unavailable/);
+});
+
+test('shutdown cancels in-flight classification without launching a child', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'route-stop-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  let classified!: () => void;
+  const started = new Promise<void>(resolve => { classified = resolve; });
+  const runtime = await startSupervisor({ directory, pi: fake, routingConfig: routingConfig(), routingDependencies: {
+    classify: async () => { classified(); return new Promise(() => {}); }, validateProfile: async () => undefined,
+  } });
+  const pending = runtime.handle({ action: 'spawn', owner: 'owner', input: { harness: 'pi', mode: 'headless', cwd: directory, prompt: 'task', parent: { agentId: 'agt_0000000000000000', pid: process.pid, startedAt: (await processStart(process.pid))!, sessionId: 'parent' } } });
+  await started;
+  await runtime.close();
+  const result = await pending;
+  assert.equal(result.status, 'failed');
+  await assert.rejects(readFile(join(directory, 'tasks', result.task_id as string, 'launch-args.json')), { code: 'ENOENT' });
+});
+
+test('cancelling a task during classification does not launch or retry it', async t => {
+  let classified!: () => void;
+  const started = new Promise<void>(resolve => { classified = resolve; });
+  const h = await setup(t, false, { routingConfig: routingConfig(), routingDependencies: {
+    classify: async () => { classified(); return new Promise(() => {}); }, validateProfile: async () => undefined,
+  } });
+  const spawning = h.spawn('task');
+  await started;
+  const listing = await h.client.request({ action: 'list', owner: 'owner' });
+  const id = (listing.tasks as any[])[0].task_id;
+  await h.client.request({ action: 'cancel', owner: 'owner', taskId: id });
+  assert.equal((await spawning).status, 'cancelled');
+  await assert.rejects(readFile(join(h.directory, 'tasks', id, 'launch-args.json')), { code: 'ENOENT' });
 });

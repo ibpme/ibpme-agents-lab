@@ -1,3 +1,4 @@
+import type { Execution, RoutingDecision } from './routing.js';
 export interface Parent {
   agentId: string;
   pid: number;
@@ -26,6 +27,9 @@ export interface Task {
   owner: string;
   input: SpawnInput;
   createdAt: number;
+  launchStartedAt?: number;
+  routing?: RoutingDecision;
+  execution?: Execution;
   status: Status;
   directory: string;
   pane?: string;
@@ -41,7 +45,7 @@ export interface Task {
 }
 export interface Ready { pid: number; sessionId: string }
 export interface Request {
-  action: 'spawn' | 'list' | 'check' | 'fetch_answer' | 'cancel';
+  action: 'capabilities' | 'spawn' | 'list' | 'check' | 'fetch_answer' | 'cancel';
   owner: string;
   input?: SpawnInput;
   taskId?: string;

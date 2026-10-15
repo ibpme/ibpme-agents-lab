@@ -243,6 +243,19 @@ readiness without waiting. Missing/stale registry data, an unregistered or exite
 process, or a missing/stale endpoint all report false without failing task access.
 Readiness is a snapshot, not a guarantee that a later delivery will succeed.
 
+### Supervisor-owned model routing
+
+The supervisor can automatically select a Pi provider/model/effort profile using
+Jev System One. Enable it with the supervisor/service `--routing-config PATH`
+option, not an MCP flag or spawn argument. When enabled, the MCP CLI and HTTP
+transport discover the policy and omit `model` from `spawn_agent`. The supervisor
+rejects execution overrides even from direct clients or stale MCP schemas.
+Reconnect MCP sessions after changing policy. Task results include `routing` and
+resolved `execution` metadata, but not profile system-prompt additions.
+
+See [routing configuration, fallback policy, and prompt testing](routing.md).
+Routing disabled preserves the optional `model` argument shown above.
+
 ### Optional parent context in spawned children
 
 By default, children receive the initial prompt unchanged and are not told the

@@ -18,6 +18,10 @@
     "./tmux": {
       "types": "./dist/tmux.d.ts",
       "import": "./dist/tmux.js"
+    },
+    "./routing": {
+      "types": "./dist/routing.d.ts",
+      "import": "./dist/routing.js"
     }
   },
   "bin": {
@@ -28,9 +32,12 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "npm run build && node --experimental-strip-types --test test/*.test.ts test/*.test.mjs",
     "cli:install": "node scripts/install-cli.mjs install",
-    "cli:uninstall": "node scripts/install-cli.mjs uninstall"
+    "cli:uninstall": "node scripts/install-cli.mjs uninstall",
+    "route:test": "npm run build && node dist/route-test.js"
   },
   "dependencies": {
-    "@agent-hub/pi": "0.1.0"
+    "@agent-hub/pi": "0.1.0",
+    "@typesafe-ai/sdk": "^0.7.0",
+    "zod": "^4.6.7"
   }
 }

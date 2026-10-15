@@ -81,6 +81,14 @@ See the [Pi setup guide](../docs/setup.md#install-the-pi-extensions) for details
 and the browser's optional Bun requirement. The underlying Pi version must also
 meet its own runtime requirements.
 
+### Automatic spawn model routing
+
+The supervisor/service can own model selection through `--routing-config PATH`.
+When enabled, MCP discovers that policy and removes caller `model` selection;
+task results report the selected profile and execution settings. Routing is
+opt-in and configured separately from this MCP server. See
+[routing setup and the prompt-based dry-run script](../docs/routing.md).
+
 ### Optional delegation context
 
 Spawned children are not told the parent's agent ID by default. To enable parent

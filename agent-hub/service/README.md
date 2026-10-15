@@ -98,3 +98,17 @@ npm run cli:uninstall --workspace @agent-hub/service
 ```
 
 This does not stop a running service or delete state.
+
+## Optional spawn model routing
+
+Pass `--routing-config /absolute/path/to/routing.json` to `agent-hub start`
+(or add `routingConfigPath` to the service configuration file). The supervisor
+uses Jev System One to select a configured Pi provider/model/effort profile,
+with optional profile system instructions and a default fallback. Routing is
+opt-in and overrides caller model selection when enabled. Export
+`TYPESAFE_API_KEY` in the service's environment before starting it.
+
+See [routing configuration and the prompt-based test script](../docs/routing.md).
+Relative file-config paths resolve against the service control directory; CLI
+paths resolve against the current working directory. Restart the service and
+reconnect MCP sessions after changing routing policy.

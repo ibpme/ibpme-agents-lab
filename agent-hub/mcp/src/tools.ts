@@ -102,8 +102,8 @@ export function registerAgentTools(server: McpServer, options: MessagingOptions 
 
   server.registerTool('spawn_agent', {
     title: 'Spawn an agent',
-    description: 'Start an agent and return task_id, agent_id, and can_receive_messages. If messaging is not ready, poll agent_task before sending. The initial task runs asynchronously and notifies you when it finishes.',
-    inputSchema: spawnAgentSchema,
+    description: 'Start an agent (the supervisor may automatically select its model and effort) and return task_id, agent_id, and can_receive_messages. If messaging is not ready, poll agent_task before sending. The initial task runs asynchronously and notifies you when it finishes.',
+    inputSchema: options.routingEnabled ? spawnAgentSchema.omit({ model: true }) : spawnAgentSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, async input => result(() => spawn(input)));
 

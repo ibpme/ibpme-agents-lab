@@ -1,3 +1,5 @@
+import { createRouter, loadRoutingConfig } from './routing.js';
+import type { RoutingConfig, RoutingDependencies } from './routing.js';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
@@ -13,6 +15,9 @@ import type { Completion, Ready, Request, SpawnInput, Task } from './types.js';
 
 export interface SupervisorOptions {
   directory: string;
+  routingConfig?: RoutingConfig;
+  routingConfigPath?: string;
+  routingDependencies?: RoutingDependencies;
   pi?: string;
   extension?: string;
   tmuxSocket?: string;
@@ -26,9 +31,9 @@ export interface SupervisorOptions {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 const active = (task: Task) => task.status === 'starting' || task.status === 'running';
-function validate(request: Request): void {
-  if (!request || !['spawn', 'list', 'check', 'fetch_answer', 'cancel'].includes(request.action) || typeof request.owner !== 'string' || !request.owner.trim() || request.owner.length > 256) throw new Error('Invalid request');
-  if (request.action !== 'list' && request.action !== 'spawn' && !/^task_[a-f0-9-]{36}$/.test(request.taskId ?? '')) throw new Error('Invalid task ID');
+function validate(request: Request, routingEnabled: boolean): void {
+  if (!request || !['capabilities', 'spawn', 'list', 'check', 'fetch_answer', 'cancel'].includes(request.action) || typeof request.owner !== 'string' || !request.owner.trim() || request.owner.length > 256) throw new Error('Invalid request');
+  if (request.action !== 'capabilities' && request.action !== 'list' && request.action !== 'spawn' && !/^task_[a-f0-9-]{36}$/.test(request.taskId ?? '')) throw new Error('Invalid task ID');
   if (request.action !== 'spawn') return;
   const input = request.input;
   if (!input || input.harness !== 'pi' || !['interactive', 'headless'].includes(input.mode)) throw new Error('Only Pi interactive/headless spawning is supported');
@@ -37,10 +42,17 @@ function validate(request: Request): void {
   if (input.injectParentContext !== undefined && typeof input.injectParentContext !== 'boolean') throw new Error('injectParentContext must be a boolean');
   if (input.mode === 'headless' && !input.prompt) throw new Error('Headless tasks require a prompt');
   for (const value of [input.model, input.name]) if (value !== undefined && (typeof value !== 'string' || !value.trim() || value.includes('\0') || value.length > 256)) throw new Error('Invalid model or name');
+  const allowed = ['harness', 'mode', 'cwd', 'prompt', 'model', 'name', 'parent', 'injectParentContext'];
+  for (const key of Object.keys(input)) if (routingEnabled && !allowed.includes(key)) throw new Error(`Unknown spawn input: ${key}`);
   const p = input.parent;
   if (!p || !/^agt_[a-f0-9]{16}$/.test(p.agentId) || !Number.isSafeInteger(p.pid) || p.pid <= 0 || !Number.isSafeInteger(p.startedAt) || typeof p.sessionId !== 'string' || !p.sessionId.trim()) throw new Error('A verified parent process and session are required');
 }
 export async function startSupervisor(options: SupervisorOptions) {
+  if (options.routingConfig && options.routingConfigPath) throw new Error('Choose routingConfig or routingConfigPath, not both');
+  const routingConfig = options.routingConfig ?? (options.routingConfigPath ? await loadRoutingConfig(options.routingConfigPath) : undefined);
+  const router = routingConfig ? createRouter(routingConfig, options.routingDependencies) : undefined;
+  const shutdown = new AbortController();
+  const requests = new Set<Promise<Record<string, unknown>>>();
   const directory = resolve(options.directory);
   const socketPath = join(directory, 'spawner.sock');
   if (Buffer.byteLength(socketPath) > 100) throw new Error('Spawner socket path exceeds 100 bytes; use a shorter AGENTS_SPAWNER_DIR');
@@ -60,6 +72,7 @@ export async function startSupervisor(options: SupervisorOptions) {
   const tasks = new Map<string, Task>();
   const children = new Map<string, ChildProcess>();
   const launching = new Set<string>();
+  const routingAborts = new Map<string, AbortController>();
   const connections = new Set<Socket>();
   const pending = new Map<string, Promise<void>>();
   let stopping = false;
@@ -104,7 +117,7 @@ export async function startSupervisor(options: SupervisorOptions) {
         task.delivery = task.input.prompt ? 'pending' : 'none';
       }
     }
-    if (task.status === 'starting' && Date.now() - task.createdAt > (options.startupTimeout ?? 15000)) {
+    if (task.status === 'starting' && Date.now() - (task.launchStartedAt ?? task.createdAt) > (options.startupTimeout ?? 15000)) {
       task.status = 'failed';
       task.completion = { status: 'failed', text: '', error: 'Pi startup handshake timed out' };
       task.delivery = task.input.prompt ? 'pending' : 'none';
@@ -135,13 +148,16 @@ export async function startSupervisor(options: SupervisorOptions) {
   async function launch(task: Task): Promise<void> {
     const extension = options.extension ?? fileURLToPath(new URL(import.meta.resolve('@agent-hub/pi/spawn-lifecycle')));
     await stat(extension);
+    shutdown.signal.throwIfAborted();
     const args = ['--extension', extension, '--session-dir', join(task.directory, 'sessions'), '--session-id', task.id];
-    if (task.input.model) args.push('--model', task.input.model);
+    if (task.execution) args.push('--provider', task.execution.provider, '--model', task.execution.model, '--thinking', task.execution.effort);
+    else if (task.input.model) args.push('--model', task.input.model);
     if (task.input.name) args.push('--name', task.input.name);
     if (task.input.mode === 'interactive') {
       if (!options.tmuxSocket || !isAbsolute(options.tmuxSocket) || !options.tmuxSession) throw new Error('Interactive spawning requires supervisor --tmux-socket and --tmux-session');
       const script = join(task.directory, 'launch.sh');
       await writeFile(script, `#!/bin/sh\nexport PATH=${quote(process.env.PATH ?? '')}\nexport AGENT_HUB_SPAWN_DIR=${quote(task.directory)}\n${options.registryDirectory ? `export AGENTS_REGISTRY_DIR=${quote(options.registryDirectory)}\n` : ''}exec ${[options.pi ?? 'pi', ...args].map(quote).join(' ')}\n`, { mode: 0o700 });
+      shutdown.signal.throwIfAborted();
       const { stdout } = await execute('tmux', ['-S', options.tmuxSocket, 'new-window', '-d', '-P', '-F', '#{pane_id}', '-t', `${options.tmuxSession}:`, '-n', task.input.name ?? task.id, '-c', task.input.cwd, `exec ${quote(script)}`], { timeout: 5000 });
       const pane = stdout.trim();
       if (!/^%\d+$/.test(pane)) throw new Error('Invalid tmux pane ID');
@@ -150,6 +166,7 @@ export async function startSupervisor(options: SupervisorOptions) {
     } else {
       const log = await open(join(task.directory, 'stderr.log'), 'a', 0o600);
       try {
+        shutdown.signal.throwIfAborted();
         const child = spawn(process.execPath, [fileURLToPath(new URL('./headless-runner.js', import.meta.url)), options.pi ?? 'pi', '--mode', 'rpc', ...args], {
           cwd: task.input.cwd, env: { ...process.env, AGENT_HUB_SPAWN_DIR: task.directory, ...(options.registryDirectory ? { AGENTS_REGISTRY_DIR: options.registryDirectory } : {}) },
           stdio: ['ignore', 'ignore', log.fd], detached: true,
@@ -163,24 +180,38 @@ export async function startSupervisor(options: SupervisorOptions) {
       } finally { await log.close(); }
     }
   }
-  async function handle(request: Request): Promise<Record<string, unknown>> {
-    validate(request);
+  async function dispatch(request: Request): Promise<Record<string, unknown>> {
+    validate(request, router?.enabled ?? false);
     if (stopping) throw new Error('Supervisor is shutting down');
+    if (request.action === 'capabilities') return { routing_enabled: router?.enabled ?? false };
     if (request.action === 'spawn') {
-      const input = request.input as SpawnInput;
+      const input = structuredClone(request.input) as SpawnInput;
+      if (router?.enabled && input.model !== undefined) throw new Error('Execution overrides are forbidden while model routing is enabled');
       if (!(await stat(input.cwd)).isDirectory()) throw new Error('cwd is not a directory');
       if ([...tasks.values()].filter(task => task.processState !== 'exited').length >= 32) throw new Error('Spawner active task limit (32) reached');
       const id = `task_${randomUUID()}`;
       const task: Task = { id, owner: request.owner, input, createdAt: Date.now(), status: 'starting', directory: join(directory, 'tasks', id), processState: 'starting', delivery: 'none' };
       tasks.set(id, task);
       launching.add(id);
-      try { await save(task); await launch(task); }
+      const routingAbort = new AbortController();
+      routingAborts.set(id, routingAbort);
+      try {
+        await save(task);
+        const routed = await router?.route(input.prompt, AbortSignal.any([shutdown.signal, routingAbort.signal]));
+        if (routed) { task.routing = routed.routing; task.execution = routed.execution; }
+        if (stopping) throw new Error('Supervisor is shutting down');
+        routingAbort.signal.throwIfAborted();
+        routingAborts.delete(id);
+        task.launchStartedAt = Date.now();
+        await save(task);
+        await launch(task);
+      }
       catch (error) {
-        task.status = 'failed';
+        task.status = routingAbort.signal.aborted ? 'cancelled' : 'failed';
         task.processState = 'exited';
-        task.completion = { status: 'failed', text: '', error: error instanceof Error ? error.message : String(error) };
+        task.completion = { status: task.status, text: '', error: error instanceof Error ? error.message : String(error) };
         await atomic(join(task.directory, 'completion.json'), task.completion);
-      } finally { launching.delete(id); }
+      } finally { launching.delete(id); routingAborts.delete(id); }
       await save(task);
       while (task.status === 'starting' && !stopping) { await reconcile(task); if (task.status === 'starting') await sleep(50); }
       return taskSummary(task);
@@ -188,9 +219,18 @@ export async function startSupervisor(options: SupervisorOptions) {
     if (request.action === 'list') return { tasks: [...tasks.values()].filter(task => task.owner === request.owner).map(taskSummary) };
     const task = tasks.get(request.taskId!);
     if (!task || task.owner !== request.owner) throw new Error('Task not found in this MCP session');
-    if (request.action === 'cancel' && active(task)) await atomic(join(task.directory, 'cancel.json'), true);
+    if (request.action === 'cancel' && active(task)) {
+      routingAborts.get(task.id)?.abort(new Error('Task cancelled before launch'));
+      await atomic(join(task.directory, 'cancel.json'), true);
+    }
     await reconcile(task);
     return { ...taskSummary(task), ...(request.action === 'fetch_answer' ? { answer: task.completion ?? null } : {}) };
+  }
+  function handle(request: Request): Promise<Record<string, unknown>> {
+    const work = dispatch(request);
+    requests.add(work);
+    void work.finally(() => requests.delete(work)).catch(() => {});
+    return work;
   }
   try {
     for (const name of await readdir(join(directory, 'tasks'))) {
@@ -204,7 +244,7 @@ export async function startSupervisor(options: SupervisorOptions) {
       socket.once('close', () => connections.delete(socket));
       let data = Buffer.alloc(0);
       let consumed = false;
-      socket.setTimeout(20000, () => socket.destroy());
+      socket.setTimeout(45000, () => socket.destroy());
       socket.on('error', () => {});
       socket.on('data', chunk => {
         if (consumed) return;
@@ -230,6 +270,8 @@ export async function startSupervisor(options: SupervisorOptions) {
       handle,
       async close() {
         stopping = true;
+        shutdown.abort(new Error('Supervisor is shutting down'));
+        await Promise.allSettled([...requests]);
         clearInterval(timer);
         await ticking;
         await Promise.allSettled([...pending.values()]);

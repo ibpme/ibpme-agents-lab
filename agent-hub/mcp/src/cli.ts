@@ -2,7 +2,7 @@
 import { parseArgs } from 'node:util';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { startHttpServer } from './http.js';
-import { createAgentsServer } from './server.js';
+import { createConfiguredAgentsServer } from './server.js';
 
 async function main(): Promise<void> {
   const { values } = parseArgs({ options: {
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
     close = runtime.close;
     console.error(`agents MCP listening on ${runtime.url}`);
   } else {
-    const server = createAgentsServer({ deliverAs, injectParentContext });
+    const server = await createConfiguredAgentsServer({ deliverAs, injectParentContext });
     await server.connect(new StdioServerTransport());
     close = () => server.close();
     process.stdin.once('end', () => { void shutdown(); });

@@ -1,0 +1,22 @@
+{
+  "routing": {
+    "enabled": true,
+    "classifier": { "model": "jev-latest", "timeout_ms": 3000 },
+    "default_profile": "general",
+    "profiles": [
+      {
+        "id": "general", "harness": "pi", "provider": "opencode-go", "model": "claude-haiku-5-5", "effort": "medium",
+        "description": "Typical implementation, focused debugging, tests, and documentation"
+      },
+      {
+        "id": "quick", "harness": "pi", "provider": "openai", "model": "gpt-6-luna", "effort": "medium",
+        "description": "Small, well-scoped tasks with clear requirements and limited reasoning"
+      },
+      {
+        "id": "deep", "harness": "pi", "provider": "openai", "model": "gpt-6-astra", "effort": "medium",
+        "description": "Complex debugging, architecture, ambiguous requirements, and cross-module reasoning",
+        "append_system_prompt": "Examine relevant code and constraints before making changes. Validate assumptions and test the resulting behavior."
+      }
+    ]
+  }
+}

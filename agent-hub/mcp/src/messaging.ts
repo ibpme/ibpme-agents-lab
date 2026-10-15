@@ -20,7 +20,7 @@ const rowSchema = z.object({
   messaging: z.object({ transport: z.literal('unix'), protocol: z.literal('pi-listener-v2'), path: z.string().refine(p => isAbsolute(p) && !p.includes('\0') && Buffer.byteLength(p) <= 100), reportedAt: timestamp }).optional(),
 });
 type Agent = z.infer<typeof rowSchema>;
-export interface MessagingOptions { registryDirectory?: string; callerAgentId?: string; callerPid?: number | null; spawnerDirectory?: string; injectParentContext?: boolean; deliverAs?: 'steer' | 'followUp' }
+export interface MessagingOptions { registryDirectory?: string; callerAgentId?: string; callerPid?: number | null; spawnerDirectory?: string; injectParentContext?: boolean; routingEnabled?: boolean; deliverAs?: 'steer' | 'followUp' }
 export class MessagingError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }

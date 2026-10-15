@@ -5,7 +5,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { Request, Response } from 'express';
-import { createAgentsServer } from './server.js';
+import { createConfiguredAgentsServer } from './server.js';
 import type { MessagingOptions } from './messaging.js';
 
 interface Session {
@@ -60,7 +60,7 @@ export async function startHttpServer(port = 3000, options: Pick<MessagingOption
       errorResponse(res, 400, 'Invalid X-Agent-Id');
       return;
     }
-    const server = createAgentsServer({ deliverAs, injectParentContext: options.injectParentContext, callerPid: null, ...(typeof callerId === 'string' ? { callerAgentId: callerId } : {}) });
+    const server = await createConfiguredAgentsServer({ deliverAs, injectParentContext: options.injectParentContext, callerPid: null, ...(typeof callerId === 'string' ? { callerAgentId: callerId } : {}) });
     const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
       sessionIdGenerator: randomUUID,
       onsessioninitialized: id => { sessions.set(id, { server, transport }); },

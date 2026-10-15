@@ -86,7 +86,7 @@ export async function startService(config: Config) {
     if (!config.registryOnly) tmux = await prepareTmux({ directory: config.spawnerDirectory, socket: config.tmuxServers[0], session: config.tmuxSession });
     const tmuxServers = [...new Set([...config.tmuxServers, ...(tmux ? [tmux.tmuxSocket] : [])])];
     registry = await startDaemon({ directory: config.registryDirectory, intervalMs: config.intervalMs, activityTtlMs: config.activityTtlMs, tmuxServers });
-    if (!config.registryOnly) supervisor = await startSupervisor({ directory: config.spawnerDirectory, registryDirectory: config.registryDirectory, pi: config.pi, recoverLock: config.recoverLock, ...tmux });
+    if (!config.registryOnly) supervisor = await startSupervisor({ directory: config.spawnerDirectory, registryDirectory: config.registryDirectory, pi: config.pi, routingConfigPath: config.routingConfigPath, recoverLock: config.recoverLock, ...tmux });
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve); });
     await chmod(socketPath, 0o600);
     server.on('error', error => { console.error(error); void stop(); });

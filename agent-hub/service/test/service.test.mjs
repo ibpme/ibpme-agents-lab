@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import test from 'node:test';
 import { resolveConfig } from '../dist/config.js';
+import { createSpawnerClient } from '@agent-hub/spawner';
 import { startService } from '../dist/service.js';
 import { request } from '../dist/client.js';
 import { request as registryRequest } from '@agent-hub/registry/client';
@@ -18,9 +19,10 @@ async function fixture(t, extra = {}) {
 
 test('configuration file, environment defaults, and explicit overrides', async t => {
   const { root } = await fixture(t);
-  await writeFile(join(root, 'config.json'), JSON.stringify({ intervalMs: 1234, registryOnly: true, tmuxServers: ['/tmp/a', '/tmp/a'] }));
+  await writeFile(join(root, 'config.json'), JSON.stringify({ intervalMs: 1234, registryOnly: true, routingConfigPath: 'routing.json', tmuxServers: ['/tmp/a', '/tmp/a'] }));
   const config = resolveConfig({ directory: root, activityTtlMs: 3000 }, { XDG_STATE_HOME: root, AGENTS_REGISTRY_DIR: join(root, 'custom') });
   assert.equal(config.intervalMs, 1234);
+  assert.equal(config.routingConfigPath, join(root, 'routing.json'));
   assert.equal(config.registryDirectory, join(root, 'custom'));
   assert.equal(config.activityTtlMs, 3000);
   assert.equal(config.registryOnly, true);
@@ -50,6 +52,8 @@ test('registry-only lifecycle, duplicate ownership, private control and legacy s
 
 test('unified lifecycle tracks the selected tmux server and preserves task artifacts', async t => {
   const { root, config } = await fixture(t, { registryOnly: false });
+  config.routingConfigPath = join(root, 'routing.json');
+  await writeFile(config.routingConfigPath, JSON.stringify({ routing: { enabled: true, default_profile: 'general', profiles: [{ id: 'general', harness: 'pi', provider: 'test', model: 'test-model', effort: 'medium', description: 'General tasks' }] } }));
   const bin = join(root, 'bin');
   await mkdir(bin);
   const log = join(root, 'tmux.log');
@@ -63,6 +67,8 @@ test('unified lifecycle tracks the selected tmux server and preserves task artif
   t.after(() => service.stop());
   const status = await request(config.directory, 'status');
   assert.equal(status.supervisor, 'running');
+  assert.equal(status.config.routingConfigPath, config.routingConfigPath);
+  assert.equal((await createSpawnerClient(config.spawnerDirectory).request({ action: 'capabilities', owner: 'test' })).routing_enabled, true);
   assert.equal(status.tmux.tmuxSocket, join(config.spawnerDirectory, 'tmux.sock'));
   assert.match(await readFile(log, 'utf8'), /list-panes/);
   await writeFile(join(config.spawnerDirectory, 'tasks', 'preserved'), 'durable');

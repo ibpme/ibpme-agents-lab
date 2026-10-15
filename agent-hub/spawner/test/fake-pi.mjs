@@ -8,6 +8,7 @@ const write = (name, data) => {
   writeFileSync(path + '.tmp', JSON.stringify(data));
   renameSync(path + '.tmp', path);
 };
+write('launch-args.json', process.argv.slice(2));
 write('ready.json', { pid: process.pid, sessionId: 'fake-session' });
 if (input.prompt === 'crash') setTimeout(() => process.exit(1), 100);
 else if (input.prompt && input.prompt !== 'wait') setTimeout(() => {

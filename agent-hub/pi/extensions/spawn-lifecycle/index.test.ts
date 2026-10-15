@@ -6,11 +6,11 @@ import test from 'node:test';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import extension from './index.ts';
 const delay = () => new Promise(resolve => setTimeout(resolve, 20));
-function setup(t: test.TestContext, prompt: string | undefined = 'Initial task', options: { injectParentContext?: boolean; parent?: { agentId: string } } = {}) {
+function setup(t: test.TestContext, prompt: string | undefined = 'Initial task', options: { injectParentContext?: boolean; parent?: { agentId: string } } = {}, execution?: { append_system_prompt?: string }) {
   const directory = mkdtempSync(join(tmpdir(), 'spawn-ext-'));
   const previous = process.env.AGENT_HUB_SPAWN_DIR;
   process.env.AGENT_HUB_SPAWN_DIR = directory;
-  writeFileSync(join(directory, 'task.json'), JSON.stringify({ input: { prompt, mode: 'interactive', ...options } }));
+  writeFileSync(join(directory, 'task.json'), JSON.stringify({ input: { prompt, mode: 'interactive', ...options }, execution }));
   const handlers = new Map<string, Function>();
   const messages: any[] = [];
   let session = 'original';
@@ -126,3 +126,26 @@ for (const invalidParent of [undefined, { agentId: 'not-an-id\nInjected instruct
     assert.equal(h.fire('before_agent_start', { systemPrompt: 'Base' }), undefined);
   });
 }
+
+for (const withParent of [false, true]) {
+  test(`profile instructions compose with parent context (${withParent}) and survive reload`, async t => {
+    const h = setup(t, 'Initial task', withParent ? { injectParentContext: true, parent } : {}, { append_system_prompt: 'Profile-only instructions' });
+    h.fire('session_start'); await delay();
+    const event = { systemPrompt: 'Base instructions' };
+    const result = h.fire('before_agent_start', event);
+    assert.ok(result.systemPrompt.startsWith('Base instructions\n\nProfile-only instructions'));
+    assert.equal(result.systemPrompt.includes('parent_agent_id'), withParent);
+    assert.equal(h.messages[0][0], 'Initial task');
+    h.fire('session_shutdown', { reason: 'reload' }); h.load(); h.fire('session_start');
+    assert.deepEqual(h.fire('before_agent_start', event), result);
+    assert.equal(h.messages.length, 1);
+    h.switchSession();
+    assert.equal(h.fire('before_agent_start', event), undefined);
+  });
+}
+
+test('empty profile additions preserve the original system prompt', t => {
+  const h = setup(t, '', {}, { append_system_prompt: '   ' });
+  h.fire('session_start');
+  assert.equal(h.fire('before_agent_start', { systemPrompt: 'Base' }), undefined);
+});
