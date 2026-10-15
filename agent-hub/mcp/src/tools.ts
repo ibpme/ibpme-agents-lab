@@ -36,7 +36,9 @@ export type ListAgentTasksInput = z.infer<typeof listAgentTasksSchema>;
 export type AgentTaskInput = z.infer<typeof agentTaskSchema>;
 
 function taskResult(output: Record<string, unknown>): Record<string, unknown> {
-  const { mode: _mode, tmux: _tmux, ...result } = output;
+  const { mode: _mode, tmux: _tmux, result_path: resultPath, ...result } = output;
+  const failed = ['failed', 'interrupted', 'lost'].includes(String(output.status)) || output.delivery === 'unavailable';
+  if (failed && typeof resultPath === 'string') result.result_path = resultPath;
   if (Array.isArray(result.tasks)) {
     result.tasks = result.tasks.map(task => taskResult(task));
   }

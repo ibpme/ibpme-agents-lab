@@ -238,6 +238,13 @@ a steering message to the original parent Pi session without asking the child mo
 call `send_message`. Later manual prompts in an interactive child do not notify
 the parent. Results remain stored when notification cannot be delivered.
 
+MCP task responses expose `result_path` only when execution status is `failed`,
+`interrupted`, or `lost`, or when `delivery` is `unavailable`. The same rule applies
+to each task in a listing. Running, idle, successful, and deliberately cancelled
+tasks omit it unless delivery is unavailable; use `agent_task` with `fetch_answer`
+for normal result retrieval. This filters MCP responses only, not stored artifacts
+or the full-result paths in automatic completion notifications.
+
 Task tool access is scoped to the current MCP session; child execution and result
 storage are not. Spawning requires an identified Pi caller with a published
 session ID. Task handles from a disconnected MCP session are not transferred to

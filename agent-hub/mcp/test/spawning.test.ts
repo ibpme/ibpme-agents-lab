@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { execFile } from 'node:child_process';
@@ -52,9 +53,51 @@ test('MCP spawns in the background, fetches results and automatically delivers w
   const checked = await client.callTool({ name: 'agent_task', arguments: { task_id: task.task_id, action: 'check' } });
   const cancelled = await client.callTool({ name: 'agent_task', arguments: { task_id: task.task_id, action: 'cancel' } });
   for (const response of [spawned, fetched, listed, checked, cancelled]) {
-    assert.doesNotMatch(JSON.stringify(response), /"mode"|"tmux"|interactive|headless/);
+    assert.doesNotMatch(JSON.stringify(response), /"mode"|"tmux"|"result_path"|interactive|headless/);
   }
   assert.equal((listed.structuredContent as any).tasks[0].task_id, task.task_id);
   const { stdout } = await execute('tmux', ['-S', tmuxSocket, 'display-message', '-p', '-t', persisted.pane, '#{pane_dead}']);
   assert.equal(stdout.trim(), '0');
+});
+
+test('MCP exposes result paths only for execution or delivery failures', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'mcp-path-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  let output: Record<string, unknown> = {};
+  const socket = createServer(connection => {
+    connection.on('error', () => {});
+    connection.once('data', () => connection.end(JSON.stringify({ ok: true, data: output }) + '\n'));
+  });
+  await new Promise<void>(resolve => socket.listen(join(directory, 'spawner.sock'), resolve));
+  t.after(() => new Promise<void>(resolve => socket.close(() => resolve())));
+  const server = createAgentsServer({ spawnerDirectory: directory });
+  const client = new Client({ name: 'path-test', version: '1' });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(b); await client.connect(a);
+  t.after(async () => { await client.close(); await server.close(); });
+  const resultPath = join(directory, 'completion.json');
+  const cases = [
+    ...['starting', 'running', 'idle', 'completed', 'cancelled'].map(status => ({ status, delivery: 'none', exposed: false })),
+    ...['failed', 'interrupted', 'lost'].map(status => ({ status, delivery: 'none', exposed: true })),
+    { status: 'completed', delivery: 'unavailable', exposed: true },
+    { status: 'completed', delivery: 'pending', exposed: false },
+    { status: 'completed', delivery: 'accepted', exposed: false },
+  ];
+  for (const item of cases) {
+    const task = { task_id: 'task_example', status: item.status, delivery: item.delivery, mode: 'interactive', tmux: {}, result_path: resultPath };
+    for (const action of ['check', 'fetch_answer', 'cancel']) {
+      output = task;
+      const response = await client.callTool({ name: 'agent_task', arguments: { task_id: task.task_id, action } });
+      assert.equal(response.isError, undefined);
+      const result = response.structuredContent as Record<string, unknown>;
+      assert.equal(result.result_path, item.exposed ? resultPath : undefined, `${item.status}/${item.delivery}/${action}`);
+      assert.equal(result.mode, undefined);
+      assert.equal(result.tmux, undefined);
+      assert.deepEqual(JSON.parse((response.content as any)[0].text), result);
+    }
+  }
+  output = { tasks: cases.map(item => ({ task_id: 'task_example', status: item.status, delivery: item.delivery, result_path: resultPath })) };
+  const response = await client.callTool({ name: 'list_agent_tasks', arguments: {} });
+  const tasks = (response.structuredContent as any).tasks;
+  assert.deepEqual(tasks.map((task: any) => task.result_path), cases.map(item => item.exposed ? resultPath : undefined));
 });
