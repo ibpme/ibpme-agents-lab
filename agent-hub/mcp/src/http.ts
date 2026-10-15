@@ -17,9 +17,10 @@ function errorResponse(res: Response, status: number, message: string, code = -3
   res.status(status).json({ jsonrpc: '2.0', error: { code, message }, id: null });
 }
 
-export async function startHttpServer(port = 3000, options: Pick<MessagingOptions, 'deliverAs'> = {}): Promise<{ url: string; close: () => Promise<void> }> {
+export async function startHttpServer(port = 3000, options: Pick<MessagingOptions, 'deliverAs' | 'injectParentContext'> = {}): Promise<{ url: string; close: () => Promise<void> }> {
   const deliverAs = options.deliverAs ?? 'steer';
   if (deliverAs !== 'steer' && deliverAs !== 'followUp') throw new Error('Invalid delivery mode; expected steer or followUp');
+  if (options.injectParentContext !== undefined && typeof options.injectParentContext !== 'boolean') throw new Error('injectParentContext must be a boolean');
   const app = createMcpExpressApp({ host: '127.0.0.1' });
   const sessions = new Map<string, Session>();
   const activeServers = new Set<McpServer>();
@@ -59,7 +60,7 @@ export async function startHttpServer(port = 3000, options: Pick<MessagingOption
       errorResponse(res, 400, 'Invalid X-Agent-Id');
       return;
     }
-    const server = createAgentsServer({ deliverAs, callerPid: null, ...(typeof callerId === 'string' ? { callerAgentId: callerId } : {}) });
+    const server = createAgentsServer({ deliverAs, injectParentContext: options.injectParentContext, callerPid: null, ...(typeof callerId === 'string' ? { callerAgentId: callerId } : {}) });
     const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
       sessionIdGenerator: randomUUID,
       onsessioninitialized: id => { sessions.set(id, { server, transport }); },

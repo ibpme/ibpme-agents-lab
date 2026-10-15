@@ -45,6 +45,7 @@ test('discovery exposes the agents interface and session-scoped job descriptions
   const spawnSchema = tools.find(tool => tool.name === 'spawn_agent')!.inputSchema;
   assert.deepEqual(spawnSchema.required, ['harness']);
   assert.equal(spawnSchema.properties?.agent_type, undefined);
+  assert.equal(spawnSchema.properties?.injectParentContext, undefined);
   assert.deepEqual(tools.find(tool => tool.name === 'agent_task')?.inputSchema.required, ['action', 'task_id']);
   assert.equal(tools.find(tool => tool.name === 'list_agent_tasks')?.annotations?.readOnlyHint, true);
   assert.equal(tools.find(tool => tool.name === 'agent_task')?.annotations?.readOnlyHint, false);
@@ -69,6 +70,7 @@ for (const call of [
   { name: 'spawn_agent', arguments: { harness: 'pi', prompt: '   ' } },
   { name: 'spawn_agent', arguments: { harness: 'pi', cwd: '' } },
   { name: 'spawn_agent', arguments: { agent_type: 'pi' } },
+  { name: 'spawn_agent', arguments: { harness: 'pi', injectParentContext: true } },
   { name: 'list_agent_tasks', arguments: { session_id: 'other-session' } },
   { name: 'agent_task', arguments: { action: 'list', task_id: 'task-1' } },
   { name: 'agent_task', arguments: { action: 'cancel' } },
@@ -82,3 +84,7 @@ for (const call of [
     assert.equal(result.structuredContent, undefined);
   });
 }
+
+test('parent context configuration rejects non-boolean values', () => {
+  assert.throws(() => createAgentsServer({ injectParentContext: 'true' as unknown as boolean }), /injectParentContext must be a boolean/);
+});

@@ -34,6 +34,7 @@ function validate(request: Request): void {
   if (!input || input.harness !== 'pi' || !['interactive', 'headless'].includes(input.mode)) throw new Error('Only Pi interactive/headless spawning is supported');
   if (typeof input.cwd !== 'string' || !isAbsolute(input.cwd) || input.cwd.includes('\0')) throw new Error('cwd must be absolute');
   if (input.prompt !== undefined && (typeof input.prompt !== 'string' || !input.prompt.trim() || Buffer.byteLength(input.prompt) > 256 * 1024)) throw new Error('Invalid prompt (maximum 256 KiB)');
+  if (input.injectParentContext !== undefined && typeof input.injectParentContext !== 'boolean') throw new Error('injectParentContext must be a boolean');
   if (input.mode === 'headless' && !input.prompt) throw new Error('Headless tasks require a prompt');
   for (const value of [input.model, input.name]) if (value !== undefined && (typeof value !== 'string' || !value.trim() || value.includes('\0') || value.length > 256)) throw new Error('Invalid model or name');
   const p = input.parent;

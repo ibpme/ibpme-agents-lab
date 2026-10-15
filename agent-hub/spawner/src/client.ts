@@ -1,3 +1,5 @@
+import { agentId } from './identity.js';
+export { agentId } from './identity.js';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { exchange } from './io.js';
@@ -17,6 +19,7 @@ export function createSpawnerClient(directory = spawnerDirectory()) {
 }
 export function taskSummary(task: Task): Record<string, unknown> {
   return {
+    agent_id: task.pid !== undefined && task.startedAt !== undefined ? agentId({ harness: task.input.harness, process: { pid: task.pid, startedAt: task.startedAt } }) : null,
     task_id: task.id, status: task.status, mode: task.input.mode, harness: task.input.harness,
     cwd: task.input.cwd, process_state: task.processState, delivery: task.delivery,
     ...(task.deliveryError ? { delivery_error: task.deliveryError } : {}),

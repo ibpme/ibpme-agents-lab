@@ -8,6 +8,7 @@ export interface SpawnInput {
   harness: 'pi';
   mode: 'interactive' | 'headless';
   prompt?: string;
+  injectParentContext?: boolean;
   cwd: string;
   model?: string;
   name?: string;

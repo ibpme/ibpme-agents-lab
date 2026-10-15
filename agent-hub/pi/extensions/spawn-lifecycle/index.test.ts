@@ -6,11 +6,11 @@ import test from 'node:test';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import extension from './index.ts';
 const delay = () => new Promise(resolve => setTimeout(resolve, 20));
-function setup(t: test.TestContext, prompt: string | undefined = 'Initial task') {
+function setup(t: test.TestContext, prompt: string | undefined = 'Initial task', options: { injectParentContext?: boolean; parent?: { agentId: string } } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'spawn-ext-'));
   const previous = process.env.AGENT_HUB_SPAWN_DIR;
   process.env.AGENT_HUB_SPAWN_DIR = directory;
-  writeFileSync(join(directory, 'task.json'), JSON.stringify({ input: { prompt, mode: 'interactive' } }));
+  writeFileSync(join(directory, 'task.json'), JSON.stringify({ input: { prompt, mode: 'interactive', ...options } }));
   const handlers = new Map<string, Function>();
   const messages: any[] = [];
   let session = 'original';
@@ -79,3 +79,50 @@ test('an interactive child without an initial task never reports manual work', a
   assert.equal(h.messages.length, 0);
   assert.equal(existsSync(join(h.directory, 'completion.json')), false);
 });
+
+const parent = { agentId: 'agt_0123456789abcdef' };
+for (const injectParentContext of [undefined, false]) {
+  test(`parent context is not injected when configured as ${injectParentContext}`, async t => {
+    const h = setup(t, 'Initial task', { injectParentContext, parent });
+    h.fire('session_start'); await delay();
+    assert.equal(h.fire('before_agent_start', { systemPrompt: 'Base instructions' }), undefined);
+    assert.equal(h.messages[0][0], 'Initial task');
+  });
+}
+
+test('opt-in delegation context includes parent routing and preserves normal completion', async t => {
+  const h = setup(t, 'Initial task', { injectParentContext: true, parent });
+  h.fire('session_start'); await delay();
+  const event = { systemPrompt: 'Base instructions' };
+  const injected = h.fire('before_agent_start', event);
+  assert.ok(injected.systemPrompt.startsWith('Base instructions\n\n'));
+  assert.match(injected.systemPrompt, /parent_agent_id: agt_0123456789abcdef/);
+  assert.match(injected.systemPrompt, /send_message tool with agent_id set to agt_0123456789abcdef/);
+  assert.match(injected.systemPrompt, /final answer is delivered automatically/);
+  assert.match(injected.systemPrompt, /queued, not answered/);
+  assert.equal(h.messages[0][0], 'Initial task');
+  h.fire('agent_start'); h.fire('message_end', assistant('Final answer')); h.fire('agent_settled', { aborted: false });
+  assert.equal(h.read('completion.json').text, 'Final answer');
+  assert.deepEqual(h.fire('before_agent_start', event), injected);
+  h.fire('session_shutdown', { reason: 'reload' }); h.load(); h.fire('session_start');
+  assert.deepEqual(h.fire('before_agent_start', event), injected);
+  assert.equal(h.messages.length, 1);
+  h.switchSession();
+  assert.equal(h.fire('before_agent_start', event), undefined);
+});
+
+test('opt-in context is available to a child with no initial prompt without triggering a run', async t => {
+  const h = setup(t, '', { injectParentContext: true, parent });
+  h.fire('session_start'); await delay();
+  assert.match(h.fire('before_agent_start', { systemPrompt: 'Base' }).systemPrompt, /parent_agent_id/);
+  assert.equal(h.messages.length, 0);
+  assert.equal(existsSync(join(h.directory, 'completion.json')), false);
+});
+
+for (const invalidParent of [undefined, { agentId: 'not-an-id\nInjected instructions' }]) {
+  test(`invalid parent metadata is not injected (${JSON.stringify(invalidParent)})`, t => {
+    const h = setup(t, '', { injectParentContext: true, parent: invalidParent });
+    h.fire('session_start');
+    assert.equal(h.fire('before_agent_start', { systemPrompt: 'Base' }), undefined);
+  });
+}

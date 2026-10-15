@@ -233,6 +233,44 @@ returns after startup, not after the task finishes. A task record with a startup
 failure is returned with `status: "failed"`; inspect task status rather than
 assuming a successful tool invocation implies a running child.
 
+Task responses include `agent_id` (or `null` until the child's process identity
+is known) and `can_receive_messages`. The agent ID uses the same process identity
+as `list_agents` and can be passed directly to `send_message`; it is distinct from
+`task_id` and `session_id`. Spawning waits up to one second for registry publication
+and a fresh messaging endpoint after startup. If `can_receive_messages` is false,
+poll `agent_task` with `check` before sending. Task checks and listings refresh
+readiness without waiting. Missing/stale registry data, an unregistered or exited
+process, or a missing/stale endpoint all report false without failing task access.
+Readiness is a snapshot, not a guarantee that a later delivery will succeed.
+
+### Optional parent context in spawned children
+
+By default, children receive the initial prompt unchanged and are not told the
+parent's agent ID. To opt in, launch the MCP server with:
+
+```bash
+node /absolute/path/to/agent-hub/mcp/dist/cli.js --inject-parent-context
+```
+
+This also works with `--transport http`. For a configured stdio MCP server, add
+`"--inject-parent-context"` to its `args` array and reconnect the MCP server.
+Programmatic callers can use `createAgentsServer({ injectParentContext: true })`
+or `startHttpServer(port, { injectParentContext: true })`.
+
+The setting is server configuration, not a `spawn_agent` argument. It applies to
+new children spawned through that server; omitted or false preserves existing
+behavior. The choice is saved in the task record, so reloads retain it without
+changing already spawned children.
+
+When enabled, the child's lifecycle extension appends delegation context to its
+system prompt for each run in the original child session. This includes
+`parent_agent_id` and instructions to use the agent-hub MCP `send_message` tool
+for clarification or blockers. The initial user prompt is not rewritten, no extra
+turn is triggered, and automatic final-answer delivery remains unchanged. The
+context also works for children started without an initial prompt, but does not
+carry over if the child switches to a different session. It does not install or
+enable MCP tools: the child must have agent-hub MCP configured to send messages.
+
 The supervisor captures the final answer from harness lifecycle events and sends
 a steering message to the original parent Pi session without asking the child model to
 call `send_message`. Later manual prompts in an interactive child do not notify

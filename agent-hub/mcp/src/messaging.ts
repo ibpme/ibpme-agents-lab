@@ -1,5 +1,6 @@
+import { agentId } from '@agent-hub/spawner';
 import { execFile } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { homedir } from 'node:os';
@@ -19,15 +20,11 @@ const rowSchema = z.object({
   messaging: z.object({ transport: z.literal('unix'), protocol: z.literal('pi-listener-v2'), path: z.string().refine(p => isAbsolute(p) && !p.includes('\0') && Buffer.byteLength(p) <= 100), reportedAt: timestamp }).optional(),
 });
 type Agent = z.infer<typeof rowSchema>;
-export interface MessagingOptions { registryDirectory?: string; callerAgentId?: string; callerPid?: number | null; spawnerDirectory?: string; deliverAs?: 'steer' | 'followUp' }
+export interface MessagingOptions { registryDirectory?: string; callerAgentId?: string; callerPid?: number | null; spawnerDirectory?: string; injectParentContext?: boolean; deliverAs?: 'steer' | 'followUp' }
 export class MessagingError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
 const fail = (code: string, message: string): never => { throw new MessagingError(code, message); };
-const agentId = (a: Agent): string => {
-  const identity = JSON.stringify([a.harness, a.process.pid, a.process.startedAt]);
-  return `agt_${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`;
-};
 const fresh = (time: number): boolean => time <= Date.now() + 5000 && Date.now() - time <= 20000;
 
 export function createMessaging(options: MessagingOptions = {}) {
@@ -82,6 +79,19 @@ export function createMessaging(options: MessagingOptions = {}) {
       const self = await identifyCaller(rows) ?? fail('CALLER_UNAVAILABLE', 'Caller identity could not be determined.');
       if (self.harness !== 'pi' || !self.session.id) fail('CALLER_UNAVAILABLE', 'Spawning currently requires a Pi parent with a published session ID.');
       return { agentId: agentId(self), pid: self.process.pid, startedAt: self.process.startedAt, sessionId: self.session.id! };
+    },
+    async messagingReadiness(ids: string[]): Promise<Set<string>> {
+      try {
+        const rows = await readAgents();
+        const requested = new Set(ids);
+        const ready = await Promise.all(rows.filter(a => requested.has(agentId(a)) && endpoint(a)).map(async a => {
+          try { await verify(a); return agentId(a); } catch { return undefined; }
+        }));
+        return new Set(ready.filter((id): id is string => id !== undefined));
+      } catch (error) {
+        if (error instanceof MessagingError) return new Set();
+        throw error;
+      }
     },
     async listAgents() {
       const rows = await readAgents();

@@ -81,6 +81,24 @@ See the [Pi setup guide](../docs/setup.md#install-the-pi-extensions) for details
 and the browser's optional Bun requirement. The underlying Pi version must also
 meet its own runtime requirements.
 
+### Optional delegation context
+
+Spawned children are not told the parent's agent ID by default. To enable parent
+routing context and `send_message` guidance, add `"--inject-parent-context"` after
+the CLI path in the MCP entry's `args` array, then reconnect the server:
+
+```json
+"args": [
+  "/absolute/path/to/ibpme-agents-lab/agent-hub/mcp/dist/cli.js",
+  "--inject-parent-context"
+]
+```
+
+This is server configuration, not a tool argument, and affects only newly spawned
+children. Omit the flag to retain current behavior. It does not register MCP tools
+in the child or change automatic final-answer delivery. See the
+[parent context documentation](../docs/mcp.md#optional-parent-context-in-spawned-children).
+
 ## Set up in Claude Code
 
 Register the local stdio server at user scope:

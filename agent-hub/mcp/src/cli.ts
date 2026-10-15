@@ -9,10 +9,11 @@ async function main(): Promise<void> {
     transport: { type: 'string', default: 'stdio' },
     port: { type: 'string' },
     'deliver-as': { type: 'string', default: 'steer' },
+    'inject-parent-context': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h' },
   } });
   if (values.help) {
-    process.stdout.write('Usage: agents-mcp [--transport stdio|http] [--port 3000] [--deliver-as steer|followUp]\n\nDelivery mode is fixed at startup (default steer), not a tool argument.\nstdio is the default. HTTP binds to 127.0.0.1 and serves /mcp.\n');
+    process.stdout.write('Usage: agents-mcp [--transport stdio|http] [--port 3000] [--deliver-as steer|followUp] [--inject-parent-context]\n\nParent context injection is opt-in and applies only to newly spawned children.\nDelivery mode is fixed at startup (default steer), not a tool argument.\nstdio is the default. HTTP binds to 127.0.0.1 and serves /mcp.\n');
     return;
   }
   if (values.transport !== 'stdio' && values.transport !== 'http') throw new Error('Invalid transport; expected stdio or http');
@@ -25,13 +26,14 @@ async function main(): Promise<void> {
   const deliverAs = values['deliver-as'];
   if (deliverAs !== 'steer' && deliverAs !== 'followUp') throw new Error('Invalid delivery mode; expected steer or followUp');
 
+  const injectParentContext = values['inject-parent-context'];
   let close: () => Promise<void>;
   if (values.transport === 'http') {
-    const runtime = await startHttpServer(port, { deliverAs });
+    const runtime = await startHttpServer(port, { deliverAs, injectParentContext });
     close = runtime.close;
     console.error(`agents MCP listening on ${runtime.url}`);
   } else {
-    const server = createAgentsServer({ deliverAs });
+    const server = createAgentsServer({ deliverAs, injectParentContext });
     await server.connect(new StdioServerTransport());
     close = () => server.close();
     process.stdin.once('end', () => { void shutdown(); });

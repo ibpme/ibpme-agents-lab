@@ -25,6 +25,7 @@ test('CLI documents both transports and rejects invalid options without stdout n
   assert.equal(help.status, 0);
   assert.match(help.stdout, /stdio/);
   assert.match(help.stdout, /http/);
+  assert.match(help.stdout, /--inject-parent-context/);
   for (const args of [['--transport', 'sse'], ['--port', 'nope'], ['--port', '65536'], ['--unknown'], ['--deliver-as', 'invalid']]) {
     const result = spawnSync(process.execPath, [cliPath, ...args], { encoding: 'utf8' });
     assert.equal(result.status, 1);
@@ -90,4 +91,8 @@ test('HTTP malformed JSON is a client error rather than an internal server failu
   });
   assert.equal(response.status, 400);
   assert.equal((await response.json()).error.message, 'Invalid JSON body');
+});
+
+test('HTTP rejects invalid parent context configuration at startup', async () => {
+  await assert.rejects(startHttpServer(0, { injectParentContext: 'true' as unknown as boolean }), /injectParentContext must be a boolean/);
 });

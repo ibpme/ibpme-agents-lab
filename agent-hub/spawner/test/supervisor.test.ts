@@ -116,6 +116,7 @@ test('rejects a second supervisor and invalid spawn requests without launching',
   await assert.rejects(startSupervisor({ directory: h.directory }), /EEXIST/);
   await assert.rejects(h.client.request({ action: 'spawn', owner: 'owner', input: { harness: 'claude' } as unknown as SpawnInput }), /Only Pi/);
   await assert.rejects(h.client.request({ action: 'spawn', owner: 'owner', input: { harness: 'pi', mode: 'headless', cwd: h.directory, parent: h.parent } }), /require a prompt/);
+  await assert.rejects(h.client.request({ action: 'spawn', owner: 'owner', input: { harness: 'pi', mode: 'interactive', cwd: h.directory, parent: h.parent, injectParentContext: 'true' } as unknown as SpawnInput }), /injectParentContext must be a boolean/);
 });
 
 test('missing Pi executable reports a failed startup rather than hanging', async t => {

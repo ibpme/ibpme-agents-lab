@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { createMessaging, MessagingError } from './messaging.js';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { resolve } from 'node:path';
 import { createSpawnerClient } from '@agent-hub/spawner';
 import type { MessagingOptions } from './messaging.js';
@@ -16,7 +17,7 @@ const spawnFields = {
 };
 
 export const sendMessageSchema = z.strictObject({
-  agent_id: nonBlank.max(256).describe('Recipient agent_id from list_agents; names are labels, not addresses.'),
+  agent_id: nonBlank.max(256).describe('Recipient agent_id from spawn_agent or list_agents; names are labels, not addresses.'),
   message_id: nonBlank.max(256).optional().describe('Optional unique message ID. Reuse with identical payload for retry after an ambiguous failure.'),
   message: nonBlank.describe('Message to deliver to the agent.'),
 });
@@ -46,18 +47,36 @@ function taskResult(output: Record<string, unknown>): Record<string, unknown> {
 }
 
 export function registerAgentTools(server: McpServer, options: MessagingOptions = {}): void {
+  if (options.injectParentContext !== undefined && typeof options.injectParentContext !== 'boolean') throw new Error('injectParentContext must be a boolean');
   const messaging = createMessaging(options);
   const spawner = createSpawnerClient(options.spawnerDirectory);
   const owner = randomUUID();
+  async function taskOutput(output: Record<string, unknown>, waitForMessaging = false): Promise<Record<string, unknown>> {
+    const tasks = Array.isArray(output.tasks) ? output.tasks as Record<string, unknown>[] : [output];
+    const ids = tasks.filter(task => task.process_state === 'available' && typeof task.agent_id === 'string').map(task => task.agent_id as string);
+    const deadline = Date.now() + (waitForMessaging ? 1000 : 0);
+    let ready = new Set<string>();
+    if (ids.length) {
+      do {
+        ready = await messaging.messagingReadiness(ids);
+        if (ids.every(id => ready.has(id)) || Date.now() >= deadline) break;
+        await sleep(Math.min(100, Math.max(0, deadline - Date.now())));
+      } while (true);
+    }
+    const enriched = tasks.map(task => ({ ...task, agent_id: task.agent_id ?? null, can_receive_messages: task.process_state === 'available' && typeof task.agent_id === 'string' && ready.has(task.agent_id) }));
+    return Array.isArray(output.tasks) ? { ...output, tasks: enriched } : enriched[0]!;
+  }
   async function spawn(input: SpawnAgentInput) {
     if (input.harness !== 'pi') throw new MessagingError('UNSUPPORTED_HARNESS', 'Only harness pi is implemented.');
     const parent = await messaging.caller();
-    return spawner.request({ action: 'spawn', owner, input: {
+    const output = await spawner.request({ action: 'spawn', owner, input: {
       harness: 'pi', mode: 'interactive', cwd: resolve(input.cwd ?? process.cwd()), parent,
+      ...(options.injectParentContext === true ? { injectParentContext: true } : {}),
       ...(input.prompt ? { prompt: input.prompt } : {}),
       ...(input.model ? { model: input.model } : {}),
       ...(input.name ? { name: input.name } : {}),
     } });
+    return taskOutput(output, true);
   }
   async function result(operation: () => Promise<Record<string, unknown>>): Promise<CallToolResult> {
     try {
@@ -83,7 +102,7 @@ export function registerAgentTools(server: McpServer, options: MessagingOptions 
 
   server.registerTool('spawn_agent', {
     title: 'Spawn an agent',
-    description: 'Start an agent and return a task ID. The initial task runs asynchronously and notifies you when it finishes.',
+    description: 'Start an agent and return task_id, agent_id, and can_receive_messages. If messaging is not ready, poll agent_task before sending. The initial task runs asynchronously and notifies you when it finishes.',
     inputSchema: spawnAgentSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, async input => result(() => spawn(input)));
@@ -93,7 +112,7 @@ export function registerAgentTools(server: McpServer, options: MessagingOptions 
     description: 'List agent tasks created in this MCP session.',
     inputSchema: listAgentTasksSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  }, async () => result(() => spawner.request({ action: 'list', owner })));
+  }, async () => result(async () => taskOutput(await spawner.request({ action: 'list', owner }))));
 
   server.registerTool('agent_task', {
     title: 'Manage an agent task',
@@ -101,5 +120,5 @@ export function registerAgentTools(server: McpServer, options: MessagingOptions 
     inputSchema: agentTaskSchema,
     // A single tool includes cancellation, so annotations must cover the mutating action.
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-  }, async input => result(() => spawner.request({ action: input.action, taskId: input.task_id, owner })));
+  }, async input => result(async () => taskOutput(await spawner.request({ action: input.action, taskId: input.task_id, owner }))));
 }
