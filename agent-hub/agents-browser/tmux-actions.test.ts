@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { performPaneAction } from "./tmux-actions.ts";
 import type { AgentSnapshot } from "./reader.ts";
-import type { Runner } from "../../../registry/src/types.ts";
+import type { Runner } from "../registry/src/types.ts";
 
 const agent: AgentSnapshot = { schemaVersion: 1, harness: "pi", observedAt: 1800000000000, process: { pid: 301, startedAt: Date.parse("2026-10-09T09:39:50Z") }, session: { mode: "interactive" }, activity: { state: "idle", source: "process-only" }, pane: { server: "/tmp/socket", sessionId: "$2", sessionName: "agent", windowIndex: "2", paneIndex: "0", id: "%2", cwd: "/work" } };
 const origin = { server: "/tmp/socket", paneId: "%0" };
@@ -43,4 +43,16 @@ test("protects current pane and does not redirect unrelated clients", async () =
   await assert.rejects(performPaneAction({ ...origin, paneId: "%2" }, agent, "kill", runner), /current pane/);
   await assert.rejects(performPaneAction(origin, agent, "attach", (cmd, args) => args.includes("list-clients") ? Promise.resolve("other\t$2\t100\n") : runner(cmd, args)), /No attached/);
   assert.ok(!calls.some(c => c.includes("switch-client") || c.includes("kill-pane")));
+});
+
+test("explicit invoking client wins over most recently active client", async () => {
+  const { calls, runner } = fixture();
+  await performPaneAction({ ...origin, client: "tty1" }, agent, "attach", runner);
+  assert.deepEqual(calls.at(-1), ["tmux", "-S", "/tmp/socket", "switch-client", "-c", "tty1", "-t", "%2"]);
+});
+
+test("missing explicit client never redirects a different client", async () => {
+  const { calls, runner } = fixture();
+  await assert.rejects(performPaneAction({ ...origin, client: "gone" }, agent, "attach", runner), /No attached/);
+  assert.ok(!calls.some(call => call.includes("switch-client")));
 });

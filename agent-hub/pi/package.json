@@ -14,9 +14,6 @@
       "./extensions/registry-publisher/index.ts"
     ]
   },
-  "dependencies": {
-    "ajv": "8.20.0"
-  },
   "devDependencies": {
     "@earendil-works/pi-agent-core": "1.1.0",
     "@earendil-works/pi-ai": "1.1.0",

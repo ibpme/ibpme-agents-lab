@@ -1,4 +1,4 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import type { BrowserTheme } from "./theme.ts";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { AgentSnapshot, RegistryView } from "./reader.ts";
 import type { Origin, PaneAction } from "./tmux-actions.ts";
@@ -49,7 +49,7 @@ function listenerStatus(agent: AgentSnapshot, registryState: RegistryView["state
     reportedAt > now + 5000 || now - reportedAt > 20_000 ? "stale" : "listening";
 }
 
-export function agentRow(agent: AgentSnapshot, selected: boolean, theme: Pick<Theme, "fg" | "bold">, origin?: Origin, registryState: RegistryView["state"] = "fresh"): string {
+export function agentRow(agent: AgentSnapshot, selected: boolean, theme: BrowserTheme, origin?: Origin, registryState: RegistryView["state"] = "fresh"): string {
   const tone = { waiting: "warning", busy: "accent", idle: "success", unknown: "dim" } as const;
   const label = agentLabel(agent, origin);
   const state = `[${agent.activity.state}]`;
@@ -67,7 +67,7 @@ export const agentDescription = (agent: AgentSnapshot): string => clean([
   agent.session.cwd ?? agent.pane?.cwd, agent.activity.waitingFor,
 ].filter(Boolean).join(" · "));
 
-export function detailLines(agent: AgentSnapshot, width: number, theme: Pick<Theme, "fg" | "bold">, listed: boolean, registryState: RegistryView["state"] = "fresh"): string[] {
+export function detailLines(agent: AgentSnapshot, width: number, theme: BrowserTheme, listed: boolean, registryState: RegistryView["state"] = "fresh"): string[] {
   const pane = agent.pane;
   const listener = listenerStatus(agent, listed ? registryState : "stale");
   const listenerDescription = listener === "listening" ? "advertised (not probed)" :
@@ -87,7 +87,7 @@ export function detailLines(agent: AgentSnapshot, width: number, theme: Pick<The
       wrapTextWithAnsi(`${theme.fg("dim", `${key}:`)} ${clean(value!)}`, Math.max(1, width)))];
 }
 
-export function frame(lines: string[], width: number, height: number, theme: Pick<Theme, "fg">): string[] {
+export function frame(lines: string[], width: number, height: number, theme: Pick<BrowserTheme, "fg">): string[] {
   if (width < 3 || height < 3) return lines.slice(0, Math.max(1, height)).map(line => truncateToWidth(line, width));
   const inner = width - 2;
   const row = (line: string) => {

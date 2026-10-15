@@ -7,6 +7,7 @@ Observe and message live Pi and Claude coding agents on one machine.
 | `registry/` | Discover agents and write live snapshots | [Registry](docs/registry.md) |
 | `mcp/` | List and message agents through MCP | [MCP server](docs/mcp.md) |
 | `pi/` | `/agents` browser, listener, and registry publisher | [Setup](docs/setup.md#install-the-pi-extensions) |
+| `agents-browser/` | Standalone terminal browser and tmux popup launcher | [Setup](agents-browser/README.md) |
 
 ## Quick start
 

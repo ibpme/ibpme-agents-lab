@@ -1,8 +1,8 @@
-import { ancestryDistance, listProcesses, run } from "../../../registry/src/discovery/processes.ts";
-import type { Runner } from "../../../registry/src/types.ts";
+import { ancestryDistance, listProcesses, run } from "../registry/src/discovery/processes.ts";
+import type { Runner } from "../registry/src/types.ts";
 import type { AgentSnapshot } from "./reader.ts";
 
-export interface Origin { server: string; paneId: string }
+export interface Origin { server: string; paneId: string; client?: string }
 export type PaneAction = "attach" | "vertical" | "horizontal" | "kill";
 
 export async function performPaneAction(origin: Origin, agent: AgentSnapshot, action: PaneAction, runner: Runner = run): Promise<void> {
@@ -32,6 +32,7 @@ export async function performPaneAction(origin: Origin, agent: AgentSnapshot, ac
   const clients = (await tmux(["-u", "list-clients", "-F", "#{client_name}\t#{session_id}\t#{client_activity}"]))
     .trim().split("\n").map(line => line.split("\t"))
     .filter(fields => fields[1] === session).sort((a, b) => Number(b[2]) - Number(a[2]));
-  if (!clients[0]?.[0]) throw new Error("No attached tmux client in the invoking session.");
-  await tmux(["switch-client", "-c", clients[0][0], "-t", pane.id]);
+  const client = origin.client ? clients.find(fields => fields[0] === origin.client)?.[0] : clients[0]?.[0];
+  if (!client) throw new Error("No attached tmux client in the invoking session.");
+  await tmux(["switch-client", "-c", client, "-t", pane.id]);
 }

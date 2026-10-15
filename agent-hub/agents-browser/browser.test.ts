@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { createBrowser, openBrowser } from "./browser.ts";
+import { createBrowser } from "./browser.ts";
 import type { AgentSnapshot, RegistryView } from "./reader.ts";
 
 const now = Date.now();
@@ -108,25 +107,6 @@ test("closing does not wait for an in-flight read or accept its late completion"
   await pending;
   assert.equal(renders, before);
   assert.ok(!browser.render(100).join("\n").includes("main"));
-});
-
-test("modal uses the injected terminal for resize and closes without waiting for registry", async () => {
-  const terminal = { columns: 120, rows: 40 };
-  let resolveRead!: (view: RegistryView) => void;
-  let reads = 0;
-  let component!: ReturnType<typeof createBrowser>;
-  const ctx = { ui: { custom: (factory: any, options: any) => new Promise<void>(resolve => {
-    component = factory({ terminal, requestRender() {} }, theme, {}, resolve);
-    assert.equal(options.overlayOptions().width, 118);
-    terminal.columns = 60;
-    assert.equal(options.overlayOptions().width, 58);
-    component.handleInput("q");
-  }) } } as unknown as ExtensionCommandContext;
-  await openBrowser(ctx, { readRegistry: () => { reads++; return new Promise(r => { resolveRead = r; }); }, performPaneAction: async () => {} });
-  resolveRead(fresh());
-  await tick();
-  assert.equal(reads, 1);
-  assert.ok(!component.render(80).join("\n").includes("main"));
 });
 
 test("other-server and old per-agent observations stay read-only", async () => {

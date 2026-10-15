@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+source=$0
+while [ -L "$source" ]; do
+  base=$(CDPATH= cd -- "$(dirname -- "$source")" && pwd)
+  source=$(readlink "$source")
+  case $source in /*) ;; *) source=$base/$source ;; esac
+done
+root=$(CDPATH= cd -- "$(dirname -- "$source")" && pwd)
+if ! command -v bun >/dev/null 2>&1; then
+  echo 'agents-browser requires Bun on PATH.' >&2
+  exit 1
+fi
+exec bun run "$root/cli.ts" "$@"

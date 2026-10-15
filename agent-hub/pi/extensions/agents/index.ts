@@ -1,8 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { openBrowser } from "./browser.ts";
-import { readRegistry, registryDirectory } from "./reader.ts";
-import { performPaneAction } from "./tmux-actions.ts";
-import { clean } from "./view.ts";
+import { openBrowser } from "./native.ts";
+import { readRegistry, registryDirectory } from "../../../agents-browser/reader.ts";
+import { performPaneAction } from "../../../agents-browser/tmux-actions.ts";
+import { clean } from "../../../agents-browser/view.ts";
+import { openPopup } from "../../../agents-browser/popup.ts";
 
 export default function agentsExtension(pi: ExtensionAPI): void {
   pi.registerCommand("agents", {
@@ -14,7 +15,8 @@ export default function agentsExtension(pi: ExtensionAPI): void {
       const origin = tmux && paneId ? { server: tmux.replace(/,\d+,\d+$/, ""), paneId } : undefined;
       const directory = registryDirectory();
       try {
-        await openBrowser(ctx, { readRegistry: () => readRegistry(directory), origin, performPaneAction });
+        if (origin) await openPopup(origin, directory);
+        else await openBrowser(ctx, { readRegistry: () => readRegistry(directory), origin, performPaneAction });
       } catch (error) { ctx.ui.notify(`/agents: ${clean(error instanceof Error ? error.message : String(error))}`, "error"); }
     },
   });

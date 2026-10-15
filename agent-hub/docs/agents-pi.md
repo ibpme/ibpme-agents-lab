@@ -42,6 +42,19 @@ For a one-off browser without the package:
 pi -e ./agent-hub/pi/extensions/agents/index.ts
 ```
 
+## Standalone browser and tmux popups
+
+Inside tmux, `/agents` launches the standalone browser in a 90% tmux popup instead
+of Pi's overlay. Install its dependencies with
+`cd agent-hub/agents-browser && bun install` and ensure Bun is on Pi/tmux's PATH.
+Outside tmux, `/agents` retains its native overlay.
+
+The browser can also launch independently from any shell or a tmux keybinding;
+see [agents-browser setup](../agents-browser/README.md). It preserves the original
+pane/socket/client for actions and closes after attaching. Standalone transcripts
+use persisted files only, not the invoking Pi process's in-memory branch. Popup
+colors use the terminal ANSI palette rather than Pi's active theme.
+
 ## Controls
 
 | Key | Action |
@@ -58,8 +71,9 @@ pi -e ./agent-hub/pi/extensions/agents/index.ts
 | `r` | Refresh |
 | Escape, Ctrl+C, or `q` | Cancel confirmation, return from transcript/details, or close |
 
-The centered modal opens immediately and refreshes every two seconds. Its size
-fills the terminal with a one-cell margin, including on large displays. The current
+The browser refreshes every two seconds. Inside tmux it opens in a 90% popup.
+The native Pi overlay outside tmux fills the terminal with a one-cell margin,
+including on large displays. The current
 session is pinned first, followed by **Interactive (tmux)** and **Non-tmux** groups.
 The Non-tmux group also includes every non-interactive, background, or unknown-mode
 agent, even when it has a mapped tmux pane. Only interactive agents with mapped
@@ -167,8 +181,11 @@ tmux. Exited, reused, or moved processes are rejected. Registry health and snaps
 files are individually atomic, not a transactional pair; action-time verification
 is therefore still necessary.
 
-Attach switches the most recently active client in the invoking session, never
-starts a nested attachment, and never redirects an unrelated session's client.
+In the popup, attach switches the explicitly captured invoking client and closes
+the browser after success. If that client is no longer in the invoking session,
+the action is refused. The native implementation without an explicit client uses
+the most recently active client in the invoking session. Neither starts a nested
+attachment nor redirects an unrelated session's client.
 Split moves the entire existing pane; it does not clone or restart the agent.
 Kill terminates all processes in the pane. The invoking pane cannot be moved or
 killed; attaching to it is a verified no-op.
@@ -184,19 +201,24 @@ this extension only reads registry snapshots.
 
 ## Implementation and checks
 
+The thin Pi extension at `agent-hub/pi/extensions/agents/` contains:
+
 - `index.ts`: command registration and runtime configuration.
+- `native.ts`: Pi overlay adapter, theme injection, and in-memory session access.
+
+Shared implementation and tests live in `agent-hub/agents-browser/`:
 - `reader.ts`: canonical snapshot schema validation and health classification.
 - `browser.ts`: modal state, refresh, navigation, confirmations, action dispatch.
-- `view.ts`: list/details, responsive framing, action eligibility.
+- `view.ts` / `theme.ts`: list/details, responsive framing, action eligibility, theme contract.
 - `session.ts`: read-only incremental Pi/Claude transcripts and usage accounting.
 - `tmux-actions.ts`: numeric identity/ancestry checks and pane operations.
 
 Snapshot types and schema come from `agent-hub/registry`; the reader has no dependency
-on its build output or daemon installation. Ajv is installed with the Pi package.
+on its build output or daemon installation. Ajv is installed with the shared agents-browser package.
 
 ```bash
-cd agent-hub/pi
-bun run check
+(cd agent-hub/agents-browser && bun run check)
+(cd agent-hub/pi && bun run check)
 ```
 
 Tests cover file-backed reader states, invalid data, selection, responsive rendering,

@@ -14,3 +14,6 @@ Run `/agents` in Pi.
 
 See the **[browser guide](../../../docs/agents-pi.md)** for all controls, listener
 indicators, transcript behavior, freshness checks, and pane-action safeguards.
+
+This directory is a thin launcher and native-overlay adapter. The shared browser
+implementation and tests live in [`agent-hub/agents-browser`](../../../agents-browser/README.md).

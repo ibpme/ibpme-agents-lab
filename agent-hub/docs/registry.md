@@ -325,8 +325,8 @@ Reload/shutdown stops timers and closes the current socket; discovery handles
 process removal, rather than a publisher deleting a row on session changes.
 
 This adds no tools, commands, agent browser, task delegation, Claude hooks, legacy
-registry-file writes, or daemon management. `agent-hub/pi/extensions/agents/`
-consumes the snapshots independently.
+registry-file writes, or daemon management. `agent-hub/agents-browser/`
+consumes the snapshots independently, directly or through the Pi launcher.
 
 ## Optional Claude main hook publisher
 
