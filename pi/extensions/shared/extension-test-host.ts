@@ -45,9 +45,15 @@ export function extensionTestHost(initial: string[] = ["read", "write", "edit", 
       for (const handler of handlers.get(name) ?? []) {
         const result = await handler({ type: name, context: { contextMessages: messages.map((message) => ({ role: "custom", ...message })) }, ...event }, ctx);
         results.push(result);
-        if (result?.message) messages.push(result.message);
+        if (result?.message) {
+          messages.push(result.message);
+          entries.push({ type: "custom_message", customType: result.message.customType, data: undefined });
+        }
         for (const entry of result?.entries ?? []) {
-          if (entry.type === "custom_message") messages.push(entry);
+          if (entry.type === "custom_message") {
+            messages.push(entry);
+            entries.push({ type: "custom_message", customType: entry.customType, data: undefined });
+          }
         }
       }
       return results;

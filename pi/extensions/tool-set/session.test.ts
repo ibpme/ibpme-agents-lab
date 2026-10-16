@@ -71,10 +71,12 @@ test("real Pi 1.3 session preserves restored declarations and gates codemode's d
   // Replace only the provider call; lifecycle, projection, persistence and tools are real Pi.
   session.agent.streamFunction = () => response([{ type: "text", text: "Acknowledged" }]);
   const notices = () => session.messages.filter((message) => message.role === "custom");
+  await session.prompt("First prompt with defaults");
+  assert.equal(notices().length, 0, "fresh YOLO/disconnected sessions need no notices");
   await session.prompt("/safe");
   assert.equal(notices().length, 0, "idle commands must not append notices");
   await session.prompt("Inspect permissions");
-  assert.equal(notices().length, 2, "mode and SSH notices must both reach the run");
+  assert.equal(notices().length, 1, "only the non-default SAFE state needs a notice");
   assert.ok(notices().some((message) => String(message.content).includes("Execution policy: SAFE")));
   const announced = notices().length;
   await session.prompt("/yolo");
@@ -135,15 +137,23 @@ test("real Pi 1.3 session preserves restored declarations and gates codemode's d
   await session.prompt("Inspect the file");
   assert.equal(requests, 2, "notice must not force another provider request");
 
-  // Retain only the final assistant response, as a compaction that drops both notices would.
+  // Retain only the final assistant response, dropping the policy notices.
   manager.appendCompaction("Earlier work summarized", manager.getLeafId()!, 0);
   session.refreshContext();
   assert.equal(notices().length, 0);
   session.agent.streamFunction = () => response([{ type: "text", text: "After compaction" }]);
   await session.prompt("Continue inspecting");
-  assert.equal(notices().length, 2);
+  assert.equal(notices().length, 1);
   assert.ok(notices().some((message) => String(message.content).includes("Execution policy: SAFE")));
   await session.prompt("Continue again");
-  assert.equal(notices().length, 2);
+  assert.equal(notices().length, 1);
+
+  await session.prompt("/yolo");
+  manager.appendCompaction("Earlier work mentioned SAFE", manager.getLeafId()!, 0);
+  session.refreshContext();
+  await session.prompt("Continue with the current policy");
+  assert.equal(notices().length, 1);
+  assert.ok(notices().some((message) => String(message.content).includes("Execution policy: YOLO")),
+    "compaction must not suppress a corrective default notice after SAFE");
   assert.deepEqual(errors, []);
 });

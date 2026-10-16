@@ -32,11 +32,24 @@ test("SSH tools stay deferred when disconnected and never fall back to local I/O
   assert.equal(h.loadoutWrites(), 0);
 });
 
+test("fresh disconnected sessions do not announce SSH defaults", async (t) => {
+  const h = extensionTestHost(["change_mode", "codemode", "tool_search"]);
+  toolSetExtension(h.pi);
+  extension(h.pi);
+  t.after(() => h.emit("session_shutdown"));
+  await h.emit("session_start");
+  await h.emit("before_agent_start");
+  await h.emit("turn_end");
+  assert.equal(h.messages.length, 0);
+});
+
 test("SSH resume and tree navigation report the live disconnected state", async (t) => {
   const h = extensionTestHost(["change_mode", "codemode", "tool_search", "read_remote"]);
   toolSetExtension(h.pi);
   extension(h.pi);
   t.after(() => h.emit("session_shutdown"));
+  // A resumed/branched conversation previously announced a connection, now absent from context.
+  h.entries.push({ type: "custom_message", customType: "ssh-connection-context", data: undefined });
   await h.emit("session_start");
   const notices = () => h.messages.filter((message) => message.customType === "ssh-connection-context");
   assert.equal(notices().length, 0);
@@ -124,4 +137,24 @@ test("mid-run SSH target changes announce only the final target at the turn boun
   assert.equal(h.messages.length, before + 1);
   assert.match(String(h.messages.at(-1)?.content), /second:\/project/);
   assert.ok(results.every((result) => !result?.continue));
+  await ssh.handler("off", h.ctx);
+  await h.emit("turn_end");
+  assert.equal(h.messages.length, before + 2);
+  assert.match(String(h.messages.at(-1)?.content), /disconnected/i);
+});
+
+test("SSH override enabled before the first prompt is announced despite the implicit disconnected default", async (t) => {
+  const { SshConnection } = await import("./transport.ts");
+  t.mock.method(SshConnection.prototype, "close", async () => {});
+  const h = extensionTestHost(["change_mode", "codemode", "tool_search"]);
+  t.mock.method(h.pi, "getFlag", () => "alice@host:/project");
+  toolSetExtension(h.pi);
+  extension(h.pi);
+  t.after(() => h.emit("session_shutdown"));
+  await h.emit("session_start");
+  assert.equal(h.messages.length, 0);
+  await h.emit("before_agent_start", { systemPrompt: `Current working directory: ${process.cwd()}` });
+  assert.equal(h.messages.length, 1);
+  assert.match(String(h.messages[0].content), /SSH override mode is active/);
+  assert.match(String(h.messages[0].content), /alice@host:\/project/);
 });

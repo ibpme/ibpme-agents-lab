@@ -10,7 +10,8 @@ export function registerModeContext(pi: ExtensionAPI, toolSet: ToolSet) {
 
   registerStateNotice(pi, "tool-set-mode-context", () => toolSet.getMode() === "safe"
     ? 'Execution policy: SAFE. Tool declarations are unchanged, but write/edit and shell execution (local or remote), and MCP tools not marked read-only, are blocked. Use read-only tools; ls/grep/find and SSH tools are discoverable through tool_search or codemode. Request user approval through change_mode with mode "yolo" if blocked operations are needed.'
-    : "Execution policy: YOLO. SAFE restrictions are lifted; other permission guards still apply. Tool declarations and SSH connection state are unchanged.");
+    : "Execution policy: YOLO. SAFE restrictions are lifted; other permission guards still apply. Tool declarations and SSH connection state are unchanged.",
+    () => toolSet.getMode() === "yolo");
 
   const unsubscribe = toolSet.onChange(() => {
     if (restoring) return;

@@ -80,6 +80,10 @@ Requires Pi 1.3.0 or newer for native restoration of tools loaded during a sessi
   if it differs from the latest notice in the current projected context. A round trip to the already
   announced mode adds no notice. Mid-run changes are announced at the turn boundary without forcing
   another model response. Notices remain visible in the TUI (`display: true`).
+  Fresh sessions omit notices for the implicit defaults (YOLO and SSH disconnected). SAFE or an
+  enabled SSH connection is still announced before the first model request. After a state has been
+  announced, returning to its default still produces a corrective notice, even if earlier notices
+  were removed from context by compaction or branching.
   New sessions default to YOLO, preserving the previous default. Explicit choices are saved in session
   metadata and restored on resume/reload. Permissions are live session-wide control: `/tree` does not
   rewind them or reset SAFE to YOLO. Notices missing from the destination branch or compacted context

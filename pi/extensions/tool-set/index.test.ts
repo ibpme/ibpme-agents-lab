@@ -10,6 +10,32 @@ function setup() {
   return h;
 }
 
+test("fresh sessions omit default notices even after unannounced idle round trips", async (t) => {
+  const h = setup();
+  t.after(() => h.emit("session_shutdown"));
+  await h.emit("session_start");
+  await h.emit("before_agent_start");
+  await h.emit("turn_end");
+  assert.equal(h.messages.length, 0);
+  await h.commands.get("safe")!.handler("", h.ctx);
+  await h.commands.get("yolo")!.handler("", h.ctx);
+  await h.emit("before_agent_start");
+  assert.equal(h.messages.length, 0);
+});
+
+test("YOLO is still announced after a previously announced SAFE state leaves projected context", async (t) => {
+  const h = setup();
+  t.after(() => h.emit("session_shutdown"));
+  await h.emit("session_start");
+  await h.commands.get("safe")!.handler("", h.ctx);
+  await h.emit("before_agent_start");
+  await h.commands.get("yolo")!.handler("", h.ctx);
+  h.messages.length = 0;
+  await h.emit("before_agent_start");
+  assert.equal(h.messages.length, 1);
+  assert.match(String(h.messages[0].content), /Execution policy: YOLO/);
+});
+
 test("idle permission changes persist immediately but announce only the final state at run start", async (t) => {
   const h = setup();
   t.after(() => h.emit("session_shutdown"));
@@ -36,10 +62,11 @@ test("returning to the already announced mode does not add a notice", async (t) 
   const h = setup();
   t.after(() => h.emit("session_shutdown"));
   await h.emit("session_start");
+  await h.commands.get("safe")!.handler("", h.ctx);
   await h.emit("before_agent_start");
   assert.equal(h.messages.length, 1);
-  await h.commands.get("safe")!.handler("", h.ctx);
   await h.commands.get("yolo")!.handler("", h.ctx);
+  await h.commands.get("safe")!.handler("", h.ctx);
   await h.emit("before_agent_start", { messageType: "custom" });
   assert.equal(h.messages.length, 1);
 });
@@ -50,13 +77,17 @@ test("mid-run changes announce at the turn boundary without requesting continuat
   await h.emit("session_start");
   await h.emit("before_agent_start");
   await h.commands.get("safe")!.handler("", h.ctx);
-  assert.equal(h.messages.length, 1);
+  assert.equal(h.messages.length, 0);
   const results = await h.emit("turn_end");
-  assert.equal(h.messages.length, 2);
+  assert.equal(h.messages.length, 1);
   assert.match(String(h.messages.at(-1)?.content), /SAFE/);
   assert.ok(results.every((result) => !result?.continue));
   await h.emit("turn_end");
+  assert.equal(h.messages.length, 1);
+  await h.commands.get("yolo")!.handler("", h.ctx);
+  await h.emit("turn_end");
   assert.equal(h.messages.length, 2);
+  assert.match(String(h.messages.at(-1)?.content), /Execution policy: YOLO/);
 });
 
 test("tree navigation and compacted-away notices are refreshed only at the next run", async (t) => {

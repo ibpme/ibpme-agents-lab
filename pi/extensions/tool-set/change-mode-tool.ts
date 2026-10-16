@@ -13,7 +13,7 @@ import { Type } from "typebox";
 import { CHANGE_MODE_TOOL } from "./state.ts";
 
 const PERMISSION_GUIDELINES = [
-  "Execution policy is independent of tool visibility. The latest execution-policy notice states whether SAFE or YOLO is active.",
+  "New sessions default to YOLO with SSH disconnected. Execution policy is independent of tool visibility. The latest execution-policy notice states whether SAFE or YOLO is active.",
   "In SAFE, mutation and shell tools are blocked at execution time, including calls through codemode. Use read-only tools instead.",
   'Local ls/grep/find and SSH tools are deferred: discover them with tool_search or call them through codemode.',
   'Use change_mode with mode "yolo" to request user approval before performing operations blocked by SAFE.',

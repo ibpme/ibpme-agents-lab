@@ -143,7 +143,8 @@ export default function (pi: ExtensionAPI) {
     ? `SSH override mode is active: unqualified read/write/edit/bash/grep/ls/find tools execute on ${cliSsh.remote}:${cliSsh.remoteCwd}, not locally. The _remote tools require a separate /ssh connection and are unavailable in this mode. Execution permissions are unchanged.`
     : sessionSsh
     ? `SSH connected to ${sessionSsh.remote}:${sessionSsh.remoteCwd}. The deferred read_remote/write_remote/edit_remote/bash_remote/grep_remote/ls_remote/find_remote tools target this host; discover them through tool_search or codemode. Unqualified tools still operate locally. Execution permissions are unchanged.`
-    : "SSH disconnected. Remote tools remain discoverable but cannot execute until the user connects through /ssh. Unqualified tools still operate locally.");
+    : "SSH disconnected. Remote tools remain discoverable but cannot execute until the user connects through /ssh. Unqualified tools still operate locally.",
+    () => !cliSsh && !sessionSsh);
 
   pi.on("session_start", async (_event, ctx) => {
     getRequiredToolSet().addBlockedTools(["write_remote", "edit_remote", "bash_remote"]);
