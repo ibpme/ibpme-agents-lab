@@ -220,7 +220,7 @@ export function createBrowser(
         offset = Math.max(0, Math.min(offset, selectedRow, Math.max(0, rows.length - page)));
         if (selectedRow >= offset + page) offset = selectedRow - page + 1;
         body = rows.slice(offset, offset + page).map(row => row.text);
-        if (!body.length) body = [` ${theme.fg("dim", loading ? `${spinner(now)} Loading registry…` : view.state === "unavailable" ? "Start agents-registry to browse live agents."
+        if (!body.length) body = [` ${theme.fg("dim", loading ? `${spinner(now)} Loading registry…` : view.state === "unavailable" ? "Run agent-hub start to browse live agents."
           : filter ? `No agents match “${clean(filter)}”.` : "No agents recorded.")}`];
         headline = summary(agents, inner);
         scrollInfo = { offset, total: rows.length };

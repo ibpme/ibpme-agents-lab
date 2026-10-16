@@ -7,17 +7,10 @@
   "engines": {
     "node": ">=22.18.0"
   },
-  "bin": {
-    "agents-registry": "dist/cli.js"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
-    "test": "npm run build && tsx --test tests/*.test.ts tests/*.test.mjs",
-    "start": "node dist/cli.js",
-    "dev": "tsx src/cli.ts",
-    "cli:install": "node scripts/install-cli.mjs install",
-    "cli:uninstall": "node scripts/install-cli.mjs uninstall"
+    "test": "npm run build && tsx --test tests/*.test.ts tests/*.test.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0",
@@ -47,6 +40,11 @@
     "./paths": {
       "types": "./dist/paths.d.ts",
       "import": "./dist/paths.js"
-    }
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js"
+    },
+    "./publishers/claude/*": "./publishers/claude/*"
   }
 }

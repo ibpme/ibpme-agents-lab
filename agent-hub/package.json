@@ -22,7 +22,9 @@
     "pretest": "npm run build",
     "test": "npm run test:packages && npm run test --workspaces",
     "check": "npm run typecheck && npm test",
-    "test:packages": "node --test scripts/packages.test.mjs"
+    "test:packages": "node --test scripts/packages.test.mjs",
+    "cli:install": "npm run cli:install --workspace @agent-hub/service",
+    "cli:uninstall": "npm run cli:uninstall --workspace @agent-hub/service"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

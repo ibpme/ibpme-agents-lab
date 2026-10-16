@@ -19,6 +19,7 @@
   "dependencies": {
     "@agent-hub/registry": "0.1.0",
     "@agent-hub/spawner": "0.1.0",
+    "@agent-hub/viewer": "0.1.0",
     "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {

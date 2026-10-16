@@ -1,46 +1,75 @@
-# agent-hub
-
-The recommended runtime is the [unified service](../service/README.md), which
-starts the registry and spawn supervisor together with shared configuration.
-Install with `npm run cli:install --workspace @agent-hub/service` from `agent-hub/`,
-then run `agent-hub start --background`. Existing Pi extensions and MCP clients
-continue using their existing registry and spawner directories.
+# Setup
 
 [Documentation index](README.md) · [Agent hub](../README.md)
 
-Setup examples start at the repository root. Run workspace development commands
-from `agent-hub/`.
-
-Tooling for observing and messaging live coding agents on one machine.
+Tooling for observing and messaging live coding agents on one machine. One
+command, `agent-hub`, runs and manages everything except the MCP server.
 
 | Directory | Purpose |
 |---|---|
-| `registry/` | `agents-registry`: background daemon writing live agent snapshots (`agents.jsonl`) |
-| `mcp/` | `agents-mcp`: MCP server (stdio and Streamable HTTP) for listing and messaging agents |
-| `spawner/` | explicitly launched supervisor for background Pi TUIs and headless tasks |
+| `service/` | the `agent-hub` command; hosts the registry and spawn supervisor |
+| `registry/` | daemon writing live agent snapshots (`agents.jsonl`) |
+| `spawner/` | supervisor for background Pi TUIs and headless tasks |
+| `viewer/` | terminal browser and tmux popup, run by `agent-hub view` |
 | `pi/` | pi package: `/agents` browser, `message-listener` and `registry-publisher` extensions |
-| `viewer/` | standalone TUI and tmux popup launcher |
+| `mcp/` | `agents-mcp`: MCP server (stdio and Streamable HTTP), set up separately |
 
-Nothing here starts or installs itself. See the [registry](registry.md) and
-[MCP](mcp.md) guides for their setup instructions.
+Nothing here starts itself or installs OS services.
+
+## Install the command
+
+Requires Node.js 22.18+ and npm 10+ on Linux or macOS, tmux for spawning, and
+Bun 1.3+ for `agent-hub view` and Pi's tmux popups. From the repository root:
+
+```bash
+cd agent-hub
+npm ci
+npm run build
+npm run cli:install
+```
+
+`cli:install` creates `~/.local/bin/agent-hub` as a symlink to this checkout's
+built CLI. Keep the checkout available and `~/.local/bin` on `PATH`. Re-running it
+is safe; files or links belonging to another checkout are never overwritten.
+`npm run cli:uninstall` removes only this checkout's link and keeps all state.
+
+```bash
+agent-hub help
+agent-hub start --background
+agent-hub status
+agent-hub view
+agent-hub stop
+```
+
+| Command | Purpose |
+|---|---|
+| `start`, `status`, `stop` | run the registry and spawn supervisor ([service](../service/README.md)) |
+| `view` | browse live agents and transcripts ([viewer](../viewer/README.md)) |
+| `publish` | send one registry publisher message from stdin ([registry](registry.md)) |
+| `route validate`, `route test` | check model routing configuration ([routing](routing.md)) |
+| `claude install`, `claude uninstall` | opt-in Claude Code hooks and status-line publisher ([registry](registry.md)) |
+
+All state lives in `$AGENT_HUB_DIR`, otherwise `$XDG_STATE_HOME/agent-hub`,
+otherwise `~/.local/state/agent-hub`. Processes started separately (Pi, MCP
+clients, Claude hooks) must see the same `AGENT_HUB_DIR` when you override it.
 
 ## Install the pi extensions
 
 ```bash
-(cd agent-hub && npm ci && npm run build)
 pi install /absolute/path/to/ibpme-agents-lab/agent-hub/pi
 ```
 
 `pi.extensions` in `pi/package.json` lists `agents`, `message-listener` and `registry-publisher`. The extensions
 import declared `@agent-hub/registry` and `@agent-hub/viewer` APIs, so install from a
-checkout of this repository, not a copy of `pi/` alone. Use `pi remove` to uninstall.
+built checkout of this repository, not a copy of `pi/` alone. Use `pi remove` to uninstall.
 
-Inside tmux, `/agents` opens a standalone popup. Ensure Bun is on the PATH
-inherited by Pi/tmux. See the
-[standalone browser guide](../viewer/README.md) for shell usage and a tmux
-keybinding. Run `npm run cli:install` from `agent-hub/viewer/` to install
-`~/.local/bin/agents-viewer`; `npm run cli:uninstall` removes this checkout's link.
-Outside tmux, `/agents` keeps the native Pi overlay.
+Inside tmux, `/agents` opens the `agent-hub view` popup; ensure Bun is on the PATH
+inherited by Pi/tmux. Outside tmux, `/agents` keeps the native Pi overlay. See the
+[viewer guide](../viewer/README.md) for a tmux keybinding.
+
+## Install the MCP server
+
+See the [MCP guide](mcp.md).
 
 ## Develop
 

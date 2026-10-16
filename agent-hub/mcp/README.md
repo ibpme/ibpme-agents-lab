@@ -13,21 +13,21 @@ installation is required. From the repository root:
 cd agent-hub
 npm ci
 npm run build
-node service/dist/cli.js start --background
-node service/dist/cli.js status
+npm run cli:install
+agent-hub start --background
+agent-hub status
 ```
 
-The [unified service](../service/README.md) starts the registry and spawn
+The [agent-hub service](../service/README.md) starts the registry and spawn
 supervisor. Spawning requires tmux and Pi on the service's PATH (or configure
 `--pi /absolute/path/to/pi`). For discovery and messaging without spawning,
 start with `--registry-only` instead:
 
 ```bash
-node service/dist/cli.js start --background --registry-only
+agent-hub start --background --registry-only
 ```
 
-Stop independently running registry/spawner instances before starting the unified
-service against the same data directories. Nothing here installs OS startup
+Nothing here installs OS startup
 configuration; start the service again after a reboot.
 
 The MCP client launches its own stdio server process, not the background service.
@@ -163,12 +163,11 @@ Delivery mode is fixed at startup with `--deliver-as steer|followUp` (default
 
 After updating the checkout, run `npm ci` and `npm run build` from `agent-hub/`,
 then reconnect/restart MCP clients. Restart the background service as well when
-updating its code. Manage it without installing a global CLI:
+updating its code:
 
 ```bash
-node service/dist/cli.js status
-node service/dist/cli.js stop
-node service/dist/cli.js start --background
+agent-hub stop
+agent-hub start --background
 ```
 
 Disconnecting an MCP client stops its stdio server, not the background service.

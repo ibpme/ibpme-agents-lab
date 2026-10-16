@@ -8,8 +8,12 @@ import { hubDirectory } from '@agent-hub/registry/paths';
 import { request } from './client.js';
 import { resolveConfig } from './config.js';
 import { startService } from './service.js';
+import { claude, claudeUsage } from './claude.js';
+import { publish, publishUsage } from './publish.js';
+import { route, routeUsage } from './route.js';
+import { view } from './view.js';
 
-const usage = `agent-hub <start|status|stop> [options]
+const lifecycleUsage = `agent-hub <start|status|stop> [options]
   --directory PATH          State directory (AGENT_HUB_DIR, else XDG state/agent-hub)
   --background              Detached launch (start only)
   --foreground              Foreground launch, the default (start only)
@@ -27,6 +31,26 @@ The state directory holds hub.sock, config.json and the registry/ and spawner/
 directories. Defaults may be set in config.json; explicit flags override them.
 No hooks, Pi extensions, or OS startup configuration are installed.`;
 
+const usage = `agent-hub <command> [options]
+
+Commands:
+  start      Run the registry and spawn supervisor
+  status     Report service configuration and health
+  stop       Stop the service
+  view       Browse live agents and transcripts (requires Bun)
+  publish    Send one registry publisher message from stdin
+  route      Validate or test model routing configuration
+  claude     Install or remove the Claude Code registry publishers
+  help       Show help for a command
+
+Run agent-hub help <command> for its options. All state lives in AGENT_HUB_DIR
+(default: XDG state/agent-hub, usually ~/.local/state/agent-hub).`;
+
+const commandUsage: Record<string, string> = {
+  start: lifecycleUsage, status: lifecycleUsage, stop: lifecycleUsage,
+  publish: publishUsage, route: routeUsage, claude: claudeUsage,
+};
+
 const delay = (ms: number): Promise<void> => new Promise(done => setTimeout(done, ms));
 const absent = (error: unknown): boolean => ['ENOENT', 'ECONNREFUSED'].includes((error as NodeJS.ErrnoException)?.code ?? '');
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error);
@@ -34,7 +58,7 @@ type Config = ReturnType<typeof resolveConfig>;
 
 function parse(args: string[]): { command: string; background: boolean; options: NonNullable<Parameters<typeof resolveConfig>[0]> } {
   const command = args.shift();
-  if (!command || !['start', 'status', 'stop'].includes(command)) throw new Error(usage);
+  if (!command || !['start', 'status', 'stop'].includes(command)) throw new Error(lifecycleUsage);
   const options: NonNullable<Parameters<typeof resolveConfig>[0]> = {};
   let background = false;
   let foreground = false;
@@ -204,11 +228,26 @@ async function foregroundStart(config: Config): Promise<void> {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  if ((args.length === 1 && ['help', '--help', '-h'].includes(args[0]!)) ||
-      (args.length === 2 && ['start', 'status', 'stop'].includes(args[0]!) && args[1] === '--help')) {
-    console.log(usage);
+  const command = args[0];
+  if (!command || ['help', '--help', '-h'].includes(command)) {
+    const topic = command ? args[1] : undefined;
+    if (topic === 'view') { process.exitCode = await view(['--help']); return; }
+    if (topic !== undefined && !commandUsage[topic]) throw new Error(`Unknown command: ${topic}\n\n${usage}`);
+    console.log(topic ? commandUsage[topic] : usage);
     return;
   }
+  if (command === 'view') { process.exitCode = await view(args.slice(1)); return; }
+  if (commandUsage[command] && args.length === 2 && ['--help', '-h'].includes(args[1]!)) { console.log(commandUsage[command]); return; }
+  switch (command) {
+    case 'start': case 'status': case 'stop': return lifecycle(args);
+    case 'publish': return publish(args.slice(1));
+    case 'route': process.exitCode = await route(args.slice(1)); return;
+    case 'claude': process.exitCode = claude(args.slice(1)); return;
+    default: throw new Error(`Unknown command: ${command}\n\n${usage}`);
+  }
+}
+
+async function lifecycle(args: string[]): Promise<void> {
   const { command, background, options } = parse(args);
   const directory = resolve(options.directory ?? hubDirectory());
   if (command === 'status') {

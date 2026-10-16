@@ -58,15 +58,16 @@ package; a dev dependency hoisted from another workspace does not count.
 
 | Directory | Package | Public API |
 |---|---|---|
-| `registry/` | `@agent-hub/registry` | `/client`, `/types`, `/processes`, `/schemas/*` |
-| `viewer/` | `@agent-hub/viewer` | `/browser`, `/reader`, `/tmux-actions`, `/view`, `/popup` |
+| `registry/` | `@agent-hub/registry` | `/client`, `/types`, `/processes`, `/protocol`, `/paths`, `/daemon`, `/schemas/*`, `/publishers/claude/*` |
+| `viewer/` | `@agent-hub/viewer` | `/browser`, `/reader`, `/tmux-actions`, `/view`, `/popup`, `/theme`, `/launcher` |
 | `pi/` | `@agent-hub/pi` | `/listener`, `/listener/protocol`, `/spawn-lifecycle` |
-| `spawner/` | `@agent-hub/spawner` | root client API, `/supervisor` |
+| `spawner/` | `@agent-hub/spawner` | root client API, `/supervisor`, `/tmux`, `/routing` |
 | `mcp/` | `@agent-hub/mcp` | CLI only; no library exports |
-| `service/` | `@agent-hub/service` | CLI only; no library exports |
+| `service/` | `@agent-hub/service` | the `agent-hub` CLI; no library exports |
 
-CLI names are `agents-registry`, `agents-viewer`, `agent-spawn`, and
-`agents-mcp`. Packages are private and intended for this checkout; the workspace
+There are two commands: `agent-hub` (service) for everything except MCP, and
+`agents-mcp`. Other packages expose libraries only; `agent-hub` subcommands call
+them. Packages are private and intended for this checkout; the workspace
 conversion does not make them independently publishable or relocatable.
 
 Declare every cross-package dependency using its workspace package version

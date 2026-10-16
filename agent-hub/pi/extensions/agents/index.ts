@@ -4,6 +4,7 @@ import { readRegistry, registryDirectory } from "@agent-hub/viewer/reader";
 import { performPaneAction } from "@agent-hub/viewer/tmux-actions";
 import { clean } from "@agent-hub/viewer/view";
 import { openPopup } from "@agent-hub/viewer/popup";
+import { hubDirectory } from "@agent-hub/registry/paths";
 
 export default function agentsExtension(pi: ExtensionAPI): void {
   pi.registerCommand("agents", {
@@ -15,7 +16,7 @@ export default function agentsExtension(pi: ExtensionAPI): void {
       const origin = tmux && paneId ? { server: tmux.replace(/,\d+,\d+$/, ""), paneId } : undefined;
       const directory = registryDirectory();
       try {
-        if (origin) await openPopup(origin, directory);
+        if (origin) await openPopup(origin, hubDirectory());
         else await openBrowser(ctx, { readRegistry: () => readRegistry(directory), origin, performPaneAction });
       } catch (error) { ctx.ui.notify(`/agents: ${clean(error instanceof Error ? error.message : String(error))}`, "error"); }
     },

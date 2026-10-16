@@ -42,7 +42,7 @@ SIGINT, SIGTERM and stdio EOF trigger cleanup, with a five-second shutdown
 fallback. Diagnostics go to stderr. Nothing installs MCP configuration or starts
 the registry daemon automatically.
 
-Start [agents-registry](registry.md) separately. The server reads
+Start the [registry](registry.md) separately with `agent-hub start`. The server reads
 its current `agents.jsonl` and `registry-health.json` on every call. Both must use
 the same runtime directory: `registry/` inside `$AGENT_HUB_DIR`, otherwise
 `$XDG_STATE_HOME/agent-hub`, otherwise `~/.local/state/agent-hub`.

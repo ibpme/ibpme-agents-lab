@@ -1,18 +1,16 @@
 # Agent spawner
 
-For shared configuration and one start/stop/status lifecycle, use the
-[unified service](../service/README.md). The standalone supervisor below remains
-available for development; never run both against the same spawner directory.
-
-A separately started, same-user supervisor for background Pi children. Interactive
-children are **real Pi TUIs in detached tmux windows**, not RPC clients or terminal
-emulations. Headless children use RPC with a detached pipe owner. Both run the same
-harness-side lifecycle extension; the model never has to call `send_message` to
-report completion.
+A same-user supervisor for background Pi children, run inside the
+[agent-hub service](../service/README.md). Interactive children are **real Pi TUIs
+in detached tmux windows**, not RPC clients or terminal emulations. Headless
+children use RPC with a detached pipe owner. Both run the same harness-side
+lifecycle extension; the model never has to call `send_message` to report
+completion.
 
 ## Optional model routing
 
-Use `--routing-config /absolute/path/to/routing.json` to enable supervisor-owned
+Use `agent-hub start --routing-config /absolute/path/to/routing.json` (or
+`routingConfigPath` in the hub's `config.json`) to enable supervisor-owned
 Jev System One profile routing. Profiles choose Pi provider/model/effort and can
 append system instructions. Routing is authoritative when enabled and falls
 back to a configured default when classification fails. No configuration means
@@ -22,53 +20,42 @@ See [routing configuration and prompt testing](../docs/routing.md) and the
 [example configuration](examples/routing.json). Test without spawning an agent:
 
 ```bash
-# From agent-hub/ after building
-node spawner/dist/route-test.js --config /path/to/routing.json --prompt 'Your delegated task'
-node spawner/dist/route-test.js --config /path/to/routing.json --validate-only
+agent-hub route test --config /path/to/routing.json --prompt 'Your delegated task'
+agent-hub route validate --config /path/to/routing.json
 ```
 
-## Build and start
+## Start
 
 Requires Node.js 22.18+, Pi 1.1+ (`agent_settled` support), and tmux for interactive
-children. Install from this repository checkout; the supervisor explicitly loads
-the `@agent-hub/pi/spawn-lifecycle` package export. It is not a globally installed extension.
-
-From the repository root:
+children. Install from this repository checkout (see [setup](../docs/setup.md));
+the supervisor explicitly loads the `@agent-hub/pi/spawn-lifecycle` package export.
+It is not a globally installed extension.
 
 ```sh
-(cd agent-hub && npm ci && npm run build)
-(cd agent-hub && npm run cli:install --workspace @agent-hub/spawner)
-
 # Inside tmux: use the current server and session.
 # Outside tmux: create or reuse a dedicated server and session.
-agent-spawn
+agent-hub start --background
 
 # Override either or both defaults.
-agent-spawn --tmux-socket /absolute/path/to/tmux.sock --tmux-session agents
+agent-hub start --background --tmux-socket /absolute/path/to/tmux.sock --tmux-session agents
 ```
 
-The installer creates `~/.local/bin/agent-spawn` as an absolute symlink to this
-checkout's built CLI. Keep the checkout available and `~/.local/bin` on PATH.
-`npm run cli:uninstall --workspace @agent-hub/spawner` (from `agent-hub/`) removes
-only this checkout's link, preserving task state. Installation starts no process.
+Nothing starts automatically. `--pi /path/to/pi` overrides the executable;
+otherwise `pi` is found using the hub's PATH. The child inherits normal Pi
+configuration, credentials, tools and trust behavior. This does **not**
+automatically approve project configuration or bypass prompts.
 
-The supervisor runs in the foreground. Start it inside a separate tmux window or
-under your own process manager. Nothing starts automatically. `--pi /path/to/pi`
-overrides the executable; otherwise `pi` is found using the supervisor's PATH.
-The child inherits normal Pi configuration, credentials, tools and trust behavior.
-This does **not** automatically approve project configuration or bypass prompts.
-
-The CLI infers the socket from `$TMUX` and detects the current session using
+The hub infers the socket from `$TMUX` and detects the current session using
 `$TMUX_PANE` when available. Outside tmux, it creates or reuses a server at
-`<spawner-directory>/tmux.sock` with session `agent-spawn`. `--tmux-socket` and
+`<state-directory>/spawner/tmux.sock` with session `agent-hub`. `--tmux-socket` and
 `--tmux-session` override their respective defaults; a different socket defaults
-to session `agent-spawn` rather than inheriting a session from the original server.
-Missing sessions are created detached. The chosen socket and session are printed
-at startup. Stopping the supervisor leaves the tmux server/session and children
-running. Attach with `tmux -S <socket> attach-session -t <session>`.
+to session `agent-hub` rather than inheriting a session from the original server.
+Missing sessions are created detached. Stopping the hub leaves the tmux
+server/session and children running. Attach with
+`tmux -S <socket> attach-session -t <session>`.
 
 The programmatic supervisor API still supports headless-only operation without
-tmux options; automatic tmux setup is performed only by the CLI.
+tmux options; automatic tmux setup is performed only by the hub.
 
 The registry and parent Pi listener must also be running for automatic completion
 delivery. Install/reload the updated listener: it must support `expectedSessionId`.

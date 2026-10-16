@@ -4,32 +4,23 @@
 
 Shell examples run from the repository root unless they include a `cd`.
 
-Browse Pi and Claude agents recorded by the standalone
-[`agents-registry` daemon](registry.md). The extension reads
+Browse Pi and Claude agents recorded by the
+[registry](registry.md) in the agent-hub service. The extension reads
 `agents.jsonl` and `registry-health.json`; it does not discover agents, publish
 status, start the daemon, or launch agents.
 
 ## Setup
 
 Install the package with `pi install <path-to>/agent-hub/pi`, then `/reload` existing Pi
-sessions. Start the registry explicitly from the repository root:
+sessions. Start the hub explicitly (see [setup](setup.md)):
 
 ```bash
-cd agent-hub
-npm ci
-npm run build
-cd registry
-node dist/cli.js start --background
+agent-hub start --background
 ```
 
-To map tmux panes, start the daemon with the server socket explicitly configured:
-
-```bash
-node dist/cli.js start --background --tmux-socket /absolute/path/to/tmux/socket
-```
-
-The daemon does not automatically use `TMUX`. Stop an existing daemon before
-changing its configuration. Multiple `--tmux-socket` arguments are supported.
+The hub maps panes of its own tmux server. To map panes of other servers, add
+`--tmux-socket /absolute/path/to/tmux/socket` (repeatable). Stop the hub before
+changing its configuration.
 
 Browser and publisher resolve the same directory: `registry/` inside
 `$AGENT_HUB_DIR`, then `$XDG_STATE_HOME/agent-hub`, then `~/.local/state/agent-hub`.
@@ -51,7 +42,7 @@ of Pi's overlay. Install its dependencies with
 Outside tmux, `/agents` retains its native overlay.
 
 The browser can also launch independently from any shell or a tmux keybinding;
-see [agents-viewer setup](../viewer/README.md). It preserves the original
+see the [viewer guide](../viewer/README.md). It preserves the original
 pane/socket/client for actions and closes after attaching. Standalone transcripts
 use persisted files only, not the invoking Pi process's in-memory branch. Popup
 colors use the terminal ANSI palette rather than Pi's active theme.
@@ -231,7 +222,7 @@ Shared implementation and tests live in `agent-hub/viewer/`:
 - `tmux-actions.ts`: numeric identity/ancestry checks and pane operations.
 
 Snapshot types and schema come from `agent-hub/registry`; the reader has no dependency
-on its build output or daemon installation. Ajv is installed with the shared agents-viewer package.
+on its build output or daemon installation. Ajv is installed with the shared viewer package.
 
 ```bash
 (cd agent-hub && npm run check)

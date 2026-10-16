@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
 const execute = promisify(execFile);
-const cli = fileURLToPath(new URL('../dist/route-test.js', import.meta.url));
+const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'routing-cli-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -25,14 +25,17 @@ async function fixture(t) {
   const save = () => writeFile(path, JSON.stringify(config));
   await save();
   const env = { ...process.env, PI_CODING_AGENT_DIR: directory, TYPESAFE_API_KEY: '' };
+  // `--validate-only` selects `route validate`; every other invocation is `route test`.
   const run = async (...args) => {
-    try { return { ...(await execute(process.execPath, [cli, '--config', path, ...args], { env })), code: 0 }; }
+    const validate = args.includes('--validate-only');
+    const rest = args.filter(arg => arg !== '--validate-only');
+    try { return { ...(await execute(process.execPath, [cli, 'route', validate ? 'validate' : 'test', '--config', path, ...rest], { env })), code: 0 }; }
     catch (error) { return { stdout: error.stdout, stderr: error.stderr, code: error.code }; }
   };
   return { config, path, env, save, run };
 }
 
-test('dry-run script validates local profiles and resolves missing-key fallback without spawning', async t => {
+test('route validates local profiles and resolves missing-key fallback without spawning', async t => {
   const h = await fixture(t);
   const validation = await h.run('--validate-only');
   assert.equal(validation.code, 0, validation.stderr);
@@ -49,7 +52,7 @@ test('dry-run script validates local profiles and resolves missing-key fallback 
   assert.equal(JSON.parse(defaultResult.stdout).routing.source, 'default');
 });
 
-test('dry-run reports unknown models, incompatible effort, and unavailable default', async t => {
+test('route reports unknown models, incompatible effort, and unavailable default', async t => {
   const h = await fixture(t);
   h.config.routing.profiles[1].model = 'nonexistent'; await h.save();
   let result = await h.run('--validate-only');
@@ -68,7 +71,7 @@ test('dry-run reports unknown models, incompatible effort, and unavailable defau
   assert.match(result.stderr, /Default routing profile general unavailable: unknown_chat_model/);
 });
 
-test('dry-run routes through real SDK to a mock endpoint and prints selected settings only', async t => {
+test('route routes through real SDK to a mock endpoint and prints selected settings only', async t => {
   const h = await fixture(t);
   const states = [];
   const server = createServer((req, res) => {
@@ -96,8 +99,10 @@ test('dry-run routes through real SDK to a mock endpoint and prints selected set
   assert.doesNotMatch(result.stdout + result.stderr, /Private profile instructions|test-secret/);
 });
 
-test('dry-run rejects invalid config and ambiguous prompt input', async t => {
+test('route rejects invalid config and ambiguous prompt input', async t => {
   const h = await fixture(t);
+  const missing = await execute(process.execPath, [cli, 'route', 'validate', '--directory', join(h.path, '..', 'empty')], { env: h.env }).catch(error => error);
+  assert.match(missing.stderr, /--config PATH is required/);
   assert.equal((await h.run('--prompt', 'task', 'second task')).code, 1);
   assert.equal((await h.run('--validate-only', '--prompt', 'task')).code, 1);
   assert.equal((await h.run('--prompt', '  ')).code, 1);
@@ -107,9 +112,9 @@ test('dry-run rejects invalid config and ambiguous prompt input', async t => {
   assert.equal((await h.run('--validate-only')).code, 1);
 });
 
-test('dry-run reads stdin and respects explicitly disabled routing', async t => {
+test('route reads stdin and respects explicitly disabled routing', async t => {
   const h = await fixture(t);
-  const child = spawn(process.execPath, [cli, '--config', h.path, '--stdin'], { env: h.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [cli, 'route', 'test', '--config', h.path, '--stdin'], { env: h.env, stdio: ['pipe', 'pipe', 'pipe'] });
   let stdout = ''; let stderr = '';
   child.stdout.on('data', chunk => { stdout += chunk; });
   child.stderr.on('data', chunk => { stderr += chunk; });
@@ -123,7 +128,7 @@ test('dry-run reads stdin and respects explicitly disabled routing', async t => 
   assert.deepEqual(JSON.parse(result.stdout), { enabled: false, routing: null, execution: null });
 });
 
-test('single-profile dry-run skips the SDK and requires no classifier key', async t => {
+test('single-profile route test skips the SDK and requires no classifier key', async t => {
   const h = await fixture(t);
   h.config.routing.profiles.splice(1); await h.save();
   let requests = 0;

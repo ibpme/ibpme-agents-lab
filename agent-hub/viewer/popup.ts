@@ -5,11 +5,12 @@ import type { Origin } from "./tmux-actions.ts";
 import type { Runner } from "@agent-hub/registry/types";
 
 const execute = promisify(execFile);
-export const launcher = fileURLToPath(new URL("./agents-viewer", import.meta.url));
+export const launcher = fileURLToPath(new URL("./launcher", import.meta.url));
 export const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
 
 const run: Runner = async (command, args) => (await execute(command, args)).stdout;
 
+/** `directory` is the agent-hub state directory, passed through to the popup. */
 export async function openPopup(origin: Origin, directory?: string, runner: Runner = run): Promise<void> {
   const client = origin.client ?? (await runner("tmux", ["-S", origin.server, "display-message", "-p", "-t", origin.paneId, "#{client_name}"])).trim();
   if (!client) throw new Error("No attached tmux client for the invoking pane.");

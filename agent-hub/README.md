@@ -4,12 +4,12 @@ Observe and message live Pi and Claude coding agents on one machine.
 
 | Component | Purpose | Guide |
 |---|---|---|
-| `service/` | Unified registry + supervisor lifecycle and configuration | [Service](service/README.md) |
+| `service/` | The `agent-hub` command: lifecycle, viewer, publishing, routing and Claude setup | [Service](service/README.md) |
 | `registry/` | Discover agents and write live snapshots | [Registry](docs/registry.md) |
 | `mcp/` | Discover, message and spawn agents through MCP | [MCP server](docs/mcp.md) |
 | `spawner/` | Supervise background Pi TUIs and headless tasks | [Spawner](spawner/README.md) |
 | `pi/` | `/agents` browser, listener, and registry publisher | [Setup](docs/setup.md#install-the-pi-extensions) |
-| `viewer/` | Standalone terminal browser and tmux popup launcher | [Setup](viewer/README.md) |
+| `viewer/` | Terminal browser and tmux popup (`agent-hub view`) | [Viewer](viewer/README.md) |
 
 ## Quick start
 
@@ -20,16 +20,21 @@ Pi tmux popups additionally require Bun 1.3+ on PATH. From the repository root:
 cd agent-hub
 npm ci
 npm run build
-npm run cli:install --workspace @agent-hub/service
+npm run cli:install
 ```
 
 With `~/.local/bin` on `PATH`, launch explicitly:
 
 ```bash
+agent-hub help
 agent-hub start --background
 agent-hub status
+agent-hub view
 agent-hub stop
 ```
+
+All state lives in `AGENT_HUB_DIR` (default `~/.local/state/agent-hub`). The MCP
+server is set up separately; see the [MCP guide](docs/mcp.md).
 
 Nothing starts automatically; OS-managed services are not installed. The unified
 service uses the current tmux server/session, or creates a dedicated one outside
@@ -43,8 +48,8 @@ architecture, and development checks.
 
 `agent-hub/` is a private npm workspace with one root lockfile. Install
 dependencies here, not separately in each component. Package names consistently
-use the `@agent-hub/` scope; the standalone viewer lives in `viewer/` and runs
-as `agents-viewer`.
+use the `@agent-hub/` scope. `agent-hub` (in `service/`) and `agents-mcp` (in
+`mcp/`) are the only commands.
 
 ```bash
 cd agent-hub

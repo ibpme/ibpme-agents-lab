@@ -1,32 +1,13 @@
-# agents-registry
+# Registry
 
-For the recommended combined registry + supervisor lifecycle, use the
-[unified service](../service/README.md). The standalone CLI below remains available
-for registry-only deployments; do not run it against a registry owned by the hub.
-
-Machine-local discovery and live snapshots for Pi and Claude agents.
-Requires Node.js 22.18+ and npm on Linux or macOS.
-
-From the repository root:
+Machine-local discovery and live snapshots for Pi and Claude agents. The
+registry runs inside the [agent-hub service](../service/README.md):
 
 ```bash
-cd agent-hub
-npm ci
-npm run build
-npm run cli:install --workspace @agent-hub/registry
+agent-hub start --background                 # with the spawn supervisor
+agent-hub start --background --registry-only # registry alone
 ```
 
-With `~/.local/bin` on `PATH`:
-
-```bash
-agents-registry start --background --tmux-socket /absolute/path/to/tmux/socket
-agents-registry status
-agents-registry stop
-```
-
-Installation only creates a CLI symlink; it does not start the registry or install
-an OS service. Supply tmux sockets explicitly; repeat the flag for multiple servers.
-
-See the **[registry guide](../docs/registry.md)** for configuration, uninstall,
+See the **[registry guide](../docs/registry.md)** for configuration,
 architecture, Claude/Pi publishers, schemas, and verification, or the
 [documentation index](../docs/README.md) for related components.

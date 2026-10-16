@@ -24,16 +24,10 @@
       "import": "./dist/routing.js"
     }
   },
-  "bin": {
-    "agent-spawn": "dist/cli.js"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
-    "test": "npm run build && node --experimental-strip-types --test test/*.test.ts test/*.test.mjs",
-    "cli:install": "node scripts/install-cli.mjs install",
-    "cli:uninstall": "node scripts/install-cli.mjs uninstall",
-    "route:test": "npm run build && node dist/route-test.js"
+    "test": "npm run build && node --experimental-strip-types --test test/*.test.ts test/*.test.mjs"
   },
   "dependencies": {
     "@agent-hub/pi": "0.1.0",

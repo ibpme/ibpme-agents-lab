@@ -1,161 +1,54 @@
-# agents-registry
-
-For one shared start/stop/status lifecycle and configuration, use the
-[unified agent-hub service](../service/README.md). Standalone commands below
-remain available; stop them before starting the hub against the same directories.
+# Registry
 
 [Documentation index](README.md) · [Agent hub](../README.md)
 
 Unless noted otherwise, run commands from `agent-hub/registry/`; source paths
 are relative to that directory. Commands labeled repository root run from the checkout root.
 
-Standalone, machine-local registry for live Pi and Claude agents. A background
-Node.js process joins discovery observations and publisher updates, then writes
-**one current agent snapshot per line** to `agents.jsonl`.
+Machine-local registry for live Pi and Claude agents. A Node.js daemon joins
+discovery observations and publisher updates, then writes **one current agent
+snapshot per line** to `agents.jsonl`.
 
 This is a current-state snapshot, not an append-only event log. It has no Pi SDK
-dependency and does not require an open Pi session. Nothing is installed automatically. The optional Pi publisher below is part of the
-`agent-hub/pi` package; it does not start or install the daemon. The Pi
-`/agents` browser reads its snapshots and health. The optional CLI installer below
-only creates a symlink; it does not start the registry or configure OS startup.
-Claude hooks and status-line model publishing have separate opt-in installers;
-neither is enabled automatically.
+dependency and does not require an open Pi session. The registry runs inside the
+[agent-hub service](../service/README.md); there is no separate registry command.
+The optional Pi publisher below is part of the `agent-hub/pi` package, and the Pi
+`/agents` browser reads its snapshots and health. Claude hooks and status-line
+model publishing are opt-in through `agent-hub claude install`; neither is
+enabled automatically.
 
-## Install and build
+## Build and run
 
 Requires Node.js 22.18+ and npm on macOS or Linux. Discovery uses `ps`; Claude
 and tmux discovery additionally require their respective executables on `PATH`.
+See [setup](setup.md) to install the `agent-hub` command.
 
 ```bash
 cd agent-hub
 npm ci
 npm run build
 npm test --workspace @agent-hub/registry
-npm run typecheck --workspace @agent-hub/registry
 ```
-
-## Install the CLI on Linux or macOS
-
-Install from a permanent checkout, as your regular user (no sudo):
 
 ```bash
-cd /absolute/path/to/ibpme-agents-lab/agent-hub
-npm ci
-npm run build
-npm run cli:install --workspace @agent-hub/registry
+agent-hub start --background                 # registry and spawn supervisor
+agent-hub start --background --registry-only # registry without spawning
+agent-hub status
+agent-hub stop
 ```
 
-This creates **`~/.local/bin/agents-registry`** as a symlink to this checkout's
-`dist/cli.js` and makes the built CLI executable. It does not copy the application,
-start a process, or install a systemd service or launchd agent. Keep the checkout,
-`node_modules`, and `dist` available. The CLI uses `node` from your current `PATH`.
-Existing files or symlinks belonging to another checkout are not overwritten.
-Reinstalling the same checkout is safe.
-
-Ensure `~/.local/bin` is on your shell's `PATH`. For example, add this to your
-shell configuration (`~/.bashrc` for Bash or `~/.zshrc` for Zsh), then reload it:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Verify and launch explicitly with the required tmux sockets:
-
-```bash
-agents-registry --help
-agents-registry start --background --tmux-socket /absolute/path/to/tmux/socket
-agents-registry status
-agents-registry stop
-```
-
-Repeat `--tmux-socket` for multiple servers. To obtain the current server's socket
-from inside tmux, use `tmux display-message -p '#{socket_path}'`. There is no
-automatic tmux server discovery, and `TMUX` is not implicitly used.
-
-**OS-managed services and autostart are not supported yet**, because tmux discovery
-requires explicit socket configuration. Start the registry from the appropriate
-shell environment and supply the socket paths at launch. The existing explicit
-foreground and detached-background modes remain supported.
-
-To update, stop the registry, update the checkout, run `npm ci && npm run build` from `agent-hub/`,
-and run `npm run cli:install --workspace @agent-hub/registry` again before restarting with your socket options.
-If moving the checkout, uninstall its old symlink before moving it.
-
-To remove only this checkout's CLI symlink:
-
-```bash
-npm run cli:uninstall
-```
-
-Uninstall does not stop a running registry or remove snapshots, state, or logs.
-It refuses to remove unrelated files or links, and can remove its own dangling
-link even if the build is missing.
-
-If you used the previous service installer, disable and remove its service before
-switching to explicit CLI launches. On Linux:
-
-```bash
-systemctl --user disable --now agents-registry.service
-rm "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/agents-registry.service"
-systemctl --user daemon-reload
-```
-
-On macOS, from your logged-in GUI session:
-
-```bash
-launchctl bootout "gui/$(id -u)/io.agent-hub.agents-registry"
-rm "$HOME/Library/LaunchAgents/io.agent-hub.agents-registry.plist"
-```
-
-Only remove service definitions you installed for this registry. These migration
-steps are unnecessary if you never installed a service.
-
-## Explicit launch
-
-Start in the foreground while developing:
-
-```bash
-node dist/cli.js start
-```
-
-Or explicitly launch a detached background writer:
-
-```bash
-node dist/cli.js start --background
-node dist/cli.js status
-node dist/cli.js stop
-```
-
-`status` prints live daemon health as JSON. `stop` requests graceful shutdown
-and waits for writer ownership to be released. Starting in the background when
-already running reports the existing PID; it does not start another writer.
-Ctrl+C or SIGTERM gracefully stops a foreground writer.
-
-Options:
-
-```bash
-node dist/cli.js start --background \
-  --directory /absolute/path/to/runtime \
-  --interval 5000 \
-  --activity-ttl 20000 \
-  --tmux-socket /absolute/path/to/tmux/socket
-```
-
-- `--directory` applies to every command. Its default is
-  `registry/` inside `$AGENT_HUB_DIR`, otherwise `$XDG_STATE_HOME/agent-hub`,
-  otherwise `~/.local/state/agent-hub`.
 - `--interval` sets discovery frequency in milliseconds; default `5000`.
 - `--activity-ttl` sets activity report expiry in milliseconds; default `20000`.
   Expiry is reflected on the next snapshot write, so it can lag by a scan interval.
-- Repeat `--tmux-socket` for multiple servers. Paths must be absolute. There is
-  **no automatic tmux server search**, and `TMUX` is not implicitly used.
-- All options except `--directory` apply only to `start`.
-- Unix socket paths must be at most 100 bytes; use a shorter runtime path if
+- The hub watches its own tmux server. Repeat `--tmux-socket` to watch more;
+  paths must be absolute.
+- Unix socket paths must be at most 100 bytes; use a shorter `AGENT_HUB_DIR` if
   your home or state directory would exceed that limit.
 
-The writer inherits the launcher's environment and `PATH`. To change its
-configuration, stop it and start it again. Background output goes to
-`daemon.log`; log rotation is not provided in this version.
+**OS-managed services and autostart are not supported**: start the hub from the
+shell environment whose tmux servers and `PATH` it should use. To change its
+configuration, stop it and start it again. Background output goes to the hub's
+`daemon.log`; log rotation is not provided.
 
 ## Runtime files
 
@@ -306,7 +199,7 @@ the repository root:
 pi --extension ./agent-hub/pi/extensions/registry-publisher/index.ts
 ```
 
-Start the daemon separately using the commands above. Both processes must use the
+Start the hub separately with `agent-hub start`. Both processes must use the
 same state directory (`AGENT_HUB_DIR`, then `XDG_STATE_HOME`, then
 `~/.local/state/agent-hub`). No daemon build or runtime dependencies are
 needed by the publisher itself; its runtime imports are Node built-ins only.
@@ -346,15 +239,14 @@ replace it; the hook is not an authoritative or permanently preferred source.
 command-hook JSON on stdin and publishes activity/session metadata with source
 `claude-hook`. **It does not publish model metadata or touch the status line.**
 
-To explicitly enable it, build the registry first, start its daemon separately,
-then run the installer from this directory:
+To explicitly enable it, build the workspace, then run:
 
 ```bash
-node publishers/claude/install.mjs
+agent-hub claude install --hooks
 # Use a different settings file (also supports project settings):
-node publishers/claude/install.mjs --settings /absolute/path/to/settings.json
+agent-hub claude install --hooks --settings /absolute/path/to/settings.json
 # Remove just this integration:
-node publishers/claude/install.mjs --uninstall
+agent-hub claude uninstall --hooks
 ```
 
 The default settings file is `$CLAUDE_CONFIG_DIR/settings.json`, otherwise
@@ -412,13 +304,12 @@ next hook invocation. The hook adds no persistent worker or status-line publishe
 
 **Disabled by default and independent of the hook publisher.** This integration
 wraps an existing command status line; it does not replace your renderer or
-install a default one. Build the registry and start its daemon separately, then
-explicitly opt in from this directory:
+install a default one. Build the workspace, then explicitly opt in:
 
 ```bash
-node publishers/claude/install-statusline.mjs
-node publishers/claude/install-statusline.mjs --settings /absolute/path/to/settings.json
-node publishers/claude/install-statusline.mjs --uninstall
+agent-hub claude install --statusline
+agent-hub claude install --statusline --settings /absolute/path/to/settings.json
+agent-hub claude uninstall --statusline
 ```
 
 The settings path defaults to `$CLAUDE_CONFIG_DIR/settings.json`, otherwise
@@ -545,7 +436,7 @@ provider rather than joined into `provider/model-id`.
 Exercise a publisher without installing integrations:
 
 ```bash
-node dist/cli.js publish < message.json
+agent-hub publish < message.json
 ```
 
 Other TypeScript/JavaScript publishers can use the bounded-time client:

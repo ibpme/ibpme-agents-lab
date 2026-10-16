@@ -44,8 +44,8 @@ test('socket override uses a dedicated session rather than querying another serv
     if (args.includes('has-session')) throw new Error('No session');
     return '';
   });
-  assert.deepEqual(result, { tmuxSocket: '/tmp/override.sock', tmuxSession: 'agent-spawn' });
-  assert.deepEqual(calls[1], ['-S', '/tmp/override.sock', 'new-session', '-Ad', '-s', 'agent-spawn']);
+  assert.deepEqual(result, { tmuxSocket: '/tmp/override.sock', tmuxSession: 'agent-hub' });
+  assert.deepEqual(calls[1], ['-S', '/tmp/override.sock', 'new-session', '-Ad', '-s', 'agent-hub']);
 });
 
 test('both flags override the environment', async t => {
@@ -64,10 +64,10 @@ test('outside tmux creates and reuses an isolated server/session', async t => {
   const socket = join(directory, 'tmux.sock');
   t.after(async () => { await execute('tmux', ['-S', socket, 'kill-server']).catch(() => {}); });
   const result = await prepareTmux({ directory, env: {} });
-  assert.deepEqual(result, { tmuxSocket: socket, tmuxSession: 'agent-spawn' });
+  assert.deepEqual(result, { tmuxSocket: socket, tmuxSession: 'agent-hub' });
   assert.deepEqual(await prepareTmux({ directory, env: {} }), result);
   const { stdout } = await execute('tmux', ['-S', socket, 'list-sessions', '-F', '#{session_name}']);
-  assert.equal(stdout.trim(), 'agent-spawn');
+  assert.equal(stdout.trim(), 'agent-hub');
   // Numeric session names must remain session targets, not occupied window indices.
   await prepareTmux({ directory, socket, session: '0', env: {} });
   await execute('tmux', ['-S', socket, 'new-window', '-d', '-t', '0:']);

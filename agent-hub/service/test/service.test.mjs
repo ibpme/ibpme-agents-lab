@@ -8,6 +8,7 @@ import { resolveConfig } from '../dist/config.js';
 import { createSpawnerClient } from '@agent-hub/spawner';
 import { startService } from '../dist/service.js';
 import { request } from '../dist/client.js';
+import { listProcesses } from '@agent-hub/registry/processes';
 import { request as registryRequest } from '@agent-hub/registry/client';
 
 async function fixture(t, extra = {}) {
@@ -104,12 +105,18 @@ test('supervisor startup failure rolls registry and control ownership back', asy
   await recovered.stop();
 });
 
-async function cli(args, env = process.env) {
+async function run(args, { env = process.env, input } = {}) {
   const child = spawn(process.execPath, [new URL('../dist/cli.js', import.meta.url).pathname, ...args], { env });
   let stdout = '', stderr = '';
   child.stdout.on('data', chunk => { stdout += chunk; });
   child.stderr.on('data', chunk => { stderr += chunk; });
+  child.stdin.end(input);
   const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
+  return { code, stdout, stderr };
+}
+
+async function cli(args, options) {
+  const { code, stdout, stderr } = await run(args, options);
   assert.equal(code, 0, stderr);
   return stdout;
 }
@@ -127,4 +134,34 @@ test('compiled CLI background start/status/stop and restart', async t => {
     await cli(['start', '--background', ...args]);
     await cli(['stop', ...args]);
   }
+});
+
+test('publish sends one stdin message to the hub-owned registry', async t => {
+  const { config } = await fixture(t);
+  const args = ['--directory', config.directory];
+  t.after(async () => { try { await request(config.directory, 'stop'); } catch {} });
+  await cli(['start', '--background', '--registry-only', ...args]);
+  const info = (await listProcesses()).get(process.pid);
+  const message = { version: 1, type: 'publish', harness: 'pi', source: 'pi', process: { pid: info.pid, startedAt: info.startedAt }, reportedAt: Date.now(), patch: { activity: { state: 'idle' }, session: { name: 'Integration', cwd: '/repo' } } };
+  await cli(['publish', ...args], { input: JSON.stringify(message) });
+  const rows = (await readFile(join(config.registryDirectory, 'agents.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  assert.equal(rows.find(row => row.process.pid === process.pid).session.name, 'Integration');
+  assert.equal((await run(['publish', ...args], { input: '{"version":1,"type":"stop"}' })).code, 1);
+  await cli(['stop', ...args]);
+});
+
+test('commands dispatch, print help, and reject unknown commands and removed options', async t => {
+  const { root } = await fixture(t);
+  assert.match(await cli(['help']), /view.*\n.*publish/s);
+  assert.match(await cli(['help', 'route']), /agent-hub route validate/);
+  assert.match(await cli(['claude', '--help']), /--statusline/);
+  for (const args of [['bogus'], ['help', 'bogus'], ['start', '--registry-directory', root], ['route', 'bogus'], ['claude', 'install', '--bogus'], ['publish', '--bogus']]) {
+    assert.equal((await run(args)).code, 1, args.join(' '));
+  }
+  const settings = join(root, 'settings.json');
+  await writeFile(settings, '{}\n');
+  await cli(['claude', 'install', '--hooks', '--settings', settings]);
+  assert.ok(JSON.parse(await readFile(settings, 'utf8')).hooks.SessionStart);
+  await cli(['claude', 'uninstall', '--hooks', '--settings', settings]);
+  assert.deepEqual(JSON.parse(await readFile(settings, 'utf8')), {});
 });

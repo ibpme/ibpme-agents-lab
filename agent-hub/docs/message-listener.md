@@ -99,8 +99,8 @@ socket to untrusted clients. No TCP listener or token authentication is included
 
 ## Registry integration
 
-With `registry-publisher` loaded and the explicitly started `agents-registry`
-daemon running, the process snapshot gains:
+With `registry-publisher` loaded and the explicitly started agent-hub registry
+running, the process snapshot gains:
 
 ```json
 {

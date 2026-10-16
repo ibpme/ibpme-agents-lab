@@ -24,7 +24,7 @@ export async function prepareTmux(options: TmuxOptions, run: Run = runTmux): Pro
     tmuxSession = await run(['-S', tmuxSocket, 'display-message', '-p', ...target, '#{session_name}']);
     if (!tmuxSession) throw new Error('Could not detect the current tmux session');
   }
-  tmuxSession ??= 'agent-spawn';
+  tmuxSession ??= 'agent-hub';
   if (!tmuxSession.trim() || tmuxSession.includes(':') || tmuxSession.includes('\0')) throw new Error('Invalid tmux session name');
   await mkdir(options.directory, { recursive: true, mode: 0o700 });
   try {

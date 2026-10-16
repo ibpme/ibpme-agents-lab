@@ -1,42 +1,26 @@
-# Standalone agents-viewer
+# Agent viewer
 
 Browse the same live registry and persisted Pi/Claude transcripts as `/agents`,
-without starting Pi. The daemon must already be running; this browser never starts
+without starting Pi. The hub must already be running; this browser never starts
 it. Registry freshness, identity verification, pane protection, and confirmations
 are shared with the native browser.
 
-## Setup
+## Usage
 
-Requires Node.js 22.18+, npm 10+, Bun 1.3+, and tmux 3.2+ for popups.
-The browser consumes the registry package APIs and schemas; a running Pi process
-is not required for standalone use. From the repository root:
-
-```bash
-cd agent-hub
-npm ci
-npm run build
-npm run cli:install --workspace @agent-hub/viewer
-```
-
-The installer creates `~/.local/bin/agents-viewer` as an absolute symlink to this
-checkout's launcher and makes it executable. Re-running it is safe; existing files
-or symlinks belonging to another checkout are never overwritten. Keep the repository
-available; this is a source launcher, not a relocatable binary. Ensure Bun and `~/.local/bin`
-are on the PATH inherited by tmux (restart/update the server environment if needed).
+Requires Bun 1.3+ on `PATH` and tmux 3.2+ for popups, plus the `agent-hub`
+command (see [setup](../docs/setup.md)). The browser runs from this checkout's
+source; it is not a relocatable binary. Ensure Bun and `~/.local/bin` are on the
+PATH inherited by tmux (restart/update the server environment if needed).
 
 ```bash
-agents-viewer                    # 90% tmux popup; direct TUI outside tmux
-agents-viewer --direct           # use this terminal, including inside tmux
-agents-viewer --directory /path/to/registry
-agents-viewer --help
+agent-hub view                     # 90% tmux popup; direct TUI outside tmux
+agent-hub view --direct            # use this terminal, including inside tmux
+agent-hub view --directory /path/to/state
+agent-hub view --help
 ```
 
-To uninstall, run `npm run cli:uninstall` from `agent-hub/viewer/`.
-It removes only this checkout's link, preserving the source and registry state.
-Neither install nor uninstall starts the browser or daemon.
-
-The default registry directory is `registry/` inside `$AGENT_HUB_DIR`, then
-`$XDG_STATE_HOME/agent-hub`, then `~/.local/state/agent-hub`.
+`--directory` selects the agent-hub state directory; the default is
+`$AGENT_HUB_DIR`, then `$XDG_STATE_HOME/agent-hub`, then `~/.local/state/agent-hub`.
 
 ## Tmux keybinding
 
@@ -44,7 +28,7 @@ Add to `~/.tmux.conf`, replacing the executable with an absolute path if it is
 not on your tmux server's PATH:
 
 ```tmux
-bind-key a run-shell -b 'agents-viewer --socket "#{socket_path}" --pane "#{pane_id}" --client "#{client_name}"'
+bind-key a run-shell -b 'agent-hub view --socket "#{socket_path}" --pane "#{pane_id}" --client "#{client_name}"'
 ```
 
 Reload the tmux config, then use **prefix + a** from any shell or agent. The

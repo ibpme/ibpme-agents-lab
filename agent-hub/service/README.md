@@ -1,6 +1,7 @@
-# Unified agent-hub service
+# agent-hub service
 
-One explicitly started, same-user process hosts the registry and spawn supervisor.
+The `agent-hub` command. Its `start` runs one explicitly started, same-user process
+hosting the registry and spawn supervisor.
 Their agent and task models, transports, and persistence remain separate. Registry
 snapshots are rebuilt from live observations; durable task artifacts survive
 process exit and service restarts.
@@ -13,7 +14,7 @@ Run from `agent-hub/`:
 ```sh
 npm ci
 npm run build
-npm run cli:install --workspace @agent-hub/service
+npm run cli:install
 agent-hub start --background
 agent-hub status
 agent-hub stop
@@ -22,7 +23,8 @@ agent-hub stop
 Without `--background`, start runs in the foreground. SIGINT/SIGTERM stop both
 modules gracefully. Nothing installs OS startup configuration or Pi extensions.
 Install the [Pi listener and publisher](../docs/setup.md) for parent completion
-delivery. The existing MCP tools and viewer need no protocol changes.
+delivery. The other subcommands (`view`, `publish`, `route`, `claude`) are listed
+by `agent-hub help` and described in [setup](../docs/setup.md).
 
 Inside tmux, spawning uses the current server/session. Outside tmux, a dedicated
 server/session is created. The registry automatically watches the selected socket.
@@ -71,14 +73,11 @@ automatically. Status reports the effective configuration, selected tmux
 server/session, and registry health. Changes require stop/start; no hot reload.
 Logs and completed task artifacts currently have no automatic retention policy.
 
-## Migration and ownership
+## Ownership
 
-Stop any independently running `agents-registry` and `agent-spawn` instances before
-starting the hub against their directories. No data migration is required. Existing
-CLI commands remain available for standalone/development use, but concurrent
-ownership of the same data directories is refused rather than silently adopted.
-An already-running background hub is reported without launching another writer.
-A legacy `agents-registry stop` against the hub-owned registry stops the whole hub.
+Concurrent ownership of the same state directory is refused rather than silently
+adopted. An already-running background hub is reported without launching another
+writer. A registry `stop` request sent to the hub-owned registry stops the whole hub.
 
 Registry-only mode disables spawning and does not require tmux setup. The registry
 can still discover manually launched Pi and Claude processes. It only scans tmux
@@ -108,6 +107,6 @@ opt-in and overrides caller model selection when enabled. Export
 `TYPESAFE_API_KEY` in the service's environment before starting it.
 
 See [routing configuration and the prompt-based test script](../docs/routing.md).
-Relative file-config paths resolve against the service control directory; CLI
+Relative file-config paths resolve against the state directory; CLI
 paths resolve against the current working directory. Restart the service and
 reconnect MCP sessions after changing routing policy.

@@ -23,7 +23,7 @@ The installed Pi registry resolves all three requested models as chat models
 supporting medium effort. `openai/gpt-6-luna` is also available as a classifier;
 that does not prevent using its chat entry for execution. The resolver explicitly
 requires a physical chat entry and rejects classifier-only entries. Catalogs may
-differ between installations: use `--validate-only` to check local resolution and
+differ between installations: use `route validate` to check local resolution and
 credentials. Catalog presence does not guarantee remote provider access.
 
 To enforce one fixed execution profile, keep only that profile in `profiles`
@@ -93,23 +93,19 @@ npm run build
 ```
 
 Export `TYPESAFE_API_KEY` in the environment used to start the supervisor, then
-choose one entry point:
+start the hub with it:
 
 ```bash
-# Standalone supervisor
-node spawner/dist/cli.js --routing-config /absolute/path/to/routing.json
-
-# Unified service
-node service/dist/cli.js start --routing-config /absolute/path/to/routing.json
+agent-hub start --background --routing-config /absolute/path/to/routing.json
 ```
 
-For the unified service, `<control-directory>/config.json` can instead contain:
+The state directory's `config.json` can instead contain:
 
 ```json
 { "routingConfigPath": "/absolute/path/to/routing.json" }
 ```
 
-Relative paths in that service config resolve against the control directory.
+Relative paths in that config resolve against the state directory.
 CLI paths resolve against the invoking working directory. Background service
 launches preserve the resolved routing configuration path.
 
@@ -130,55 +126,48 @@ including direct clients and sessions with stale schemas.
 
 ## Test a configuration and prompt
 
-These commands do **not** spawn Pi agents or modify project files. Run from
-`agent-hub/` after building:
+These commands do **not** spawn Pi agents or modify project files. `--config`
+defaults to `routingConfigPath` from the state directory's `config.json`.
 
 ```bash
 # Check configuration, local model resolution, effort support, and provider auth.
 # Does not call System One; checks every configured profile.
-node spawner/dist/route-test.js \
-  --config /absolute/path/to/routing.json --validate-only
+agent-hub route validate --config /absolute/path/to/routing.json
 
 # Classify a prompt with the actual SDK and resolve the execution profile.
-node spawner/dist/route-test.js \
+agent-hub route test \
   --config /absolute/path/to/routing.json \
   --prompt 'Diagnose a cross-module race condition and add regression tests'
 
 # Read a prompt from stdin instead of exposing it in process arguments.
 printf '%s' 'Update a documentation link' | \
-  node spawner/dist/route-test.js --config /absolute/path/to/routing.json --stdin
+  agent-hub route test --config /absolute/path/to/routing.json --stdin
 
 # Fail the command if routing had to fall back instead of using the classifier.
-node spawner/dist/route-test.js \
+agent-hub route test \
   --config /absolute/path/to/routing.json --prompt 'Review this design' \
   --require-classifier
 ```
 
 A single quoted positional prompt is also accepted. With no prompt argument,
 the command resolves the default profile without calling System One. A single
-configured profile also bypasses System One, even when a prompt is provided. The npm
-convenience command builds first:
-
-```bash
-npm run route:test --workspace @agent-hub/spawner -- \
-  --config /absolute/path/to/routing.json --prompt 'Implement a focused fix'
-```
+configured profile also bypasses System One, even when a prompt is provided.
 
 Use optional `--routing-hint TEXT` to test supplementary routing context:
 
 ```bash
-node spawner/dist/route-test.js \
+agent-hub route test \
   --config /absolute/path/to/routing.json \
   --prompt 'Investigate the cache invalidation failure' \
   --routing-hint 'The user prioritizes root-cause analysis across services'
 ```
 
 Hints are optional; no hint is synthesized when omitted. `--routing-hint` cannot be
-combined with `--validate-only`. Without an initial prompt, the default profile
+combined with `route validate`. Without an initial prompt, the default profile
 is used without classification even if a hint is supplied.
 
 With multiple profiles, prompt tests send the delegated text and any supplied
-hint to TypeSafe. Single-profile routing does not call TypeSafe. `--validate-only` does not.
+hint to TypeSafe. Single-profile routing does not call TypeSafe. `route validate` does not.
 Output is JSON with routing source, profile, duration, resolved execution
 settings, and fallback details. It does not echo prompts, hints, appended instructions,
 or credentials. `has_append_system_prompt` indicates whether the selected
@@ -187,13 +176,13 @@ profile adds instructions.
 Exit codes:
 
 - **0:** successful resolution (including an explicitly reported fallback),
-  disabled routing, or all profiles passed `--validate-only`.
+  disabled routing, or all profiles passed `route validate`.
 - **1:** invalid arguments/configuration, failed profile validation in
-  `--validate-only`, or an unavailable default execution profile.
+  `route validate`, or an unavailable default execution profile.
 - **2:** `--require-classifier` was supplied but the result was not a successful
   classifier-selected execution profile (including single-profile bypass).
 
-`--validate-only` can fail because a non-default profile is unavailable even
+`route validate` can fail because a non-default profile is unavailable even
 though actual prompt routing can successfully fall back to the default.
 
 ## Execution and fallback policy
