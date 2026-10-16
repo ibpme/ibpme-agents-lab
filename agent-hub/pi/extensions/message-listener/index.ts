@@ -2,8 +2,10 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { LISTENER_CHANGED_EVENT, LISTENER_QUERY_EVENT, LISTENER_STATUS_KEY } from "../contracts/listener.ts";
 import { startListener } from "./listener.ts";
 import type { Listener } from "./listener.ts";
+import { AGENT_MESSAGE_TYPE, parseAgentMessage, renderAgentMessage } from "./agent-message.ts";
 
 export default function messageListener(pi: ExtensionAPI): void {
+  pi.registerMessageRenderer(AGENT_MESSAGE_TYPE, renderAgentMessage);
   let listener: Listener | undefined;
   let context: ExtensionContext | undefined;
   let enabled = true;
@@ -30,7 +32,11 @@ export default function messageListener(pi: ExtensionAPI): void {
       listener = await startListener(message => {
         if (shutdown || !listener) throw new Error("Listener is stopping");
         if (message.expectedSessionId !== undefined && message.expectedSessionId !== context?.sessionManager.getSessionId()) throw new Error("Recipient session changed");
-        pi.sendUserMessage(message.content, { deliverAs: message.deliverAs, expandPromptTemplates: false });
+        if (parseAgentMessage(message.content)) {
+          pi.sendMessage({ customType: AGENT_MESSAGE_TYPE, content: message.content, display: true }, { deliverAs: message.deliverAs, triggerTurn: true });
+        } else {
+          pi.sendUserMessage(message.content, { deliverAs: message.deliverAs, expandPromptTemplates: false });
+        }
       });
       if (shutdown) { await stop(); return; }
       advertise();

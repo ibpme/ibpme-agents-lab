@@ -42,9 +42,9 @@ including the newline are limited to 64 KiB. Unknown fields are rejected.
 - Required: `version`, `type`, `id`, and nonblank string `content`.
 - `id` is a nonblank string of at most 256 characters. Use a UUID for the message
   ID; IDs share one namespace on each listener instance.
-- `content` is opaque text. The listener does not parse, add, authenticate, or
-  format sender metadata; it delivers the string unchanged to Pi. Senders are
-  responsible for any model-facing headers they want to include.
+- `content` is opaque text at the socket transport layer. The extension recognizes
+  agent-hub's `<agent_message>` wrapper for custom TUI rendering, but delivers the
+  original string unchanged to model context. It does not authenticate metadata.
 - `from` and `replyTo` are not transport fields and are rejected. The listener
   does not connect to a reply endpoint or automatically forward model responses.
 - `deliverAs` is `steer` or `followUp`, defaulting to `steer`. Both start a turn
@@ -54,7 +54,8 @@ including the newline are limited to 64 KiB. Unknown fields are rejected.
 
 Slash commands, skill expansion, and prompt-template expansion are disabled for
 socket input; `/listen off` sent as content is literal text, not a local command.
-Even a string that resembles a metadata header is not interpreted by the listener.
+Only a complete agent-hub XML wrapper selects custom rendering; other text,
+including malformed wrappers, remains ordinary user input.
 
 ### ACKs and retries
 
@@ -155,8 +156,12 @@ JS
 
 The [`agents-mcp` server](mcp.md) routes `send_message` to this listener
 using the envelope and ACK protocol above. It formats sender identity and the message ID
-into the opaque `content` string; the listener never interprets it. See the MCP guide for
-the header format, addressing and error codes.
+into an XML wrapper in the opaque `content` string. The extension displays recognized
+messages with an `Agent message · <sender name or ID>` header, a decoded Markdown
+body, and a distinct border. Expanding the message reveals sender and message
+metadata. The original XML remains in model context, and custom messages retain
+steering/follow-up delivery and trigger a turn when idle. See the MCP guide for
+addressing and error codes.
 
 ## Session-targeted supervisor delivery
 
