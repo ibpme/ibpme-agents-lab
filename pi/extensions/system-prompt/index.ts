@@ -12,7 +12,7 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { openPager, textSource } from "../shared/pager.ts";
+import { markdownSource, openPager } from "../shared/pager.ts";
 
 function estimateTokens(text: string): number {
 	return Math.ceil(Array.from(text).length / 4);
@@ -25,7 +25,7 @@ async function show(
 ): Promise<void> {
 	await openPager(ctx, {
 		title,
-		source: textSource(content),
+		source: markdownSource(content),
 		footerChips: [`~${estimateTokens(content)} tokens`],
 		plainText: content,
 	});
@@ -33,7 +33,7 @@ async function show(
 
 export default function systemPromptExtension(pi: ExtensionAPI) {
 	pi.registerCommand("system-prompt", {
-		description: "View the current system prompt or append prompt",
+		description: "View the current system prompt or append prompt as rendered Markdown",
 		getArgumentCompletions: (prefix) => {
 			const options = ["append"];
 			const filtered = options.filter((o) => o.startsWith(prefix));
