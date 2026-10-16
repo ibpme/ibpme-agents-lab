@@ -9,8 +9,8 @@ are shared with the native browser.
 
 Requires tmux 3.2+ for popups, plus the `agent-hub` command (see
 [setup](../docs/setup.md)). The browser runs from this checkout's source with
-the invoking Node; popups reuse that Node, so tmux needs only `agent-hub` on the
-PATH for the keybinding below.
+the invoking Node; popups reuse that Node. The keybinding below needs `agent-hub`
+and `node` on the tmux server's PATH.
 
 ```bash
 agent-hub view                     # 90% tmux popup; direct TUI outside tmux
