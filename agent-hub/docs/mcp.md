@@ -201,6 +201,37 @@ Operational failures return `isError: true` and
 `MESSAGING_UNAVAILABLE`, `MESSAGE_TOO_LARGE`, `MESSAGE_REJECTED`, or
 `DELIVERY_UNKNOWN`. Invalid tool inputs are rejected by SDK schema validation.
 
+## Pi tool displays
+
+The installed `agent-hub/pi` package includes custom TUI renderers for all five
+MCP tools when the server is configured as `agent-hub` (or `agents`). Run
+`/reload` after updating the package. Other MCP servers keep their own renderers.
+This changes presentation only, not execution, tool schemas, or model-facing data.
+Displays have no background fill. Theme foreground colors distinguish titles and
+identities, successful/ready states, pending/unready states, failures, paths, and
+separators. Expanded JSON highlights keys, strings, numbers, booleans, and null.
+
+Collapsed displays show:
+
+- `list_agents`: agent count and up to four names, activity, messaging readiness,
+  and working directories; the current agent is marked `(you)`.
+- `send_message`: recipient, message preview, and a queued acknowledgment that
+  explicitly does not imply an answer.
+- `spawn_agent`: name/harness/directory, task status, and messaging readiness.
+- `list_agent_tasks`: task count and up to four task/status summaries.
+- `agent_task`: action, task identity/status, readiness, and an answer preview
+  when fetched. Failures and delivery errors are highlighted.
+
+Use Pi's tool expansion control (default **Ctrl+O**, or click the tool row in
+fullscreen mode) to reveal full arguments and pretty-printed result data.
+Expansion includes long prompts/messages, all list entries, routing/execution
+metadata, and full fetched answers. Collapse is a space-saving view, not a
+redaction mechanism. Pi's existing output limits still apply; if it truncates an
+MCP response, the expanded view retains the truncation notice and saved full-output
+path. Partial updates show a working indicator, and plain-text errors and saved
+results remain readable. Terminal control sequences are sanitized, and displays
+adapt to narrow terminals and resize.
+
 ## Security and current receiver support
 
 Currently delivery adapts advertised `pi-listener-v2` endpoints. Pi's listener

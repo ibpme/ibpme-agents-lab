@@ -10,6 +10,7 @@
   "pi": {
     "extensions": [
       "./extensions/agents/index.ts",
+      "./extensions/tool-renderers/index.ts",
       "./extensions/message-listener/index.ts",
       "./extensions/registry-publisher/index.ts"
     ]

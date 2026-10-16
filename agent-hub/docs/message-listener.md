@@ -157,9 +157,17 @@ JS
 The [`agents-mcp` server](mcp.md) routes `send_message` to this listener
 using the envelope and ACK protocol above. It formats sender identity and the message ID
 into an XML wrapper in the opaque `content` string. The extension displays recognized
-messages with an `Agent message · <sender name or ID>` header, a decoded Markdown
-body, and a distinct border. Expanding the message reveals sender and message
-metadata. The original XML remains in model context, and custom messages retain
+messages with a `◈ Agent message · <sender name or ID>` header styled like
+agent-hub tool calls. Incoming messages use the theme's dedicated `customMessageBg`
+background, distinct from user messages; MCP tool calls remain background-free.
+Titles, sender identities, separators, and metadata labels/values use distinct theme
+foreground colors. Foregrounds are checked against the message background and
+adjusted toward black or white when needed for at least 4.5:1 contrast, preserving
+readable colors. This also covers Markdown syntax colors, default text, ANSI resets,
+and 256-color output; faint styling is removed on the card. The decoded Markdown
+body previews up to four display lines; expansion reveals the full body and sender
+and message metadata. There is no separate border. The original XML remains in
+model context, and custom messages retain
 steering/follow-up delivery and trigger a turn when idle. See the MCP guide for
 addressing and error codes.
 
