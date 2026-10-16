@@ -41,6 +41,24 @@ service uses the current tmux server/session, or creates a dedicated one outside
 tmux. The registry watches that server automatically. Repeat `--tmux-socket` to
 watch additional servers; the first selects the spawning server.
 
+## Picking up changes
+
+`agent-hub` links to this checkout, so `cli:install` never needs re-running.
+Source edits take effect as follows:
+
+| Edited | Takes effect |
+|---|---|
+| `service/`, `registry/`, `spawner/`, `mcp/` | after `npm run build` |
+| `viewer/` | next `agent-hub view` or `/agents` |
+| `pi/` extensions | after `/reload` in pi |
+| `registry/publishers/claude/` | next hook or status-line call |
+
+The viewer, pi extensions and Claude publishers import the registry's built
+`dist/`, so registry changes reach them only after a build. After building,
+restart a running hub (`agent-hub stop && agent-hub start --background`) and
+reconnect MCP clients. After `git pull`, run `npm ci` if dependencies changed,
+then `npm run build`.
+
 See **[docs/](docs/README.md)** for installation, Pi setup, protocols, security,
 architecture, and development checks.
 
