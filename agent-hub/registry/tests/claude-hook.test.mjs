@@ -12,7 +12,9 @@ const publishers = resolve('publishers/claude');
 const payload = { session_id: 'session-1', transcript_path: '/repo/session.jsonl', cwd: '/repo' };
 
 async function fixture(t, { ancestor = true, reply = true, root } = {}) {
-  const directory = await mkdtemp(join(tmpdir(), 'arp-'));
+  const hub = await mkdtemp(join(tmpdir(), 'arp-'));
+  const directory = join(hub, 'registry');
+  await mkdir(directory);
   const bin = join(directory, 'bin');
   await mkdir(bin);
   // ps is the external process-observation boundary; the socket/protocol stay real.
@@ -34,9 +36,9 @@ async function fixture(t, { ancestor = true, reply = true, root } = {}) {
   t.after(async () => {
     for (const socket of sockets) socket.destroy();
     await new Promise(done => server.close(done));
-    await rm(directory, { recursive: true, force: true });
+    await rm(hub, { recursive: true, force: true });
   });
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, AGENTS_REGISTRY_DIR: directory };
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, AGENT_HUB_DIR: hub };
   async function run(script, input, args = []) {
     return new Promise((done, reject) => {
       const child = spawn(process.execPath, [join(publishers, script), ...args], { env });

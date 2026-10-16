@@ -2,16 +2,16 @@
 import { spawn } from 'node:child_process';
 import { closeSync, openSync } from 'node:fs';
 import { lstat } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { request } from './client.js';
 import { startDaemon } from './daemon.js';
+import { registryDirectory } from './paths.js';
 import { privateDirectory } from './persistence.js';
 import { MAX_MESSAGE_BYTES, validateMessage } from './protocol.js';
 
 const usage = `agents-registry <start|status|stop|publish> [options]
-  --directory PATH       Runtime directory (or AGENTS_REGISTRY_DIR)
+  --directory PATH       Runtime directory (default: <AGENT_HUB_DIR>/registry)
   --background           Explicit detached launch (start only)
   --foreground           Foreground launch, the default (start only)
   --interval MS          Discovery interval, default 5000 (start only)
@@ -27,8 +27,7 @@ async function main(): Promise<void> {
   if (args.includes('--help') || args[0] === 'help') { console.log(usage); return; }
   const command = args.shift();
   if (!command || !['start', 'status', 'stop', 'publish'].includes(command)) throw new Error(usage);
-  const stateHome = process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state');
-  let directory = resolve(process.env.AGENTS_REGISTRY_DIR ?? join(stateHome, 'agents-registry'));
+  let directory = registryDirectory();
   let background = false, foreground = false;
   let intervalMs = 5000, activityTtlMs = 20000;
   const tmuxServers: string[] = [];

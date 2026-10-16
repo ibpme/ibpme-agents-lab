@@ -3,12 +3,12 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
-import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import type { SendMessageInput } from './tools.js';
 import { formatAgentMessage } from './message-format.js';
+import { registryDirectory } from '@agent-hub/registry/paths';
 
 const execute = promisify(execFile);
 const timestamp = z.number().int().nonnegative().safe();
@@ -30,7 +30,7 @@ const fresh = (time: number): boolean => time <= Date.now() + 5000 && Date.now()
 export function createMessaging(options: MessagingOptions = {}) {
   const deliverAs = options.deliverAs ?? 'steer';
   if (deliverAs !== 'steer' && deliverAs !== 'followUp') throw new Error('Invalid delivery mode; expected steer or followUp');
-  const directory = resolve(options.registryDirectory ?? process.env.AGENTS_REGISTRY_DIR ?? join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'agents-registry'));
+  const directory = resolve(options.registryDirectory ?? registryDirectory());
   async function readAgents(): Promise<Agent[]> {
     try {
       const health = z.object({ version: z.literal(1), state: z.literal('running'), updatedAt: timestamp, lastSuccessfulProcessDiscoveryAt: timestamp }).parse(JSON.parse(await readFile(join(directory, 'registry-health.json'), 'utf8')));

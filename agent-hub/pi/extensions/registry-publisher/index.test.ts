@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,9 +11,11 @@ import type { PublishMessage } from "@agent-hub/registry/types";
 import extension from "./index.ts";
 
 async function setup(t: test.TestContext) {
-  const directory = await mkdtemp(join(tmpdir(), "pi-pub-"));
-  const previous = process.env.AGENTS_REGISTRY_DIR;
-  process.env.AGENTS_REGISTRY_DIR = directory;
+  const hub = await mkdtemp(join(tmpdir(), "pi-pub-"));
+  const directory = join(hub, "registry");
+  await mkdir(directory);
+  const previous = process.env.AGENT_HUB_DIR;
+  process.env.AGENT_HUB_DIR = hub;
   const messages: PublishMessage[] = [];
   const server = createServer(socket => {
     let input = "";
@@ -48,9 +50,9 @@ async function setup(t: test.TestContext) {
   t.after(async () => {
     await fire("session_shutdown");
     await new Promise<void>(resolve => server.close(() => resolve()));
-    if (previous === undefined) delete process.env.AGENTS_REGISTRY_DIR;
-    else process.env.AGENTS_REGISTRY_DIR = previous;
-    await rm(directory, { recursive: true, force: true });
+    if (previous === undefined) delete process.env.AGENT_HUB_DIR;
+    else process.env.AGENT_HUB_DIR = previous;
+    await rm(hub, { recursive: true, force: true });
   });
   async function next(after: number) {
     for (let i = 0; i < 650; i++) {

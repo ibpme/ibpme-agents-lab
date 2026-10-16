@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { execFile, spawn } from 'node:child_process';
-import { basename, join, resolve } from 'node:path';
-import { homedir } from 'node:os';
+import { basename } from 'node:path';
 import { promisify } from 'node:util';
 
 const execute = promisify(execFile);
@@ -66,13 +65,13 @@ async function publish(input) {
     if (context) patch.context = context;
     if (!Object.keys(patch).length) return;
     // A missing build must not prevent the existing renderer from running.
-    const [{ request }, { parseProcesses, PS_FIELDS }] = await Promise.all([
-      import('../../dist/client.js'), import('../../dist/discovery/processes.js'),
+    const [{ request }, { parseProcesses, PS_FIELDS }, { registryDirectory }] = await Promise.all([
+      import('../../dist/client.js'), import('../../dist/discovery/processes.js'), import('../../dist/paths.js'),
     ]);
     const reportedAt = Date.now();
     const identity = await identify(parseProcesses, PS_FIELDS);
     if (!identity) return;
-    const directory = resolve(process.env.AGENTS_REGISTRY_DIR ?? join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'agents-registry'));
+    const directory = registryDirectory();
     await request(directory, {
       version: 1, type: 'publish', harness: 'claude', source: 'claude-statusline',
       process: identity, reportedAt, patch,

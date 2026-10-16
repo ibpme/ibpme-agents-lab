@@ -35,8 +35,8 @@ To uninstall, run `npm run cli:uninstall` from `agent-hub/viewer/`.
 It removes only this checkout's link, preserving the source and registry state.
 Neither install nor uninstall starts the browser or daemon.
 
-The default registry directory is `AGENTS_REGISTRY_DIR`, then
-`$XDG_STATE_HOME/agents-registry`, then `~/.local/state/agents-registry`.
+The default registry directory is `registry/` inside `$AGENT_HUB_DIR`, then
+`$XDG_STATE_HOME/agent-hub`, then `~/.local/state/agent-hub`.
 
 ## Tmux keybinding
 

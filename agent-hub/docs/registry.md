@@ -142,8 +142,8 @@ node dist/cli.js start --background \
 ```
 
 - `--directory` applies to every command. Its default is
-  `$AGENTS_REGISTRY_DIR`, otherwise `$XDG_STATE_HOME/agents-registry`, otherwise
-  `~/.local/state/agents-registry/`.
+  `registry/` inside `$AGENT_HUB_DIR`, otherwise `$XDG_STATE_HOME/agent-hub`,
+  otherwise `~/.local/state/agent-hub`.
 - `--interval` sets discovery frequency in milliseconds; default `5000`.
 - `--activity-ttl` sets activity report expiry in milliseconds; default `20000`.
   Expiry is reflected on the next snapshot write, so it can lag by a scan interval.
@@ -160,7 +160,7 @@ configuration, stop it and start it again. Background output goes to
 ## Runtime files
 
 ```text
-~/.local/state/agents-registry/
+~/.local/state/agent-hub/registry/
 ├── registry.sock            publisher and control transport
 ├── writer.lock/             exclusive writer lease (directory)
 ├── agents.jsonl             current normalized agent snapshots
@@ -307,8 +307,8 @@ pi --extension ./agent-hub/pi/extensions/registry-publisher/index.ts
 ```
 
 Start the daemon separately using the commands above. Both processes must use the
-same runtime directory (`AGENTS_REGISTRY_DIR`, then `XDG_STATE_HOME`, then
-`~/.local/state/agents-registry`). No daemon build or runtime dependencies are
+same state directory (`AGENT_HUB_DIR`, then `XDG_STATE_HOME`, then
+`~/.local/state/agent-hub`). No daemon build or runtime dependencies are
 needed by the publisher itself; its runtime imports are Node built-ins only.
 
 The publisher obtains its own PID/start time from `TZ=UTC LC_ALL=C ps`, then
@@ -371,8 +371,8 @@ review `/hooks` to ensure the new hook configuration is loaded.
 The installer uses the current Node executable and an absolute path to the hook;
 keep both paths available. The hook imports the built `dist/` client and process
 parser. An unbuilt/moved installation silently skips publication. Claude must
-inherit the same runtime directory configuration as the daemon:
-`AGENTS_REGISTRY_DIR`, then `XDG_STATE_HOME`, then `~/.local/state/agents-registry`.
+inherit the same state directory configuration as the daemon:
+`AGENT_HUB_DIR`, then `XDG_STATE_HOME`, then `~/.local/state/agent-hub`.
 
 | Hook event | Activity |
 | --- | --- |
@@ -467,8 +467,8 @@ final command completion, but not renderer output. Cancellation stops the wrappe
 without waiting for telemetry.
 
 The wrapper imports the built `dist/` client and process parser. Claude must
-inherit the same runtime-directory environment as the daemon (`AGENTS_REGISTRY_DIR`,
-then `XDG_STATE_HOME`, then `~/.local/state/agents-registry`). There is no heartbeat:
+inherit the same state-directory environment as the daemon (`AGENT_HUB_DIR`,
+then `XDG_STATE_HOME`, then `~/.local/state/agent-hub`). There is no heartbeat:
 model/session metadata is republished on the next Claude status-line invocation,
 including after daemon restarts. This is a socket publisher, not the legacy
 per-session-file wrapper under `pi/extensions/agents/`.

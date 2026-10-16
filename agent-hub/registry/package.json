@@ -43,6 +43,10 @@
     "./daemon": {
       "types": "./dist/daemon.d.ts",
       "import": "./dist/daemon.js"
+    },
+    "./paths": {
+      "types": "./dist/paths.d.ts",
+      "import": "./dist/paths.js"
     }
   }
 }

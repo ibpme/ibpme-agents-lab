@@ -130,12 +130,10 @@ make Claude a Pi message-listener endpoint. Check `can_receive_messages` in
 
 ## Shared runtime directories and verification
 
-The service, MCP clients, and Pi extensions must use matching data directories:
-
-- Registry: `$AGENTS_REGISTRY_DIR`, otherwise `$XDG_STATE_HOME/agents-registry`,
-  otherwise `~/.local/state/agents-registry`.
-- Spawner: `$AGENTS_SPAWNER_DIR`, otherwise `$XDG_STATE_HOME/agents-spawner`,
-  otherwise `~/.local/state/agents-spawner`.
+The service, MCP clients, and Pi extensions must use the same state directory:
+`$AGENT_HUB_DIR`, otherwise `$XDG_STATE_HOME/agent-hub`, otherwise
+`~/.local/state/agent-hub`. The registry lives in its `registry/` and the
+spawner in its `spawner/` subdirectory.
 
 Defaults work when all processes run as the same OS user with the same
 environment. If the service uses custom data directories, set the corresponding

@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { AgentSnapshot, Health } from "@agent-hub/registry/types";
 export type { AgentSnapshot };
@@ -26,9 +25,7 @@ const validHealth = (value: unknown): value is Health => {
     Array.isArray(h.errors) && h.errors.every(error => typeof error === "string");
 };
 
-export function registryDirectory(env: NodeJS.ProcessEnv = process.env): string {
-  return resolve(env.AGENTS_REGISTRY_DIR ?? join(env.XDG_STATE_HOME ?? join(homedir(), ".local", "state"), "agents-registry"));
-}
+export { registryDirectory } from "@agent-hub/registry/paths";
 
 export async function readRegistry(directory: string, now = Date.now(), staleAfterMs = 30_000): Promise<RegistryView> {
   try {

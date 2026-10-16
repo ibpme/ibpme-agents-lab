@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@agent-hub/pi": "0.1.0",
+    "@agent-hub/registry": "0.1.0",
     "@earendil-works/pi-ai": "1.3.0",
     "@earendil-works/pi-coding-agent": "1.3.0",
     "@typesafe-ai/sdk": "^0.7.0",

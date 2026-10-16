@@ -31,8 +31,8 @@ node dist/cli.js start --background --tmux-socket /absolute/path/to/tmux/socket
 The daemon does not automatically use `TMUX`. Stop an existing daemon before
 changing its configuration. Multiple `--tmux-socket` arguments are supported.
 
-Browser and publisher resolve the same directory: `AGENTS_REGISTRY_DIR`, then
-`$XDG_STATE_HOME/agents-registry`, then `~/.local/state/agents-registry`.
+Browser and publisher resolve the same directory: `registry/` inside
+`$AGENT_HUB_DIR`, then `$XDG_STATE_HOME/agent-hub`, then `~/.local/state/agent-hub`.
 The independent `registry-publisher.ts` extension reports Pi session, model,
 context-window fill, and activity metadata. Without it, Pi processes still appear but have unknown activity
 and limited metadata. Claude activity comes from the daemon's Claude CLI queries.

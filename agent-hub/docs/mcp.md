@@ -44,8 +44,8 @@ the registry daemon automatically.
 
 Start [agents-registry](registry.md) separately. The server reads
 its current `agents.jsonl` and `registry-health.json` on every call. Both must use
-the same runtime directory: `$AGENTS_REGISTRY_DIR`, otherwise
-`$XDG_STATE_HOME/agents-registry`, otherwise `~/.local/state/agents-registry`.
+the same runtime directory: `registry/` inside `$AGENT_HUB_DIR`, otherwise
+`$XDG_STATE_HOME/agent-hub`, otherwise `~/.local/state/agent-hub`.
 A missing, invalid, stopped or stale registry produces `REGISTRY_UNAVAILABLE`;
 there is no fallback socket discovery. Health and successful process discovery
 must be no more than 20 seconds old. Endpoint advertisements also have a

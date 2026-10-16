@@ -18,7 +18,9 @@ const payload = { session_id: 'session-1', transcript_path: '/repo/session.jsonl
   model: { id: 'claude-test', display_name: 'Test Model' }, prompt: 'secret', cost: { total_cost_usd: 42 } };
 
 async function fixture(t, { root = '/opt/bin/claude claude', reply = true } = {}) {
-  const directory = await mkdtemp(join(tmpdir(), 'ars-'));
+  const hub = await mkdtemp(join(tmpdir(), 'ars-'));
+  const directory = join(hub, 'registry');
+  await mkdir(directory);
   const bin = join(directory, 'bin');
   await mkdir(bin);
   // Only process observation is faked; publication uses the real socket client and schema.
@@ -39,9 +41,9 @@ async function fixture(t, { root = '/opt/bin/claude claude', reply = true } = {}
   t.after(async () => {
     for (const socket of sockets) socket.destroy();
     await new Promise(done => server.close(done));
-    await rm(directory, { recursive: true, force: true });
+    await rm(hub, { recursive: true, force: true });
   });
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, AGENTS_REGISTRY_DIR: directory };
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, AGENT_HUB_DIR: hub };
   const start = (input, command = 'cat') => {
     const child = spawn(process.execPath, [join(publishers, 'statusline-wrapper.mjs'), '--command', command], { env });
     child.stdin.on('error', () => {});

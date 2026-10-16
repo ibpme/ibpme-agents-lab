@@ -9,7 +9,7 @@ try {
 
 Inside tmux, opens a 90% popup. Outside tmux, runs directly.
 --direct     Run the browser in this terminal instead of opening a popup.
---directory  Registry directory (otherwise uses AGENTS_REGISTRY_DIR/XDG defaults).
+--directory  Registry directory (default: <AGENT_HUB_DIR>/registry).
 --socket/--pane/--client preserve the invoking tmux context.`);
   } else if (options.origin && !options.direct) {
     await openPopup(options.origin, options.directory);

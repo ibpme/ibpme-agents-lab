@@ -76,10 +76,9 @@ See [setup](../docs/setup.md) and [registry](../docs/registry.md).
 
 ### Runtime locations
 
-The supervisor and MCP clients use `$AGENTS_SPAWNER_DIR`, otherwise
-`$XDG_STATE_HOME/agents-spawner`, otherwise `~/.local/state/agents-spawner`.
-`--directory PATH` overrides the supervisor directory; set `AGENTS_SPAWNER_DIR` to
-that same path in MCP clients. Unix socket paths must be at most 100 bytes.
+The supervisor and MCP clients use `spawner/` inside `$AGENT_HUB_DIR`, otherwise
+`$XDG_STATE_HOME/agent-hub`, otherwise `~/.local/state/agent-hub`. When the hub
+runs with `--directory PATH`, set `AGENT_HUB_DIR` to that same path in MCP clients. Unix socket paths must be at most 100 bytes.
 
 Each `tasks/task_<uuid>/` directory contains:
 
@@ -122,7 +121,7 @@ A successful startup returns, for example:
   "delivery": "none",
   "tmux": {"socket":"/path/to/tmux.sock","pane":"%3"},
   "session_id":"task_00000000-0000-0000-0000-000000000000",
-  "result_path":"/state/agents-spawner/tasks/task_.../completion.json"
+  "result_path":"/state/agent-hub/spawner/tasks/task_.../completion.json"
 }
 ```
 

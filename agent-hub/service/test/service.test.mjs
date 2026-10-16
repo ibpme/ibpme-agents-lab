@@ -13,21 +13,24 @@ import { request as registryRequest } from '@agent-hub/registry/client';
 async function fixture(t, extra = {}) {
   const root = await mkdtemp(join(tmpdir(), 'hub-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const config = resolveConfig({ directory: join(root, 'hub'), registryDirectory: join(root, 'registry'), spawnerDirectory: join(root, 'spawner'), registryOnly: true, ...extra });
+  const config = resolveConfig({ directory: join(root, 'hub'), registryOnly: true, ...extra });
   return { root, config };
 }
 
 test('configuration file, environment defaults, and explicit overrides', async t => {
   const { root } = await fixture(t);
   await writeFile(join(root, 'config.json'), JSON.stringify({ intervalMs: 1234, registryOnly: true, routingConfigPath: 'routing.json', tmuxServers: ['/tmp/a', '/tmp/a'] }));
-  const config = resolveConfig({ directory: root, activityTtlMs: 3000 }, { XDG_STATE_HOME: root, AGENTS_REGISTRY_DIR: join(root, 'custom') });
+  const config = resolveConfig({ directory: root, activityTtlMs: 3000 }, { XDG_STATE_HOME: join(root, 'unused') });
   assert.equal(config.intervalMs, 1234);
   assert.equal(config.routingConfigPath, join(root, 'routing.json'));
-  assert.equal(config.registryDirectory, join(root, 'custom'));
+  assert.equal(config.registryDirectory, join(root, 'registry'));
+  assert.equal(config.spawnerDirectory, join(root, 'spawner'));
+  assert.equal(resolveConfig({}, { AGENT_HUB_DIR: join(root, 'env') }).directory, join(root, 'env'));
+  assert.equal(resolveConfig({}, { XDG_STATE_HOME: join(root, 'xdg') }).spawnerDirectory, join(root, 'xdg', 'agent-hub', 'spawner'));
   assert.equal(config.activityTtlMs, 3000);
   assert.equal(config.registryOnly, true);
   assert.deepEqual(config.tmuxServers, ['/tmp/a']);
-  for (const value of [{ intervalMs: 0 }, { registryOnly: 'yes' }, { tmuxServers: ['relative'] }, { unknown: true }, []]) {
+  for (const value of [{ intervalMs: 0 }, { registryOnly: 'yes' }, { tmuxServers: ['relative'] }, { registryDirectory: '/tmp/r' }, { unknown: true }, []]) {
     await writeFile(join(root, 'config.json'), JSON.stringify(value));
     assert.throws(() => resolveConfig({ directory: root }));
   }
@@ -88,7 +91,7 @@ test('supervisor startup failure rolls registry and control ownership back', asy
   t.after(() => { process.env.PATH = oldPath; });
   config.tmuxServers = [join(root, 'tmux.sock')];
   config.tmuxSession = 'test';
-  await mkdir(config.spawnerDirectory);
+  await mkdir(config.spawnerDirectory, { recursive: true });
   await writeFile(join(config.spawnerDirectory, 'supervisor.lock'), '{}');
   await assert.rejects(startService(config));
   await assert.rejects(stat(join(config.registryDirectory, 'writer.lock')));
@@ -114,7 +117,7 @@ async function cli(args, env = process.env) {
 test('compiled CLI background start/status/stop and restart', async t => {
   const { root, config } = await fixture(t);
   await mkdir(config.directory);
-  await writeFile(join(config.directory, 'config.json'), JSON.stringify({ registryDirectory: config.registryDirectory, spawnerDirectory: config.spawnerDirectory, registryOnly: true }));
+  await writeFile(join(config.directory, 'config.json'), JSON.stringify({ registryOnly: true }));
   const args = ['--directory', config.directory];
   t.after(async () => { try { await request(config.directory, 'stop'); } catch {} });
   for (let i = 0; i < 2; i++) {

@@ -1,13 +1,11 @@
 import { agentId } from './identity.js';
 export { agentId } from './identity.js';
-import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
+import { spawnerDirectory } from '@agent-hub/registry/paths';
 import { exchange } from './io.js';
 import type { Request, Task } from './types.js';
 export type { SpawnInput, Parent, Task } from './types.js';
-export function spawnerDirectory(): string {
-  return resolve(process.env.AGENTS_SPAWNER_DIR ?? join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'agents-spawner'));
-}
+export { spawnerDirectory };
 export function createSpawnerClient(directory = spawnerDirectory()) {
   return {
     async request(request: Request, timeout = 45000): Promise<Record<string, unknown>> {

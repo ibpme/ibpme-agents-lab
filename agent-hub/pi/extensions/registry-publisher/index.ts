@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
 import { createConnection } from "node:net";
 import type { Socket } from "node:net";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { registryDirectory } from "@agent-hub/registry/paths";
 import type { MessagingEndpoint, ProcessIdentity, PublishMessage } from "@agent-hub/registry/types";
 import { LISTENER_CHANGED_EVENT, LISTENER_QUERY_EVENT, isListenerEndpoint } from "../contracts/listener.ts";
 
@@ -138,7 +138,7 @@ export default function (pi: ExtensionAPI): void {
     stop();
     active = true;
     context = ctx;
-    directory = resolve(process.env.AGENTS_REGISTRY_DIR ?? join(process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state"), "agents-registry"));
+    directory = registryDirectory();
     messaging = null;
     pi.events.emit(LISTENER_QUERY_EVENT, undefined);
     refresh();

@@ -6,7 +6,7 @@ import { webcrypto } from 'node:crypto';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { startHttpServer } from '../src/http.js';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -16,8 +16,10 @@ import { startListener } from '@agent-hub/pi/listener';
 import type { IncomingMessage } from '@agent-hub/pi/listener/protocol';
 
 async function setup(t: import('node:test').TestContext, callerAgentId?: string, callerPid: number | null = process.pid, deliverAs?: 'steer' | 'followUp') {
-  const directory = await mkdtemp(join(tmpdir(), 'agents-mcp-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
+  const hub = await mkdtemp(join(tmpdir(), 'agents-mcp-'));
+  t.after(() => rm(hub, { recursive: true, force: true }));
+  const directory = join(hub, 'registry');
+  await mkdir(directory);
   const received: IncomingMessage[] = [];
   const listener = await startListener(message => received.push(message));
   t.after(() => listener.close());
@@ -41,7 +43,7 @@ async function setup(t: import('node:test').TestContext, callerAgentId?: string,
   await server.connect(b); await client.connect(a);
   t.after(async () => { await client.close(); await server.close(); });
   const send = (args: Record<string, unknown> = {}) => client.callTool({ name: 'send_message', arguments: { agent_id: id, message: 'Please review.\n/listen off', message_id: 'message-1', ...args } });
-  return { client, send, snapshots, row, received, id, directory, expectedId };
+  return { client, send, snapshots, row, received, id, directory, hub, expectedId };
 }
 
 test('discovery supplies routable identity and sending delivers the standard envelope once', async t => {
@@ -128,8 +130,8 @@ test('HTTP sender identity belongs to the initialized session, not the server an
   const f = await setup(t);
   const runtime = await startHttpServer(0, { deliverAs: 'followUp' });
   t.after(runtime.close);
-  const previous = process.env.AGENTS_REGISTRY_DIR;
-  process.env.AGENTS_REGISTRY_DIR = f.directory;
+  const previous = process.env.AGENT_HUB_DIR;
+  process.env.AGENT_HUB_DIR = f.hub;
   try {
     for (const identity of [undefined, f.id]) {
       const client = new Client({ name: 'http-messaging', version: '1' });
@@ -142,8 +144,8 @@ test('HTTP sender identity belongs to the initialized session, not the server an
       assert.equal(result.isError, identity ? undefined : true);
     }
   } finally {
-    if (previous === undefined) delete process.env.AGENTS_REGISTRY_DIR;
-    else process.env.AGENTS_REGISTRY_DIR = previous;
+    if (previous === undefined) delete process.env.AGENT_HUB_DIR;
+    else process.env.AGENT_HUB_DIR = previous;
   }
   assert.equal(f.received.length, 1);
   assert.equal(f.received[0]!.deliverAs, 'followUp');
@@ -230,7 +232,7 @@ test('stdio CLI fixes delivery mode at startup', async t => {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [new URL('../dist/cli.js', import.meta.url).pathname, '--deliver-as', 'followUp'],
-    env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), AGENTS_REGISTRY_DIR: f.directory },
+    env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), AGENT_HUB_DIR: f.hub },
     stderr: 'pipe',
   });
   t.after(() => client.close());

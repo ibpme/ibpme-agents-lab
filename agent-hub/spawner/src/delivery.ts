@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { registryDirectory as defaultRegistryDirectory } from '@agent-hub/registry/paths';
 import { json, exchange, processStart } from './io.js';
 import type { Task } from './types.js';
 interface Row {
@@ -11,7 +11,7 @@ interface Row {
 }
 const fresh = (time: number): boolean => Number.isFinite(time) && time <= Date.now() + 5000 && Date.now() - time <= 20000;
 export async function notifyParent(task: Task, registryDirectory?: string): Promise<void> {
-  const directory = registryDirectory ?? process.env.AGENTS_REGISTRY_DIR ?? join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'agents-registry');
+  const directory = registryDirectory ?? defaultRegistryDirectory();
   const health = await json<{ state: string; updatedAt: number; lastSuccessfulProcessDiscoveryAt: number }>(join(directory, 'registry-health.json'));
   if (!health || health.state !== 'running' || !fresh(health.updatedAt) || !fresh(health.lastSuccessfulProcessDiscoveryAt)) throw new Error('Registry unavailable or stale');
   const { readFile } = await import('node:fs/promises');

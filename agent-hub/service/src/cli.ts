@@ -2,19 +2,17 @@
 import { spawn } from 'node:child_process';
 import { closeSync, constants, fstatSync, fchmodSync, openSync } from 'node:fs';
 import { chmod, lstat, mkdir } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hubDirectory } from '@agent-hub/registry/paths';
 import { request } from './client.js';
 import { resolveConfig } from './config.js';
 import { startService } from './service.js';
 
 const usage = `agent-hub <start|status|stop> [options]
-  --directory PATH          Control directory (AGENT_HUB_DIR or XDG state/agent-hub)
+  --directory PATH          State directory (AGENT_HUB_DIR, else XDG state/agent-hub)
   --background              Detached launch (start only)
   --foreground              Foreground launch, the default (start only)
-  --registry-directory PATH Registry state directory (start only)
-  --spawner-directory PATH  Spawner state directory (start only)
   --interval MS             Discovery interval (start only)
   --activity-ttl MS         Activity expiry (start only)
   --tmux-socket PATH        Repeat to watch multiple servers; first is used by spawner
@@ -25,10 +23,8 @@ const usage = `agent-hub <start|status|stop> [options]
   --registry-only           Run without the spawner (start only)
   --help                    Show this help
 
-Control requests use hub.sock inside the control directory.
-Defaults may be set in <control-directory>/config.json; explicit flags override them.
-Registry and spawner directories retain their AGENTS_* / XDG defaults;
---directory changes only the hub control directory.
+The state directory holds hub.sock, config.json and the registry/ and spawner/
+directories. Defaults may be set in config.json; explicit flags override them.
 No hooks, Pi extensions, or OS startup configuration are installed.`;
 
 const delay = (ms: number): Promise<void> => new Promise(done => setTimeout(done, ms));
@@ -45,7 +41,7 @@ function parse(args: string[]): { command: string; background: boolean; options:
   const seen = new Set<string>();
   while (args.length) {
     const option = args.shift()!;
-    if (!['--directory', '--background', '--foreground', '--registry-directory', '--spawner-directory', '--interval', '--activity-ttl', '--tmux-socket', '--tmux-session', '--pi', '--routing-config', '--recover-lock', '--registry-only'].includes(option)) {
+    if (!['--directory', '--background', '--foreground', '--interval', '--activity-ttl', '--tmux-socket', '--tmux-session', '--pi', '--routing-config', '--recover-lock', '--registry-only'].includes(option)) {
       throw new Error(`Unknown option: ${option}`);
     }
     if (seen.has(option) && option !== '--tmux-socket') throw new Error(`Duplicate option: ${option}`);
@@ -59,8 +55,6 @@ function parse(args: string[]): { command: string; background: boolean; options:
     if (!value || !value.trim() || value.startsWith('--') || value.includes('\0')) throw new Error(`Missing or invalid value for ${option}`);
     switch (option) {
       case '--directory': options.directory = resolve(value); break;
-      case '--registry-directory': options.registryDirectory = resolve(value); break;
-      case '--spawner-directory': options.spawnerDirectory = resolve(value); break;
       case '--routing-config': options.routingConfigPath = resolve(value); break;
       case '--pi': options.pi = value; break;
       case '--tmux-session':
@@ -98,7 +92,6 @@ async function privateDirectory(directory: string): Promise<void> {
 
 function childFlags(config: Config): string[] {
   const flags = ['start', '--foreground', '--directory', config.directory,
-    '--registry-directory', config.registryDirectory, '--spawner-directory', config.spawnerDirectory,
     '--interval', String(config.intervalMs), '--activity-ttl', String(config.activityTtlMs),
     ...config.tmuxServers.flatMap(socket => ['--tmux-socket', socket])];
   if (config.tmuxSession !== undefined) flags.push('--tmux-session', config.tmuxSession);
@@ -217,8 +210,7 @@ async function main(): Promise<void> {
     return;
   }
   const { command, background, options } = parse(args);
-  const stateHome = process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state');
-  const directory = resolve(options.directory ?? (process.env.AGENT_HUB_DIR || join(stateHome, 'agent-hub')));
+  const directory = resolve(options.directory ?? hubDirectory());
   if (command === 'status') {
     const response = await request(directory, 'status');
     if (!response.ok) throw new Error(response.error ?? 'Service status failed');

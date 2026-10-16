@@ -33,14 +33,12 @@ tasks and pending completion delivery, without re-running initial prompts.
 
 ## Shared configuration
 
-The control directory defaults to `$AGENT_HUB_DIR`, then
+All state lives in one directory: `$AGENT_HUB_DIR`, then
 `$XDG_STATE_HOME/agent-hub`, then `~/.local/state/agent-hub`.
 `--directory PATH` overrides it. An optional `config.json` there configures startup:
 
 ```json
 {
-  "registryDirectory": "/absolute/path/to/registry",
-  "spawnerDirectory": "/absolute/path/to/spawner",
   "intervalMs": 5000,
   "activityTtlMs": 20000,
   "tmuxServers": ["/absolute/path/to/tmux.sock"],
@@ -52,23 +50,24 @@ The control directory defaults to `$AGENT_HUB_DIR`, then
 
 All keys are optional. CLI flags override file values. Unknown keys and invalid
 values fail startup. Interval/TTL values must be integers from 100 to 2147483647.
-The corresponding CLI flags are `--registry-directory`, `--spawner-directory`,
-`--interval`, `--activity-ttl`, repeated `--tmux-socket`, `--tmux-session`, `--pi`,
+The corresponding CLI flags are `--interval`, `--activity-ttl`, repeated `--tmux-socket`, `--tmux-session`, `--pi`,
 and `--registry-only`. `--recover-lock` explicitly permits stale supervisor-lock
 recovery after verifying that its recorded process lifetime is no longer alive;
 it is deliberately not a persistent configuration key. Registry and hub writer
 leases can take 30 seconds to expire after a hard crash.
 
-**Existing data paths remain the defaults:** registry uses `$AGENTS_REGISTRY_DIR`
-or the XDG `agents-registry` directory; supervisor uses `$AGENTS_SPAWNER_DIR` or
-the XDG `agents-spawner` directory. Setting `--directory` changes only hub control
-state, not those data locations. The private control directory contains
-`hub.sock`, `hub.lock/`, and, for background launches, `daemon.log`.
+```text
+~/.local/state/agent-hub/
+├── hub.sock, hub.lock/   control transport and ownership lease
+├── config.json           optional startup defaults
+├── daemon.log            background output
+├── registry/             registry snapshots, health and socket
+└── spawner/              supervisor socket, lock and task artifacts
+```
 
-If you override data directories in hub configuration, configure your separately
-started Pi, MCP, and viewer processes with matching `AGENTS_REGISTRY_DIR` and
-`AGENTS_SPAWNER_DIR`. Spawned children automatically inherit the configured
-registry directory. Status reports the effective configuration, selected tmux
+If you start the hub with `--directory`, set `AGENT_HUB_DIR` to the same path for
+separately started Pi, MCP, and viewer processes. Spawned children inherit it
+automatically. Status reports the effective configuration, selected tmux
 server/session, and registry health. Changes require stop/start; no hot reload.
 Logs and completed task artifacts currently have no automatic retention policy.
 

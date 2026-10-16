@@ -22,7 +22,10 @@ export interface SupervisorOptions {
   extension?: string;
   tmuxSocket?: string;
   tmuxSession?: string;
+  /** Registry read for parent completion delivery. */
   registryDirectory?: string;
+  /** Exported to children as AGENT_HUB_DIR so their publishers find the same registry. */
+  hubDirectory?: string;
   startupTimeout?: number;
   pollInterval?: number;
   recoverLock?: boolean;
@@ -56,7 +59,7 @@ export async function startSupervisor(options: SupervisorOptions) {
   const requests = new Set<Promise<Record<string, unknown>>>();
   const directory = resolve(options.directory);
   const socketPath = join(directory, 'spawner.sock');
-  if (Buffer.byteLength(socketPath) > 100) throw new Error('Spawner socket path exceeds 100 bytes; use a shorter AGENTS_SPAWNER_DIR');
+  if (Buffer.byteLength(socketPath) > 100) throw new Error('Spawner socket path exceeds 100 bytes; use a shorter AGENT_HUB_DIR');
   await mkdir(join(directory, 'tasks'), { recursive: true, mode: 0o700 });
   // Never remove a live daemon's socket. A lock also protects the startup window before listen().
   const lockPath = join(directory, 'supervisor.lock');
@@ -157,7 +160,7 @@ export async function startSupervisor(options: SupervisorOptions) {
     if (task.input.mode === 'interactive') {
       if (!options.tmuxSocket || !isAbsolute(options.tmuxSocket) || !options.tmuxSession) throw new Error('Interactive spawning requires supervisor --tmux-socket and --tmux-session');
       const script = join(task.directory, 'launch.sh');
-      await writeFile(script, `#!/bin/sh\nexport PATH=${quote(process.env.PATH ?? '')}\nexport AGENT_HUB_SPAWN_DIR=${quote(task.directory)}\n${options.registryDirectory ? `export AGENTS_REGISTRY_DIR=${quote(options.registryDirectory)}\n` : ''}exec ${[options.pi ?? 'pi', ...args].map(quote).join(' ')}\n`, { mode: 0o700 });
+      await writeFile(script, `#!/bin/sh\nexport PATH=${quote(process.env.PATH ?? '')}\nexport AGENT_HUB_SPAWN_DIR=${quote(task.directory)}\n${options.hubDirectory ? `export AGENT_HUB_DIR=${quote(options.hubDirectory)}\n` : ''}exec ${[options.pi ?? 'pi', ...args].map(quote).join(' ')}\n`, { mode: 0o700 });
       shutdown.signal.throwIfAborted();
       const { stdout } = await execute('tmux', ['-S', options.tmuxSocket, 'new-window', '-d', '-P', '-F', '#{pane_id}', '-t', `${options.tmuxSession}:`, '-n', task.input.name ?? task.id, '-c', task.input.cwd, `exec ${quote(script)}`], { timeout: 5000 });
       const pane = stdout.trim();
@@ -169,7 +172,7 @@ export async function startSupervisor(options: SupervisorOptions) {
       try {
         shutdown.signal.throwIfAborted();
         const child = spawn(process.execPath, [fileURLToPath(new URL('./headless-runner.js', import.meta.url)), options.pi ?? 'pi', '--mode', 'rpc', ...args], {
-          cwd: task.input.cwd, env: { ...process.env, AGENT_HUB_SPAWN_DIR: task.directory, ...(options.registryDirectory ? { AGENTS_REGISTRY_DIR: options.registryDirectory } : {}) },
+          cwd: task.input.cwd, env: { ...process.env, AGENT_HUB_SPAWN_DIR: task.directory, ...(options.hubDirectory ? { AGENT_HUB_DIR: options.hubDirectory } : {}) },
           stdio: ['ignore', 'ignore', log.fd], detached: true,
         });
         child.unref();
