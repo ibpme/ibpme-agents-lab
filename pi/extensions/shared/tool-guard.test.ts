@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ExtensionAPI, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
-import permissionGate from "../permission-gate/index.ts";
 import protectedPaths from "../protected-paths/index.ts";
 import { registerToolGuard } from "./tool-guard.ts";
 
@@ -33,9 +32,7 @@ test("confirmation fails closed without UI and continues to later block rules", 
 
 test("existing guards retain their local-only tool boundaries", async () => {
   const h = harness();
-  permissionGate(h.pi);
   protectedPaths(h.pi);
-  assert.equal((await h.call("bash", { command: "sudo true" }))?.block, true);
   assert.equal(await h.call("bash", { command: "echo safe" }), undefined);
   assert.equal((await h.call("write", { path: "/repo/.git/config" }))?.block, true);
   assert.equal(await h.call("bash_remote", { command: "sudo true" }), undefined);

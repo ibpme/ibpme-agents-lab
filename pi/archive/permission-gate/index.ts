@@ -6,7 +6,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { registerToolGuard } from "../shared/tool-guard.ts";
+import { registerToolGuard } from "../../extensions/shared/tool-guard.ts";
 
 const DANGEROUS_PATTERNS = [
   /\brm\s+(-rf?|--recursive)/i,

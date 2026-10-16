@@ -25,7 +25,6 @@ disable an extension. Run `/reload` in pi after changes.
 | `question` | Structured questions with re-answer | - |
 | `thinking-cycle-backward` | Cycle thinking level backward | shared: shortcut-config |
 | `stash` | Stash the editor draft | shared: shortcut-config |
-| `permission-gate` | Confirm risky tool calls | shared: tool-guard |
 | `protected-paths` | Block writes to protected paths | shared: tool-guard |
 | `system-prompt` | View the system prompt | shared: pager |
 | `usage` | Provider account quota viewer | shared: pager |
