@@ -52,11 +52,12 @@ import another extension's `index.ts`.
 
 ```bash
 cd pi
-bun install
-bun run check      # typecheck + tests + real-loader test
+npm ci
+npm run check      # typecheck + tests + real-loader test
 ```
 
-Pi loads TypeScript through jiti, so there is no build step. Relative imports carry an explicit `.ts` extension.
+Pi loads TypeScript through jiti in its own Node.js runtime, so there is no build step and no runtime of our
+own to install. Relative imports carry an explicit `.ts` extension. The scripts need Node.js 22.18+ and npm 10+.
 
 ## Configuration
 

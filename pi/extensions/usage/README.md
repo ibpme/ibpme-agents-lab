@@ -106,7 +106,7 @@ Run from `pi/`:
 
 ```bash
 node --experimental-strip-types --test extensions/usage/*.test.ts
-bun run check
+npm run check
 ```
 
 Contract references:
