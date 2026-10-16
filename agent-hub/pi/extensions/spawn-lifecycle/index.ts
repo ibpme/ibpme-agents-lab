@@ -65,6 +65,8 @@ export default function spawnLifecycle(pi: ExtensionAPI): void {
     }, 250);
     poll.unref();
   });
+  // Wait until MCP startup initializes its readiness checks; early prompts can change the
+  // tool list mid-run and invalidate Anthropic thinking signatures on continuation.
   pi.on('resources_discover', (_event, ctx) => {
     if (!active || !task.input.prompt || state.phase !== 'pending' || initial !== undefined) return;
     if (ctx.sessionManager.getSessionId() !== state.sessionId) return;
