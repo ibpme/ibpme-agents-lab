@@ -25,16 +25,17 @@ KEYS="$TARGET/keybindings.json"
 if [ -L "$KEYS" ]; then
   echo "skip $KEYS: symlink (add the entries from $ROOT/keybindings.json yourself)" >&2
 else
-  node - "$ROOT/keybindings.json" "$KEYS" <<'JS'
-const fs = require("node:fs");
-const [, , source, target] = process.argv;
-const wanted = JSON.parse(fs.readFileSync(source, "utf8"));
-let current = {};
-try { current = JSON.parse(fs.readFileSync(target, "utf8")); } catch (e) { if (e.code !== "ENOENT") { console.error(`skip ${target}: not valid JSON`); process.exit(0); } }
-const added = Object.keys(wanted).filter((action) => !(action in current));
-if (added.length) {
-  fs.writeFileSync(target, JSON.stringify({ ...current, ...Object.fromEntries(added.map((a) => [a, wanted[a]])) }, null, 2) + "\n");
-  console.log(`keybindings: added ${added.join(", ")} to ${target}`);
-}
-JS
+  command -v jq >/dev/null || { echo "jq is required to merge $KEYS" >&2; exit 1; }
+  current='{}'
+  if [ -e "$KEYS" ]; then
+    if ! current="$(jq -ce 'if type == "object" then . else error("not an object") end' "$KEYS" 2>/dev/null)"; then
+      echo "skip $KEYS: not a valid JSON object" >&2
+      exit 0
+    fi
+  fi
+  added="$(jq -r --argjson cur "$current" '[keys_unsorted[] | select(in($cur) | not)] | join(", ")' "$ROOT/keybindings.json")"
+  if [ -n "$added" ]; then
+    printf '%s\n' "$(jq --argjson cur "$current" '$cur + with_entries(select(.key | in($cur) | not))' "$ROOT/keybindings.json")" > "$KEYS"
+    echo "keybindings: added $added to $KEYS"
+  fi
 fi
