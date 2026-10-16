@@ -74,8 +74,8 @@ process environment. Its `TYPESAFE_BASE_URL` override is also respected. Do not
 put API keys in routing JSON. Profiles use Pi's normal provider authentication,
 independent of TypeSafe authentication.
 
-The preflight resolver uses the bundled Pi SDK's local catalog, `models.json`,
-and configured provider authentication. It does not start a session, load
+The preflight resolver uses the local catalog of the Pi SDK pinned in the
+spawner's dependencies, `models.json`, and configured provider authentication. It does not start a session, load
 provider extensions, or make inference requests to execution providers. Models
 registered only by an extension must also be resolvable in the preflight catalog.
 It does not prove that a remote provider will accept a request. Keep the

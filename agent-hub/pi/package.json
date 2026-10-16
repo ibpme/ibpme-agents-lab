@@ -35,7 +35,6 @@
   "exports": {
     "./spawn-lifecycle": "./extensions/spawn-lifecycle/index.ts",
     "./listener": "./extensions/message-listener/listener.ts",
-    "./listener/protocol": "./extensions/message-listener/protocol.ts",
-    "./routing": "./routing.ts"
+    "./listener/protocol": "./extensions/message-listener/protocol.ts"
   }
 }
