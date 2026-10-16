@@ -38,7 +38,7 @@ pi -e ./agent-hub/pi/extensions/agents/index.ts
 
 Inside tmux, `/agents` launches the standalone browser in a 90% tmux popup instead
 of Pi's overlay. Install its dependencies with
-`cd agent-hub && npm ci && npm run build` and ensure Bun is on Pi/tmux's PATH.
+`cd agent-hub && npm ci && npm run build`. The popup runs the viewer with Pi's own Node.
 Outside tmux, `/agents` retains its native overlay.
 
 The browser can also launch independently from any shell or a tmux keybinding;

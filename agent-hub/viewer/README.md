@@ -7,10 +7,10 @@ are shared with the native browser.
 
 ## Usage
 
-Requires Bun 1.3+ on `PATH` and tmux 3.2+ for popups, plus the `agent-hub`
-command (see [setup](../docs/setup.md)). The browser runs from this checkout's
-source; it is not a relocatable binary. Ensure Bun and `~/.local/bin` are on the
-PATH inherited by tmux (restart/update the server environment if needed).
+Requires tmux 3.2+ for popups, plus the `agent-hub` command (see
+[setup](../docs/setup.md)). The browser runs from this checkout's source with
+the invoking Node; popups reuse that Node, so tmux needs only `agent-hub` on the
+PATH for the keybinding below.
 
 ```bash
 agent-hub view                     # 90% tmux popup; direct TUI outside tmux

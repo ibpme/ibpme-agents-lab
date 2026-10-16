@@ -6,8 +6,7 @@
 
 Use npm 10+ and Node.js 22.18+; npm 11.19 is the recorded package-manager version.
 Run `npm ci` in `agent-hub/`. Commit only the root `package-lock.json`; do not
-create per-package npm or Bun lockfiles. Bun 1.3+ remains a **runtime** dependency
-for the browser launcher and Pi's tmux popups, not the dependency installer.
+create per-package npm or Bun lockfiles. Everything runs on Node.
 
 ```bash
 cd agent-hub
@@ -98,7 +97,7 @@ strict NodeNext policy. There are intentionally two runtime profiles:
   emitted files. Library exports point to JavaScript plus declaration files.
 - **Source-loaded packages:** Pi extensions and browser code use `noEmit` and
   `allowImportingTsExtensions`. Their relative imports use `.ts`, and their
-  exports point to source. Pi's extension loader and the Bun browser launcher
+  exports point to source. Pi's extension loader and Node's type stripping
   handle those entry points. Node's TypeScript stripping runs their tests.
 
 Do not replace these profiles with a single emit configuration or introduce

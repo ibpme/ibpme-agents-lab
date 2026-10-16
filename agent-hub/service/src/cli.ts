@@ -37,7 +37,7 @@ Commands:
   start      Run the registry and spawn supervisor
   status     Report service configuration and health
   stop       Stop the service
-  view       Browse live agents and transcripts (requires Bun)
+  view       Browse live agents and transcripts
   publish    Send one registry publisher message from stdin
   route      Validate or test model routing configuration
   claude     Install or remove the Claude Code registry publishers

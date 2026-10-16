@@ -18,8 +18,8 @@ Nothing here starts itself or installs OS services.
 
 ## Install the command
 
-Requires Node.js 22.18+ and npm 10+ on Linux or macOS, tmux for spawning, and
-Bun 1.3+ for `agent-hub view` and Pi's tmux popups. From the repository root:
+Requires Node.js 22.18+ and npm 10+ on Linux or macOS, and tmux for spawning
+and popups. From the repository root:
 
 ```bash
 cd agent-hub
@@ -63,8 +63,7 @@ pi install /absolute/path/to/ibpme-agents-lab/agent-hub/pi
 import declared `@agent-hub/registry` and `@agent-hub/viewer` APIs, so install from a
 built checkout of this repository, not a copy of `pi/` alone. Use `pi remove` to uninstall.
 
-Inside tmux, `/agents` opens the `agent-hub view` popup; ensure Bun is on the PATH
-inherited by Pi/tmux. Outside tmux, `/agents` keeps the native Pi overlay. See the
+Inside tmux, `/agents` opens the `agent-hub view` popup. Outside tmux, `/agents` keeps the native Pi overlay. See the
 [viewer guide](../viewer/README.md) for a tmux keybinding.
 
 ## Install the MCP server

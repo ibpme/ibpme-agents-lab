@@ -13,8 +13,7 @@ Observe and message live Pi and Claude coding agents on one machine.
 
 ## Quick start
 
-Requires Node.js 22.18+ and npm 10+ on Linux or macOS. The browser and
-Pi tmux popups additionally require Bun 1.3+ on PATH. From the repository root:
+Requires Node.js 22.18+ and npm 10+ on Linux or macOS. From the repository root:
 
 ```bash
 cd agent-hub

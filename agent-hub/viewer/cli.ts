@@ -9,7 +9,7 @@ try {
     console.log(`Usage: agent-hub view [--direct] [--directory PATH]
                       [--socket PATH --pane %ID [--client NAME]]
 
-Browse live agents and their transcripts. Requires Bun on PATH.
+Browse live agents and their transcripts.
 Inside tmux, opens a 90% popup. Outside tmux, runs directly.
 --direct     Run the browser in this terminal instead of opening a popup.
 --directory  agent-hub state directory (default: AGENT_HUB_DIR, else ~/.local/state/agent-hub).

@@ -77,8 +77,7 @@ pi install /absolute/path/to/ibpme-agents-lab/agent-hub/pi
 
 Run `/reload` afterward. The package includes the message listener, registry
 publisher, and `/agents` browser; configuring MCP alone does not install them.
-See the [Pi setup guide](../docs/setup.md#install-the-pi-extensions) for details
-and the browser's optional Bun requirement. The underlying Pi version must also
+See the [Pi setup guide](../docs/setup.md#install-the-pi-extensions) for details. The underlying Pi version must also
 meet its own runtime requirements.
 
 ### Automatic spawn model routing
