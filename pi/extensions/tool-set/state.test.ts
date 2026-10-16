@@ -3,84 +3,53 @@ import { test } from "node:test";
 import type { ExtensionAPI, ToolInfo } from "@earendil-works/pi-coding-agent";
 import { createToolSet } from "./state.ts";
 
-function host(initial = ["read", "write", "edit", "bash"]) {
-  let active = [...initial];
-  const tools = [...new Set([...initial, "grep", "ls", "find", "change_mode"])].map(
-    (name) => ({ name }) as ToolInfo,
-  );
+function host() {
+  const active = ["read", "write", "edit", "bash", "mcp__server__update"];
+  const tools = [{ name: "mcp__server__update" }, { name: "mcp__server__read", annotations: { readOnlyHint: true } }] as ToolInfo[];
+  let writes = 0;
   const pi = {
-    getActiveTools: () => [...active],
-    getAllTools: () => tools,
-    setActiveTools: (names: string[]) => { active = [...names]; },
+    getActiveTools: () => [...active], getAllTools: () => tools,
+    setActiveTools: () => { writes++; },
   } as unknown as ExtensionAPI;
-  return { pi, tools, active: () => active, activate: (name: string) => active.push(name) };
+  return { pi, active, writes: () => writes };
 }
 
-test("SAFE masks selection and YOLO restores it", () => {
+test("permission toggles never rewrite the host loadout", () => {
   const h = host();
   const tools = createToolSet(h.pi);
-  tools.adoptHostSelection();
   tools.setMode("safe");
-  assert.deepEqual(h.active(), ["read", "grep", "find", "ls", "change_mode"]);
-  assert.deepEqual(tools.getSelection(), ["read", "write", "edit", "bash"]);
   tools.setMode("yolo");
-  assert.deepEqual(h.active(), ["read", "write", "edit", "bash"]);
+  tools.toggleMode();
+  assert.equal(h.writes(), 0);
+  assert.deepEqual(h.pi.getActiveTools(), ["read", "write", "edit", "bash", "mcp__server__update"]);
 });
 
-test("tools activated by the host remain selected after a mode change", () => {
-  const h = host();
-  const tools = createToolSet(h.pi);
-  tools.adoptHostSelection();
-  h.activate("new_tool");
-  tools.setMode("safe");
-  assert.ok(h.active().includes("new_tool"));
-});
-
-test("an explicit selection removes tools without re-adopting them from the host", () => {
-  const h = host();
-  const tools = createToolSet(h.pi);
-  tools.adoptHostSelection();
-  tools.setMode("safe");
-  tools.setSelection(["read"]);
-  tools.setMode("yolo");
-  assert.deepEqual(h.active(), ["read"]);
-});
-
-for (const [name, annotation, blocked] of [
-  ["unannotated MCP tools", undefined, true],
-  ["read-only MCP tools", { readOnlyHint: true }, false],
+for (const [name, blocked] of [
+  ["read", false], ["grep", false], ["ls", false], ["find", false],
+  ["write", true], ["edit", true], ["bash", true], ["powershell", true],
+  ["mcp__server__update", true], ["mcp__server__read", false], ["mcp__missing__tool", true],
 ] as const) {
   test(`SAFE ${blocked ? "blocks" : "allows"} ${name}`, () => {
-    const h = host(["read", "mcp__server__tool"]);
-    h.tools.find((tool) => tool.name === "mcp__server__tool")!.annotations = annotation;
-    const tools = createToolSet(h.pi);
-    tools.adoptHostSelection();
-    tools.setMode("safe");
-    assert.equal(h.active().includes("mcp__server__tool"), !blocked);
+    assert.equal(createToolSet(host().pi).isBlockedInSafe(name), blocked);
   });
 }
 
-test("SAFE treats missing MCP tool metadata as blocked", () => {
-  const tools = createToolSet(host().pi);
-  assert.equal(tools.isBlockedInSafe("mcp__missing__tool"), true);
-});
-
-test("unsubscribed listeners receive no further tool changes", () => {
+test("permission listeners fire once per transition and can unsubscribe", () => {
   const tools = createToolSet(host().pi);
   const modes: string[] = [];
   const unsubscribe = tools.onChange(() => modes.push(tools.getMode()));
-  tools.adoptHostSelection();
+  tools.setMode("safe");
+  tools.setMode("safe");
+  tools.toggleMode();
   unsubscribe();
   tools.setMode("safe");
-  assert.deepEqual(modes, ["yolo"]);
+  assert.deepEqual(modes, ["safe", "yolo"]);
 });
 
-test("a new session restores YOLO and excludes SAFE-only tools from selection", () => {
-  const tools = createToolSet(host().pi);
-  tools.adoptHostSelection();
-  tools.setMode("safe");
-  tools.beginSession();
-  assert.equal(tools.getMode(), "yolo");
-  tools.adoptHostSelection();
-  assert.ok(!tools.getSelection().includes("change_mode"));
+test("extra blocked tools belong to one permission instance", () => {
+  const first = createToolSet(host().pi);
+  const second = createToolSet(host().pi);
+  first.addBlockedTools(["bash_remote"]);
+  assert.equal(first.isBlockedInSafe("bash_remote"), true);
+  assert.equal(second.isBlockedInSafe("bash_remote"), false);
 });

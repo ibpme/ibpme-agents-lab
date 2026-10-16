@@ -21,7 +21,6 @@ import {
   createRemoteReadOps,
   createRemoteWriteOps,
 } from "./operations.ts";
-import { integrateRemoteTools, REMOTE_TOOL_NAMES, SAFE_ONLY_REMOTE_TOOL_NAMES } from "./tool-set-integration.ts";
 import { SshConnection } from "./transport.ts";
 
 const REMOTE_DESCRIPTIONS = {
@@ -63,6 +62,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(
     createStylishReadTool(localCwd, timers, {
       name: "read_remote",
+      exposure: "deferred",
       extraDescription: REMOTE_DESCRIPTIONS.read,
       getOperations: () => (sessionSsh ? createRemoteReadOps(sessionSsh, localCwd) : undefined),
       getTag: () => sessionSsh?.remote,
@@ -72,6 +72,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(
     createStylishWriteTool(localCwd, timers, {
       name: "write_remote",
+      exposure: "deferred",
       extraDescription: REMOTE_DESCRIPTIONS.write,
       getOperations: () => (sessionSsh ? createRemoteWriteOps(sessionSsh, localCwd) : undefined),
       getTag: () => sessionSsh?.remote,
@@ -81,6 +82,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(
     createStylishEditTool(localCwd, timers, {
       name: "edit_remote",
+      exposure: "deferred",
       extraDescription: REMOTE_DESCRIPTIONS.edit,
       getOperations: () => (sessionSsh ? createRemoteEditOps(sessionSsh, localCwd) : undefined),
       getTag: () => sessionSsh?.remote,
@@ -90,6 +92,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(
     createStylishBashTool(localCwd, timers, {
       name: "bash_remote",
+      exposure: "deferred",
       extraDescription: REMOTE_DESCRIPTIONS.bash,
       promptSnippet: "Execute bash commands on the SSH remote host connected via /ssh (not the local machine)",
       getOperations: () => (sessionSsh ? createRemoteBashOps(sessionSsh, localCwd) : undefined),
@@ -100,6 +103,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(
     createStylishGrepTool(localCwd, timers, {
       name: "grep_remote",
+      exposure: "deferred",
       extraDescription: REMOTE_DESCRIPTIONS.grep,
       getOperations: () => (sessionSsh ? createRemoteGrepOps(sessionSsh, localCwd) : undefined),
       getTag: () => sessionSsh?.remote,
@@ -109,6 +113,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(
     createStylishLsTool(localCwd, timers, {
       name: "ls_remote",
+      exposure: "deferred",
       extraDescription: REMOTE_DESCRIPTIONS.ls,
       getOperations: () => (sessionSsh ? createRemoteLsOps(sessionSsh, localCwd) : undefined),
       getTag: () => sessionSsh?.remote,
@@ -118,6 +123,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(
     createStylishFindTool(localCwd, timers, {
       name: "find_remote",
+      exposure: "deferred",
       extraDescription: REMOTE_DESCRIPTIONS.find,
       getOperations: () => (sessionSsh ? createRemoteFindOps(sessionSsh, localCwd) : undefined),
       getTag: () => sessionSsh?.remote,
@@ -125,61 +131,34 @@ export default function (pi: ExtensionAPI) {
     }),
   );
 
-  type StatusUiCtx = { ui: { setStatus(key: string, text: string | undefined): void; theme: { fg(color: string, text: string): string } } };
+  type StatusUiCtx = { ui: { setStatus(key: string, text: string | undefined): void; theme: Theme } };
 
-  // mode.ts's "tools:" status line tries to keep pi's own built-ins from
-  // being pushed out of the "+N" overflow by sorting on
-  // tool.sourceInfo.source === "builtin" — but stylish-tools/index.ts re-registers
-  // read/write/edit/bash/grep/ls/find as its own extension-owned tools, so
-  // pi's loader stamps them source: "local" like everything else. That sort
-  // no longer does anything useful, and the _remote tools (also "local",
-  // also opt-in) have no reliable way to stay visible in that single
-  // shared, truncated line. So: a second, dedicated status line for exactly
-  // which _remote tools are active, updated whenever that could change
-  // (connect/disconnect, or a SAFE/YOLO toggle blocking/unblocking some of
-  // them) — see updateRemoteToolsStatus's callers below.
-  let lastStatusCtx: StatusUiCtx | undefined;
-
-  function updateRemoteToolsStatus() {
-    if (!lastStatusCtx) return;
-    if (!sessionSsh) {
-      lastStatusCtx.ui.setStatus(SSH_REMOTE_TOOLS_STATUS_KEY, undefined);
-      return;
-    }
-    const active = REMOTE_TOOL_NAMES.filter((name) => pi.getActiveTools().includes(name));
-    lastStatusCtx.ui.setStatus(
-      SSH_REMOTE_TOOLS_STATUS_KEY,
-      active.length > 0
-        ? lastStatusCtx.ui.theme.fg("dim", "remote: ") + lastStatusCtx.ui.theme.fg("muted", active.join(", "))
-        : undefined,
-    );
+  function updateRemoteToolsStatus(ctx: StatusUiCtx) {
+    ctx.ui.setStatus(SSH_STATUS_KEY, sessionSsh ? sshStatusText(ctx.ui.theme, "SSH", sessionSsh) : undefined);
+    ctx.ui.setStatus(SSH_REMOTE_TOOLS_STATUS_KEY, sessionSsh ? ctx.ui.theme.fg("dim", "remote: deferred") : undefined);
   }
 
-  function activateRemoteTools(ctx: StatusUiCtx) {
-    remoteTools!.activate();
-    ctx.ui.setStatus(SSH_STATUS_KEY, sshStatusText(ctx.ui.theme as Theme, "SSH", sessionSsh!));
-    lastStatusCtx = ctx;
-    updateRemoteToolsStatus();
+  function announceConnection() {
+    pi.sendMessage({
+      customType: "ssh-connection-context",
+      content: cliSsh
+        ? `SSH override mode is active: unqualified read/write/edit/bash/grep/ls/find tools execute on ${cliSsh.remote}:${cliSsh.remoteCwd}, not locally. The _remote tools require a separate /ssh connection and are unavailable in this mode. Execution permissions are unchanged.`
+        : sessionSsh
+        ? `SSH connected to ${sessionSsh.remote}:${sessionSsh.remoteCwd}. The deferred read_remote/write_remote/edit_remote/bash_remote/grep_remote/ls_remote/find_remote tools target this host; discover them through tool_search or codemode. Unqualified tools still operate locally. Execution permissions are unchanged.`
+        : "SSH disconnected. Remote tools remain discoverable but cannot execute until the user connects through /ssh. Unqualified tools still operate locally.",
+      display: false,
+    }, { triggerTurn: false });
   }
-
-  function deactivateRemoteTools(ctx: StatusUiCtx) {
-    remoteTools!.deactivate();
-    ctx.ui.setStatus(SSH_STATUS_KEY, undefined);
-    lastStatusCtx = ctx;
-    updateRemoteToolsStatus();
-  }
-
-  let remoteTools: ReturnType<typeof integrateRemoteTools> | undefined;
 
   pi.on("session_start", async (_event, ctx) => {
-    lastStatusCtx = ctx;
-
-    if (!remoteTools) {
-      remoteTools = integrateRemoteTools(getRequiredToolSet(), () => sessionSsh !== null, updateRemoteToolsStatus);
-    }
+    getRequiredToolSet().addBlockedTools(["write_remote", "edit_remote", "bash_remote"]);
+    updateRemoteToolsStatus(ctx);
 
     const arg = pi.getFlag("ssh") as string | undefined;
-    if (!arg) return;
+    if (!arg) {
+      announceConnection();
+      return;
+    }
 
     cliSsh = await connectSsh(arg);
     setOperationsOverride({
@@ -192,7 +171,8 @@ export default function (pi: ExtensionAPI) {
       find: createRemoteFindOps(cliSsh, localCwd),
       tag: cliSsh.remote,
     });
-    ctx.ui.setStatus(SSH_STATUS_KEY, sshStatusText(ctx.ui.theme as Theme, "SSH", cliSsh));
+    ctx.ui.setStatus(SSH_STATUS_KEY, sshStatusText(ctx.ui.theme, "SSH", cliSsh));
+    announceConnection();
     ctx.ui.notify(
       `SSH override mode: ${cliSsh.remote}:${cliSsh.remoteCwd} (read/write/edit/bash/grep/ls/find run remotely)`,
       "info",
@@ -236,7 +216,8 @@ export default function (pi: ExtensionAPI) {
         }
         const previous = sessionSsh;
         sessionSsh = null;
-        deactivateRemoteTools(ctx);
+        updateRemoteToolsStatus(ctx);
+        announceConnection();
         await previous.close();
         ctx.ui.notify("SSH disconnected.", "info");
         return;
@@ -251,17 +232,17 @@ export default function (pi: ExtensionAPI) {
       }
       const previous = sessionSsh;
       sessionSsh = next;
+      updateRemoteToolsStatus(ctx);
+      announceConnection();
       await previous?.close();
-      activateRemoteTools(ctx);
-      const active = REMOTE_TOOL_NAMES.filter((name) => pi.getActiveTools().includes(name));
-      const safeOnlyNote =
-        getRequiredToolSet().getMode() === "safe" ? "" : ` — ${SAFE_ONLY_REMOTE_TOOL_NAMES.join("/")} activate in SAFE mode`;
       ctx.ui.notify(
-        `SSH session tools active: ${sessionSsh.remote}:${sessionSsh.remoteCwd} (${active.join("/")})${safeOnlyNote}`,
+        `SSH connected: ${sessionSsh.remote}:${sessionSsh.remoteCwd} — remote tools are deferred (tool_search or codemode).`,
         "info",
       );
     },
   });
+
+  pi.on("session_tree", announceConnection);
 
   // Handle user ! commands via SSH — only in CLI override mode, since in
   // session mode local bash remains the default and bash_remote is opt-in.
@@ -281,9 +262,6 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async () => {
-    remoteTools?.dispose();
-    remoteTools = undefined;
-    lastStatusCtx = undefined;
     for (const timer of timers) clearInterval(timer);
     timers.clear();
     if (cliSsh) clearOperationsOverride();

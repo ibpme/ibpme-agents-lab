@@ -3,8 +3,7 @@ import type { ToolSet } from "./contracts.ts";
  * The `change_mode` tool.
  *
  * Lets the model ask the user for permission to leave SAFE mode when it needs
- * write, edit, or bash access. Only ever registered as active while SAFE (see
- * state.ts SAFE_ONLY_TOOLS).
+ * mutation or shell access. Its declaration stays stable in both modes.
  */
 
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -13,9 +12,11 @@ import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { CHANGE_MODE_TOOL } from "./state.ts";
 
-const SAFE_MODE_GUIDELINES = [
-  "SAFE mode is active: write, edit, and bash are unavailable. Do not attempt to call them.",
-  'Use change_mode with mode "yolo" when write, edit, or bash access is required.',
+const PERMISSION_GUIDELINES = [
+  "Execution policy is independent of tool visibility. The latest execution-policy notice states whether SAFE or YOLO is active.",
+  "In SAFE, mutation and shell tools are blocked at execution time, including calls through codemode. Use read-only tools instead.",
+  'Local ls/grep/find and SSH tools are deferred: discover them with tool_search or call them through codemode.',
+  'Use change_mode with mode "yolo" to request user approval before performing operations blocked by SAFE.',
 ];
 
 interface ChangeModeResult {
@@ -33,11 +34,12 @@ export function registerChangeModeTool(pi: ExtensionAPI, toolSet: ToolSet) {
   pi.registerTool({
     name: CHANGE_MODE_TOOL,
     label: "Change Mode",
+    exposure: "model-only",
     description:
       "Request user approval to switch from SAFE to YOLO mode when more tool access is needed.",
     promptSnippet:
       "Request user approval to switch from safe mode to yolo mode when more tool access is needed",
-    promptGuidelines: SAFE_MODE_GUIDELINES,
+    promptGuidelines: PERMISSION_GUIDELINES,
     parameters: Type.Object({
       mode: StringEnum(["yolo"] as const, {
         description: "Target mode to switch to.",
@@ -49,12 +51,12 @@ export function registerChangeModeTool(pi: ExtensionAPI, toolSet: ToolSet) {
         return errorResult("Error: user approval is unavailable without a UI");
       }
       if (toolSet.getMode() !== "safe") {
-        return errorResult("Error: change_mode is only available in safe mode");
+        return errorResult("Error: YOLO is already active");
       }
 
       const approved = await ctx.ui.confirm(
         "Allow mode change?",
-        "The agent requests switching from SAFE to YOLO mode, which restores write, edit, and bash access.",
+        "The agent requests switching from SAFE to YOLO mode, allowing mutation and shell execution, including remote tools. Other permission guards still apply.",
       );
 
       if (approved) {
@@ -62,7 +64,7 @@ export function registerChangeModeTool(pi: ExtensionAPI, toolSet: ToolSet) {
       }
 
       const text = approved
-        ? "User approved switching to YOLO mode. The updated tool set is available on the next model request."
+        ? "User approved switching to YOLO mode. SAFE execution restrictions are lifted; tool declarations are unchanged."
         : "User denied switching to YOLO mode; remaining in SAFE mode.";
 
       return {

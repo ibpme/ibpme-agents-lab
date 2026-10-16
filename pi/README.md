@@ -31,7 +31,7 @@ disable an extension. Run `/reload` in pi after changes.
 | `usage` | Provider account quota viewer | shared: pager |
 | `readmd` | Render the last reply as paged markdown (with Mermaid) | shared: pager, message-text, mermaid |
 | `prompt-suggestions` | Next-prompt suggestions in the editor | shared: shortcut-config, message-text |
-| `tool-set` | Tool sets and modes | shared: pager, tool-guard, tool-status; contracts: status-keys |
+| `tool-set` | Execution permissions and tool viewer | shared: pager, tool-guard, tool-status; contracts: status-keys |
 | `stylish-tools` | Styled tool rendering and operation overrides | - |
 | `ssh` | Run tools against SSH remotes | `tool-set`, `stylish-tools`; contracts: status-keys |
 | `reasoning-tokens` | Live reasoning token counter | contracts: events |
@@ -64,3 +64,33 @@ Extensions create their own config under `~/.pi/agent/` when needed; nothing is 
 `prompt-suggestions` reads `~/.pi/agent/prompt-suggestions.json` (written when you toggle suggestions) with keys
 `enabled`, `provider`, `model` and `ollamaUrl`. Missing keys fall back to built-in defaults, and
 `PI_SUGGESTIONS_PROVIDER`, `PI_SUGGESTIONS_MODEL` and `PI_SUGGESTIONS_OLLAMA_URL` override the file.
+
+## Tools and execution permissions
+
+Requires Pi 1.3.0 or newer for native restoration of tools loaded during a session.
+
+- `/safe`, `/yolo` (`/auto`), and `shift+tab` change **execution permissions**, not the active tool list.
+  SAFE blocks local write/edit/shell tools (including PowerShell), SSH mutation/shell tools, and MCP tools
+  without `readOnlyHint: true`. The guard also applies to nested calls from codemode and other tools.
+  Other extension tools retain their existing policy unless explicitly registered as blocked.
+- `change_mode` remains declared in both modes and requests user confirmation before leaving SAFE.
+  It is model-only: scripts cannot use it to open approval dialogs. Without a UI, escalation is denied.
+- Mode changes append context notices instead of rewriting the system prompt or earlier messages.
+  New sessions default to YOLO, preserving the previous default. Explicit choices are saved in session
+  metadata and restored on resume/reload. Permissions are live session-wide control: `/tree` does not
+  rewind them or reset SAFE to YOLO, and appends the current policy to the destination branch.
+- Local `ls`, `grep`, and `find`, and all seven SSH `_remote` tools, are registered with **deferred**
+  exposure. Codemode can call them without adding declarations; `tool_search` can load them for direct
+  calls. Once loaded, tools may remain declared across turns and resume. Permission switches do not
+  unload them. Startup adds registered `codemode`, `tool_search`, and `change_mode` entry points to the
+  restored loadout without removing other tools. Explicit Pi tool exclusions still govern registration.
+- `/ssh user@host[:/path]` connects the deferred remote tools; unqualified tools remain local.
+  `/ssh off` disconnects without changing tool exposure or declarations. Disconnected remote tools
+  remain discoverable, but execution fails rather than falling back to local I/O. Connections are not
+  persisted; reconnect after resume. Connection/target changes append context notices.
+- `--ssh user@host[:/path]` is distinct: it redirects the unqualified tools to that remote for the
+  session. Their exposure and execution permissions are unchanged.
+- `/tools` shows reachability separately from permission, for example `deferred · blocked (SAFE)`.
+
+SAFE is a harness execution policy, not an operating-system sandbox. MCP read-only annotations are
+server assertions, not verified guarantees; trusted extensions can perform I/O outside nested tool calls.

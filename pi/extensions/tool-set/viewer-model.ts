@@ -1,7 +1,7 @@
 import type { ToolInfo } from "@earendil-works/pi-coding-agent";
 import type { ToolSet } from "./contracts.ts";
 
-const BUILTIN_TOOL_NAMES = new Set(["read", "write", "edit", "bash", "grep", "ls", "find"]);
+const BUILTIN_TOOL_NAMES = new Set(["read", "write", "edit", "bash", "powershell", "grep", "ls", "find"]);
 
 export interface ToolSection {
   title: string;
@@ -51,14 +51,16 @@ export function toolStatus(
   toolSet: Pick<ToolSet, "getMode" | "isBlockedInSafe">,
 ): { label: string; color: "success" | "dim" | "warning" } {
   if (tool.exposure === "hidden") return { label: "disabled (hidden)", color: "dim" };
-  if (toolSet.getMode() === "safe" && toolSet.isBlockedInSafe(tool.name)) {
-    return { label: "disabled (SAFE)", color: "warning" };
-  }
+  let status: { label: string; color: "success" | "dim" | "warning" };
   if (active.has(tool.name)) {
     const loaded = tool.exposure === "deferred" || tool.exposure === "codemode";
-    return { label: loaded ? `active (loaded · ${tool.exposure})` : "active", color: "success" };
+    status = { label: loaded ? `active (loaded · ${tool.exposure})` : "active", color: "success" };
+  } else if (tool.exposure === "codemode") status = { label: "codemode", color: "success" };
+  else if (tool.exposure === "deferred") status = { label: "deferred", color: "dim" };
+  else status = { label: "inactive", color: "dim" };
+
+  if (toolSet.getMode() === "safe" && toolSet.isBlockedInSafe(tool.name)) {
+    return { label: `${status.label} · blocked (SAFE)`, color: "warning" };
   }
-  if (tool.exposure === "codemode") return { label: "codemode", color: "success" };
-  if (tool.exposure === "deferred") return { label: "deferred", color: "dim" };
-  return { label: mcpServer(tool) === undefined ? "inactive" : "disabled (inactive)", color: "dim" };
+  return status;
 }

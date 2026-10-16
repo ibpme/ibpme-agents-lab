@@ -22,6 +22,7 @@ import {
   type ReadOperations,
   type ReadToolDetails,
   type WriteOperations,
+  type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { homedir } from "node:os";
@@ -59,6 +60,7 @@ import {
 export interface StylishToolOptions<Ops> {
   /** Tool name as seen by the LLM. Defaults to the built-in's own name. */
   name?: string;
+  exposure?: ToolDefinition["exposure"];
   /** Placed before the built-in description so alternate tool destinations are immediately visible to the LLM. */
   extraDescription?: string;
   /** Override the short system-prompt tool summary (used by bash). */
@@ -103,6 +105,8 @@ export function createStylishBashTool(
 
   return defineTool({
     name: opts.name ?? "bash",
+    exposure: opts.exposure ?? "direct",
+    annotations: { readOnlyHint: false },
     get label() { return getLabel(); },
     description: opts.extraDescription ? `${opts.extraDescription}\n\n${metadata.description}` : metadata.description,
     promptSnippet: opts.promptSnippet ?? metadata.promptSnippet,
@@ -164,6 +168,8 @@ export function createStylishReadTool(cwd: string, timers: Set<NodeJS.Timeout>, 
 
   return defineTool({
     name: opts.name ?? "read",
+    exposure: opts.exposure ?? "direct",
+    annotations: { readOnlyHint: true },
     label: "read",
     description: opts.extraDescription ? `${opts.extraDescription}\n\n${localTool.description}` : localTool.description,
     parameters: localTool.parameters,
@@ -240,6 +246,8 @@ export function createStylishEditTool(cwd: string, timers: Set<NodeJS.Timeout>, 
 
   return defineTool({
     name: opts.name ?? "edit",
+    exposure: opts.exposure ?? "direct",
+    annotations: { readOnlyHint: false },
     label: "edit",
     description: opts.extraDescription ? `${opts.extraDescription}\n\n${localTool.description}` : localTool.description,
     parameters: localTool.parameters,
@@ -317,6 +325,8 @@ export function createStylishWriteTool(cwd: string, timers: Set<NodeJS.Timeout>,
 
   return defineTool({
     name: opts.name ?? "write",
+    exposure: opts.exposure ?? "direct",
+    annotations: { readOnlyHint: false },
     label: "write",
     description: opts.extraDescription ? `${opts.extraDescription}\n\n${localTool.description}` : localTool.description,
     parameters: localTool.parameters,
@@ -379,6 +389,8 @@ export function createStylishGrepTool(cwd: string, timers: Set<NodeJS.Timeout>, 
 
   return defineTool({
     name: opts.name ?? "grep",
+    exposure: opts.exposure ?? "deferred",
+    annotations: { readOnlyHint: true },
     label: "grep",
     description: opts.extraDescription ? `${opts.extraDescription}\n\n${localTool.description}` : localTool.description,
     parameters: localTool.parameters,
@@ -441,6 +453,8 @@ export function createStylishLsTool(cwd: string, timers: Set<NodeJS.Timeout>, op
 
   return defineTool({
     name: opts.name ?? "ls",
+    exposure: opts.exposure ?? "deferred",
+    annotations: { readOnlyHint: true },
     label: "ls",
     description: opts.extraDescription ? `${opts.extraDescription}\n\n${localTool.description}` : localTool.description,
     parameters: localTool.parameters,
@@ -498,6 +512,8 @@ export function createStylishFindTool(cwd: string, timers: Set<NodeJS.Timeout>, 
 
   return defineTool({
     name: opts.name ?? "find",
+    exposure: opts.exposure ?? "deferred",
+    annotations: { readOnlyHint: true },
     label: "find",
     description: opts.extraDescription ? `${opts.extraDescription}\n\n${localTool.description}` : localTool.description,
     parameters: localTool.parameters,

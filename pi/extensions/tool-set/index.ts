@@ -1,19 +1,4 @@
-/**
- * Tool Set Extension
- *
- * One owner for pi's active tool set, combining what used to be two extensions
- * fighting over `setActiveTools`:
- *
- *   /tools          view which tools are active, read-only (viewer.ts)
- *   /safe /yolo     YOLO/SAFE mode + shift+tab             (mode.ts)
- *   change_mode     model-initiated escalation request     (change-mode-tool.ts)
- *
- * SAFE mode *removes* write/edit/bash and any MCP tool not marked read-only
- * from the active set, and adds the read-only search tools. Mode is in-memory only and the selection is
- * re-adopted from whatever pi has active fresh every session — there is no
- * user-editable selection UI to persist a choice from, see viewer.ts and
- * state.ts for why.
- */
+/** Execution permissions and a read-only tool viewer. Pi owns the active loadout. */
 
 import type {
   ExtensionAPI,
@@ -22,7 +7,7 @@ import type {
 import { registerToolGuard } from "../shared/tool-guard.ts";
 import { registerChangeModeTool } from "./change-mode-tool.ts";
 import { registerMode } from "./mode.ts";
-import { registerSafeContext } from "./safe-context.ts";
+import { registerModeContext } from "./mode-context.ts";
 import { CHANGE_MODE_TOOL, createToolSet } from "./state.ts";
 import { publishToolSet } from "./service.ts";
 import { registerViewer } from "./viewer.ts";
@@ -34,16 +19,11 @@ export default function toolSetExtension(pi: ExtensionAPI) {
 
   const applyStatus = registerMode(pi, toolSet);
   registerChangeModeTool(pi, toolSet);
-  registerSafeContext(pi, toolSet);
+  registerModeContext(pi, toolSet);
   registerViewer(pi, toolSet);
 
-  // Removing tools keeps them out of the model's available tool set. This
-  // guard is the enforcement layer: it also covers codemode scripts, which call
-  // tools regardless of the active set, and any tool another extension re-adds.
-  // `tools: []` (every tool) rather than a blocked-tool snapshot:
-  // other extensions can extend the blocked tools after this factory has already
-  // run (e.g. from their own session_start, via toolSet.addBlockedTools()),
-  // so the check has to read the Set live rather than a copy taken now.
+  // Every call crosses this seam, including nested codemode calls. Read policy
+  // live so tools discovered or registered after startup receive the same checks.
   registerToolGuard(pi, [
     {
       tools: [],
@@ -51,7 +31,7 @@ export default function toolSetExtension(pi: ExtensionAPI) {
         toolSet.getMode() === "safe" && toolSet.isBlockedInSafe(event.toolName)
           ? {
             action: "block",
-            reason: `Blocked by safe mode: ${event.toolName} is disabled. Use /yolo or /auto to restore access.`,
+            reason: `Blocked by SAFE execution policy: ${event.toolName}. Use read-only tools or request user approval through change_mode with mode "yolo".`,
           }
           : undefined,
     },
@@ -68,11 +48,17 @@ export default function toolSetExtension(pi: ExtensionAPI) {
   ]);
 
   const startSession = async (_event: unknown, ctx: ExtensionContext) => {
-    toolSet.beginSession();
-    toolSet.adoptHostSelection();
     applyStatus(ctx);
   };
 
-  pi.on("session_start", startSession);
+  pi.on("session_start", async (event, ctx) => {
+    // Keep discovery and approval reachable even on older restored loadouts.
+    // Add these once at startup; never rebuild Pi's restored selection.
+    const active = pi.getActiveTools();
+    const registered = new Set(pi.getAllTools().filter((tool) => tool.exposure !== "hidden").map((tool) => tool.name));
+    const missing = ["codemode", "tool_search", CHANGE_MODE_TOOL].filter((name) => registered.has(name) && !active.includes(name));
+    if (missing.length) pi.setActiveTools([...active, ...missing]);
+    await startSession(event, ctx);
+  });
   pi.on("session_tree", startSession);
 }

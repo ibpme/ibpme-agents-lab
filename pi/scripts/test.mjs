@@ -11,7 +11,7 @@ function tests(directory) {
     return entry.isDirectory() ? tests(file) : file.endsWith(".test.ts") ? [file] : [];
   });
 }
-const result = spawnSync(process.execPath, ["--experimental-strip-types", "--test", ...tests(join(root, "extensions"))], {
+const result = spawnSync(process.execPath, ["--experimental-transform-types", "--test", ...tests(join(root, "extensions"))], {
   cwd: root,
   stdio: "inherit",
 });

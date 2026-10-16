@@ -21,6 +21,7 @@ export function registerViewer(pi: ExtensionAPI, toolSet: ToolSet) {
       const modeHint = `${toolSet.getMode().toUpperCase()} mode — /safe /yolo to change`;
       const help = [
         "Deferred: discover via tool_search or codemode · Loaded: active declaration",
+        "SAFE blocks execution, not discovery or declarations · SSH tools require /ssh",
         "Unregistered/disabled servers: /mcp",
       ];
 

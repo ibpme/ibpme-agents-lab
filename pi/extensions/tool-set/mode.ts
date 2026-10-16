@@ -3,7 +3,7 @@ import { MODE_STATUS_KEY } from "../contracts/status-keys.ts";
  * Mode commands, shortcut, and status indicator.
  *
  * Owns how the user drives YOLO/SAFE and how the current mode is displayed.
- * All state lives in the ToolSet; this module only reads it.
+ * Permission state lives in the ToolSet; declarations remain owned by Pi.
  */
 
 import type {
@@ -24,12 +24,12 @@ const MCP_STATUS_ID = "mcp-tools";
 const MODE_COMMANDS: { name: string; description: string; mode: Mode }[] = [
   {
     name: "safe",
-    description: "Enable safe mode (removes write/edit/bash and non-read-only MCP tools, adds grep/find/ls)",
+    description: "Enable SAFE execution policy (block mutations, shells, and non-read-only MCP calls)",
     mode: "safe",
   },
   {
     name: "yolo",
-    description: "Disable safe mode (restore prior tool access)",
+    description: "Enable YOLO execution policy (lift SAFE restrictions without changing tools)",
     mode: "yolo",
   },
   {
