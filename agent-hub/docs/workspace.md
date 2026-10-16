@@ -39,6 +39,21 @@ its own copies when it loads an extension, so the pinned versions are what
 typechecking and the standalone viewer use; keep them equal to the current Pi
 release, and in step with the sibling `pi/` package.
 
+### Pi host packages
+
+Pi supplies `@earendil-works/pi-ai`, `pi-agent-core`, `pi-coding-agent`,
+`pi-tui` and `typebox` to the extensions it loads. Code that Pi loads (`pi/` and
+the workspace packages it depends on, such as `viewer/`) declares the ones it
+imports as `peerDependencies` with `"*"`, plus an exact `devDependencies` pin for
+typechecking, tests and the standalone viewer. It never lists them in
+`dependencies`, because a physical copy can bypass Pi's module mapping.
+
+Code that runs outside Pi, such as the spawner's model-profile validator,
+declares the packages it imports as ordinary `dependencies`. Production imports
+must be declared in `dependencies` or `peerDependencies` of the importing
+package; a dev dependency hoisted from another workspace does not count.
+`npm run test:packages` checks these rules.
+
 ## Packages and public APIs
 
 | Directory | Package | Public API |

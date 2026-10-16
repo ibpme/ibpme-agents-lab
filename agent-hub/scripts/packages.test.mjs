@@ -40,6 +40,29 @@ test('external dependencies use one specifier across the workspace', () => {
   }
 });
 
+// Pi supplies these to the extensions it loads and maps their imports to its own copies.
+const piHostPackages = ['@earendil-works/pi-ai', '@earendil-works/pi-agent-core', '@earendil-works/pi-coding-agent', '@earendil-works/pi-tui', 'typebox'];
+
+test('packages loaded by Pi take host packages as peers', () => {
+  const byName = new Map(packages.map(pkg => [pkg.name, pkg]));
+  const loaded = new Set();
+  const visit = name => {
+    if (loaded.has(name)) return;
+    loaded.add(name);
+    for (const dependency of Object.keys(byName.get(name).dependencies ?? {})) if (byName.has(dependency)) visit(dependency);
+  };
+  visit('@agent-hub/pi');
+  for (const pkg of packages) {
+    for (const name of piHostPackages) {
+      const peer = pkg.peerDependencies?.[name];
+      if (loaded.has(pkg.name)) assert.equal(pkg.dependencies?.[name], undefined, `${pkg.name}: ${name} must be a peer, not a dependency`);
+      if (peer === undefined) continue;
+      assert.equal(peer, '*', `${pkg.name}: peer ${name} must use "*"`);
+      assert.ok(pkg.devDependencies?.[name], `${pkg.name}: peer ${name} needs a pinned dev dependency`);
+    }
+  }
+});
+
 test('every explicit export resolves to an existing package file', async () => {
   for (const pkg of packages) {
     for (const [subpath, target] of Object.entries(pkg.exports ?? {})) {
@@ -68,16 +91,17 @@ async function* sources(directory) {
 test('production code uses declared package imports rather than sibling paths', async () => {
   for (const pkg of packages) {
     const directory = new URL(`${pkg.directory}/`, root);
-    const declared = new Set([pkg.name, ...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {}), ...Object.keys(pkg.peerDependencies ?? {})]);
+    // Production imports must not rely on dev dependencies, which may be hoisted from another package.
+    const declared = new Set([pkg.name, ...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.peerDependencies ?? {})]);
     for await (const file of sources(directory)) {
       const content = await readFile(file, 'utf8');
       for (const match of content.matchAll(/(?:from\s*|import\s*\(|import\.meta\.resolve\s*\(|new URL\s*\()\s*["']([^"']+)["']/g)) {
         const specifier = match[1];
         if (specifier.startsWith('.')) {
           assert.ok(new URL(specifier, file).href.startsWith(directory.href), `${file.pathname}: sibling path ${specifier}`);
-        } else if (specifier.startsWith('@agent-hub/')) {
-          const name = specifier.split('/').slice(0, 2).join('/');
-          assert.ok(declared.has(name), `${pkg.name} must declare ${name}`);
+        } else if (!specifier.includes(':')) {
+          const name = specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
+          assert.ok(declared.has(name), `${file.pathname}: ${pkg.name} must declare ${name} in dependencies or peerDependencies`);
         }
       }
     }
