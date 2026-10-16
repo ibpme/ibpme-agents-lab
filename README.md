@@ -7,7 +7,6 @@ A collection of reusable agent skills and pi extensions.
 - **brainstorm** — Develop ideas through structured dialogue.
 - **commit** — Create conventional Git commits.
 - **context7-mcp** — Fetch current library and framework documentation.
-- **indonesian-language-guidelines** — Apply Indonesian writing and localization guidelines.
 - **prompt-sharpen** — Refine prompts for coding agents.
 - **to-full-markdown** — Convert documents to detail-preserving Markdown.
 
