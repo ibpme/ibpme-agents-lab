@@ -259,8 +259,10 @@ Settings symlinks are refused: pass their source file explicitly. Installation
 does not start the daemon. Restart Claude Code or
 review `/hooks` to ensure the new hook configuration is loaded.
 
-The installer uses the current Node executable and an absolute path to the hook;
-keep both paths available. The hook imports the registry's `src/` client and process
+The installed handler is `"$HOME/.local/bin/agent-hub" claude hook`, resolved when
+Claude runs it, so it survives Node upgrades and works on any machine with
+`agent-hub` installed. Reinstalling replaces handlers written by an older
+installer. The hook imports the registry's `src/` client and process
 parser. A moved or broken installation silently skips publication. Claude must
 inherit the same state directory configuration as the daemon:
 `AGENT_HUB_DIR`, then `XDG_STATE_HOME`, then `~/.local/state/agent-hub`.
@@ -314,8 +316,9 @@ agent-hub claude uninstall --statusline
 The settings path defaults to `$CLAUDE_CONFIG_DIR/settings.json`, otherwise
 `~/.claude/settings.json`. An existing non-empty `statusLine.command` with
 `type: "command"` is required. Installation changes only that command, preserving
-padding, refresh settings, hooks, and unrelated configuration. It uses the current
-Node executable and an absolute wrapper path; keep both paths available.
+padding, refresh settings, hooks, and unrelated configuration. The new command is
+`"$HOME/.local/bin/agent-hub" claude statusline --command <original>`, so it
+survives Node upgrades; reinstalling replaces a command from an older installer.
 Installation is idempotent and is not part of daemon startup.
 Restart Claude Code to ensure it loads the new command.
 

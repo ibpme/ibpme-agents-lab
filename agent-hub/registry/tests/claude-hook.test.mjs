@@ -107,7 +107,7 @@ test('installer merges hooks, leaves statusline untouched, and uninstalls withou
   assert.equal(installed.hooks.Stop.length, 2);
   assert.deepEqual(installed.hooks.Stop[0], original.hooks.Stop[0]);
   assert.deepEqual(installed.statusLine, original.statusLine);
-  assert.match(installed.hooks.Stop[1].hooks[0].command, /hook\.mjs/);
+  assert.equal(installed.hooks.Stop[1].hooks[0].command, '"$HOME/.local/bin/agent-hub" claude hook');
   assert.equal(installed.hooks.Stop[1].hooks[0].async, undefined);
   await run();
   assert.deepEqual(JSON.parse(await readFile(settings, 'utf8')), installed);
@@ -121,6 +121,25 @@ test('installer merges hooks, leaves statusline untouched, and uninstalls withou
   assert.deepEqual(restored.statusLine, original.statusLine);
   assert.equal(restored.hooks.UserPromptSubmit, undefined);
   await run('--uninstall');
+});
+
+test('reinstalling replaces handlers written by an older installer', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'ari-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const settings = join(directory, 'settings.json');
+  const old = "'/old/node' '/old/hook.mjs'";
+  await writeFile(settings, JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo existing' }] }, { hooks: [{ type: 'command', command: old, timeout: 2 }] }] } }));
+  await writeFile(`${settings}.agents-registry-hooks.json`, JSON.stringify({ version: 1, command: old, originalEvents: ['Stop'], hadHooks: true, originalSettings: '{"hooks":{"Stop":[]}}' }));
+  await exec(process.execPath, [join(publishers, 'install.mjs'), '--settings', settings]);
+  const installed = JSON.parse(await readFile(settings, 'utf8'));
+  const commands = Object.values(installed.hooks).flat().flatMap(group => group.hooks.map(handler => handler.command));
+  assert.ok(!commands.includes(old));
+  assert.deepEqual(installed.hooks.Stop.map(group => group.hooks[0].command), ['echo existing', '"$HOME/.local/bin/agent-hub" claude hook']);
+  const state = JSON.parse(await readFile(`${settings}.agents-registry-hooks.json`, 'utf8'));
+  assert.equal(state.command, '"$HOME/.local/bin/agent-hub" claude hook');
+  assert.equal(state.originalSettings, '{"hooks":{"Stop":[]}}');
+  await exec(process.execPath, [join(publishers, 'install.mjs'), '--settings', settings, '--uninstall']);
+  assert.deepEqual(JSON.parse(await readFile(settings, 'utf8')).hooks, { Stop: [{ hooks: [{ type: 'command', command: 'echo existing' }] }] });
 });
 
 test('installer creates missing settings without configuring a statusline', async t => {

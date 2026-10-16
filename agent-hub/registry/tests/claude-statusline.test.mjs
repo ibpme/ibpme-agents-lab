@@ -155,11 +155,15 @@ async function installation(t) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   const settings = join(directory, "settings with 'quote.json");
   const run = (...args) => exec(process.execPath, [join(publishers, 'install-statusline.mjs'), '--settings', settings, ...args]);
-  return { directory, settings, run };
+  // Installed commands call $HOME/.local/bin/agent-hub, as cli:install creates it.
+  const home = join(directory, 'home');
+  await mkdir(join(home, '.local', 'bin'), { recursive: true });
+  await symlink(resolve('../service/src/cli.ts'), join(home, '.local', 'bin', 'agent-hub'));
+  return { directory, settings, run, env: { ...process.env, HOME: home } };
 }
 
 test('opt-in installer wraps renderer idempotently and uninstall preserves later settings', async t => {
-  const { settings, run } = await installation(t);
+  const { settings, run, env } = await installation(t);
   const original = { hooks: { Stop: [] }, env: { KEEP: 'yes' }, statusLine: { type: 'command', command: "printf \"renderer's output\"", padding: 2 } };
   await writeFile(settings, JSON.stringify(original));
   await run();
@@ -167,7 +171,8 @@ test('opt-in installer wraps renderer idempotently and uninstall preserves later
   assert.notEqual(installed.statusLine.command, original.statusLine.command);
   assert.equal(installed.statusLine.padding, 2);
   assert.deepEqual(installed.hooks, original.hooks);
-  const rendering = exec('/bin/bash', ['-c', installed.statusLine.command], { env: process.env });
+  assert.match(installed.statusLine.command, /^"\$HOME\/\.local\/bin\/agent-hub" claude statusline --command /);
+  const rendering = exec('/bin/bash', ['-c', installed.statusLine.command], { env });
   rendering.child.stdin.end('{}');
   const { stdout } = await rendering;
   assert.equal(stdout, "renderer's output");
@@ -180,6 +185,20 @@ test('opt-in installer wraps renderer idempotently and uninstall preserves later
   await run('--uninstall');
   assert.deepEqual(JSON.parse(await readFile(settings, 'utf8')), { ...original, env: { KEEP: 'yes', LATER: 'kept' }, statusLine: { ...original.statusLine, padding: 4 } });
   await run('--uninstall');
+});
+
+test('reinstalling replaces a command written by an older installer', async t => {
+  const { settings, run } = await installation(t);
+  const original = { type: 'command', command: 'cat', padding: 2 };
+  const old = "'/old/node' '/old/statusline-wrapper.mjs' --command 'cat'";
+  await writeFile(settings, JSON.stringify({ statusLine: { ...original, command: old } }));
+  await writeFile(`${settings}.agents-registry-statusline.json`, JSON.stringify({ version: 1, originalStatusLine: original, installedCommand: old }));
+  await run();
+  const installed = JSON.parse(await readFile(settings, 'utf8')).statusLine;
+  assert.equal(installed.command, `"$HOME/.local/bin/agent-hub" claude statusline --command 'cat'`);
+  assert.equal(installed.padding, 2);
+  await run('--uninstall');
+  assert.deepEqual(JSON.parse(await readFile(settings, 'utf8')).statusLine, original);
 });
 
 test('installer refuses missing renderer, symlinks, and changed commands without overwriting settings', async t => {

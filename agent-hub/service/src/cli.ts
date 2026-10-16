@@ -1,297 +1,32 @@
 #!/usr/bin/env -S node --disable-warning=ExperimentalWarning
-import { spawn } from 'node:child_process';
-import { closeSync, constants, fstatSync, fchmodSync, openSync } from 'node:fs';
-import { chmod, lstat, mkdir } from 'node:fs/promises';
-import { isAbsolute, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { hubDirectory } from '@agent-hub/registry/paths';
-import { request } from './client.ts';
-import { resolveConfig } from './config.ts';
-import { startService } from './service.ts';
-import { claude, claudeUsage } from './claude.ts';
-import { publish, publishUsage } from './publish.ts';
-import { route, routeUsage } from './route.ts';
-import { view } from './view.ts';
-
-const lifecycleUsage = `agent-hub <start|status|stop> [options]
-  --directory PATH          State directory (AGENT_HUB_DIR, else XDG state/agent-hub)
-  --background              Detached launch (start only)
-  --foreground              Foreground launch, the default (start only)
-  --interval MS             Discovery interval (start only)
-  --activity-ttl MS         Activity expiry (start only)
-  --tmux-socket PATH        Repeat to watch multiple servers; first is used by spawner
-  --tmux-session NAME       Spawner tmux session (start only)
-  --routing-config PATH     Supervisor model routing configuration (start only)
-  --pi PATH                 Pi executable (start only)
-  --recover-lock            Recover stale spawner ownership (start only)
-  --registry-only           Run without the spawner (start only)
-  --help                    Show this help
-
-The state directory holds hub.sock, config.json and the registry/ and spawner/
-directories. Defaults may be set in config.json; explicit flags override them.
-No hooks, Pi extensions, or OS startup configuration are installed.`;
-
-const usage = `agent-hub <command> [options]
-
-Commands:
-  start      Run the registry and spawn supervisor
-  status     Report service configuration and health
-  stop       Stop the service
-  view       Browse live agents and transcripts
-  publish    Send one registry publisher message from stdin
-  route      Validate or test model routing configuration
-  claude     Install or remove the Claude Code registry publishers
-  help       Show help for a command
-
-Run agent-hub help <command> for its options. All state lives in AGENT_HUB_DIR
-(default: XDG state/agent-hub, usually ~/.local/state/agent-hub).`;
-
-const commandUsage: Record<string, string> = {
-  start: lifecycleUsage, status: lifecycleUsage, stop: lifecycleUsage,
-  publish: publishUsage, route: routeUsage, claude: claudeUsage,
-};
-
-const delay = (ms: number): Promise<void> => new Promise(done => setTimeout(done, ms));
-const absent = (error: unknown): boolean => ['ENOENT', 'ECONNREFUSED'].includes((error as NodeJS.ErrnoException)?.code ?? '');
-const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error);
-type Config = ReturnType<typeof resolveConfig>;
-
-function parse(args: string[]): { command: string; background: boolean; options: NonNullable<Parameters<typeof resolveConfig>[0]> } {
-  const command = args.shift();
-  if (!command || !['start', 'status', 'stop'].includes(command)) throw new Error(lifecycleUsage);
-  const options: NonNullable<Parameters<typeof resolveConfig>[0]> = {};
-  let background = false;
-  let foreground = false;
-  const seen = new Set<string>();
-  while (args.length) {
-    const option = args.shift()!;
-    if (!['--directory', '--background', '--foreground', '--interval', '--activity-ttl', '--tmux-socket', '--tmux-session', '--pi', '--routing-config', '--recover-lock', '--registry-only'].includes(option)) {
-      throw new Error(`Unknown option: ${option}`);
-    }
-    if (seen.has(option) && option !== '--tmux-socket') throw new Error(`Duplicate option: ${option}`);
-    seen.add(option);
-    if (command !== 'start' && option !== '--directory') throw new Error(`${option} is only valid for start`);
-    if (option === '--background') { background = true; continue; }
-    if (option === '--foreground') { foreground = true; continue; }
-    if (option === '--recover-lock') { options.recoverLock = true; continue; }
-    if (option === '--registry-only') { options.registryOnly = true; continue; }
-    const value = args.shift();
-    if (!value || !value.trim() || value.startsWith('--') || value.includes('\0')) throw new Error(`Missing or invalid value for ${option}`);
-    switch (option) {
-      case '--directory': options.directory = resolve(value); break;
-      case '--routing-config': options.routingConfigPath = resolve(value); break;
-      case '--pi': options.pi = value; break;
-      case '--tmux-session':
-        if (value.includes(':')) throw new Error('Invalid tmux session name');
-        options.tmuxSession = value;
-        break;
-      case '--tmux-socket':
-        if (!isAbsolute(value)) throw new Error('--tmux-socket must be an absolute path');
-        if (Buffer.byteLength(value) > 100) throw new Error('--tmux-socket must not exceed 100 bytes');
-        (options.tmuxServers ??= []).push(value);
-        break;
-      case '--interval':
-      case '--activity-ttl': {
-        const number = Number(value);
-        if (!/^\d+$/.test(value) || !Number.isSafeInteger(number) || number < 100 || number > 2147483647) {
-          throw new Error(`${option} must be an integer between 100 and 2147483647`);
-        }
-        if (option === '--interval') options.intervalMs = number;
-        else options.activityTtlMs = number;
-        break;
-      }
-    }
-  }
-  if (background && foreground) throw new Error('Choose either --background or --foreground');
-  return { command, background, options };
-}
-
-async function privateDirectory(directory: string): Promise<void> {
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const stat = await lstat(directory);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Not a private directory: ${directory}`);
-  if (process.getuid && stat.uid !== process.getuid()) throw new Error(`Directory is owned by another user: ${directory}`);
-  await chmod(directory, 0o700);
-}
-
-function childFlags(config: Config): string[] {
-  const flags = ['start', '--foreground', '--directory', config.directory,
-    '--interval', String(config.intervalMs), '--activity-ttl', String(config.activityTtlMs),
-    ...config.tmuxServers.flatMap(socket => ['--tmux-socket', socket])];
-  if (config.tmuxSession !== undefined) flags.push('--tmux-session', config.tmuxSession);
-  if (config.routingConfigPath !== undefined) flags.push('--routing-config', config.routingConfigPath);
-  if (config.pi !== undefined) flags.push('--pi', config.pi);
-  if (config.recoverLock) flags.push('--recover-lock');
-  if (config.registryOnly) flags.push('--registry-only');
-  return flags;
-}
-
-async function backgroundStart(config: Config): Promise<void> {
-  try {
-    const response = await request(config.directory, 'status');
-    if (!response.ok) throw new Error(response.error ?? 'Service status failed');
-    console.log(`Agent hub already running (PID ${response.pid})`);
-    return;
-  } catch (error) {
-    if (!absent(error)) throw error;
-  }
-  await privateDirectory(config.directory);
-  const logPath = join(config.directory, 'daemon.log');
-  const log = openSync(logPath, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | constants.O_NOFOLLOW, 0o600);
-  let child: ReturnType<typeof spawn>;
-  try {
-    const stat = fstatSync(log);
-    if (!stat.isFile() || (process.getuid && stat.uid !== process.getuid())) throw new Error(`Not a private log file: ${logPath}`);
-    fchmodSync(log, 0o600);
-    child = spawn(process.execPath, [...process.execArgv, fileURLToPath(import.meta.url), ...childFlags(config)], {
-      detached: true, stdio: ['ignore', log, log, 'ipc'],
-    });
-  } finally {
-    closeSync(log);
-  }
-  await new Promise<void>((done, reject) => {
-    const cleanup = (): void => {
-      clearTimeout(timeout);
-      child.removeListener('error', onError);
-      child.removeListener('exit', onExit);
-      child.removeListener('message', onMessage);
-    };
-    const fail = (error: Error): void => {
-      cleanup();
-      child.kill('SIGTERM');
-      if (child.connected) child.disconnect();
-      child.unref();
-      reject(error);
-    };
-    const onError = (error: Error): void => fail(error);
-    const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
-      fail(new Error(`Agent hub startup exited (${signal ?? code}); inspect ${logPath}`));
-    };
-    const onMessage = (message: unknown): void => {
-      if (!message || typeof message !== 'object') return;
-      const result = message as { ready?: boolean; error?: string };
-      if (result.ready === true) {
-        cleanup();
-        if (child.connected) child.disconnect();
-        done();
-      } else if (typeof result.error === 'string') {
-        fail(new Error(result.error));
-      }
-    };
-    const timeout = setTimeout(() => fail(new Error(`Agent hub startup timed out; inspect ${logPath}`)), 20000);
-    child.once('error', onError);
-    child.once('exit', onExit);
-    child.on('message', onMessage);
-  });
-  child.unref();
-  console.log(`Agent hub running in background (PID ${child.pid}) at ${config.directory}`);
-}
-
-function notifyParent(message: { ready: true } | { error: string }): Promise<void> {
-  return new Promise(done => {
-    if (!process.send || !process.connected) { done(); return; }
-    process.send(message, () => {
-      if (process.connected) process.disconnect();
-      done();
-    });
-  });
-}
-
-async function foregroundStart(config: Config): Promise<void> {
-  let runtime: Awaited<ReturnType<typeof startService>> | undefined;
-  let interrupted = false;
-  let stopping: Promise<void> | undefined;
-  const stop = (): void => {
-    interrupted = true;
-    if (!runtime || stopping) return;
-    stopping = Promise.resolve().then(() => runtime!.stop()).then(() => undefined).catch(error => {
-      console.error(messageOf(error));
-      process.exitCode = 1;
-    });
-  };
-  process.on('SIGINT', stop);
-  process.on('SIGTERM', stop);
-  try {
-    runtime = await startService(config);
-    if (interrupted) stop();
-    else {
-      await notifyParent({ ready: true });
-      console.log(`Agent hub running (PID ${process.pid}) at ${config.directory}`);
-    }
-    await runtime.closed;
-    await stopping;
-  } finally {
-    process.removeListener('SIGINT', stop);
-    process.removeListener('SIGTERM', stop);
-  }
-}
+// Commands are imported on demand so that hooks and the status line start quickly.
+import { commandUsage, usage } from './usage.ts';
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
   if (!command || ['help', '--help', '-h'].includes(command)) {
     const topic = command ? args[1] : undefined;
-    if (topic === 'view') { process.exitCode = await view(['--help']); return; }
+    if (topic === 'view') { process.exitCode = await (await import('./view.ts')).view(['--help']); return; }
     if (topic !== undefined && !commandUsage[topic]) throw new Error(`Unknown command: ${topic}\n\n${usage}`);
     console.log(topic ? commandUsage[topic] : usage);
     return;
   }
-  if (command === 'view') { process.exitCode = await view(args.slice(1)); return; }
+  if (command === 'view') { process.exitCode = await (await import('./view.ts')).view(args.slice(1)); return; }
   if (commandUsage[command] && args.length === 2 && ['--help', '-h'].includes(args[1]!)) { console.log(commandUsage[command]); return; }
   switch (command) {
-    case 'start': case 'status': case 'stop': return lifecycle(args);
-    case 'publish': return publish(args.slice(1));
-    case 'route': process.exitCode = await route(args.slice(1)); return;
-    case 'claude': process.exitCode = claude(args.slice(1)); return;
+    case 'start': case 'status': case 'stop': return (await import('./lifecycle.ts')).lifecycle(args);
+    case 'publish': return (await import('./publish.ts')).publish(args.slice(1));
+    case 'route': process.exitCode = await (await import('./route.ts')).route(args.slice(1)); return;
+    case 'claude': process.exitCode = await (await import('./claude.ts')).claude(args.slice(1)); return;
     default: throw new Error(`Unknown command: ${command}\n\n${usage}`);
   }
 }
 
-async function lifecycle(args: string[]): Promise<void> {
-  const { command, background, options } = parse(args);
-  const directory = resolve(options.directory ?? hubDirectory());
-  if (command === 'status') {
-    const response = await request(directory, 'status');
-    if (!response.ok) throw new Error(response.error ?? 'Service status failed');
-    console.log(JSON.stringify(response, null, 2));
-    return;
-  }
-  if (command === 'stop') {
-    const response = await request(directory, 'stop');
-    if (!response.ok) throw new Error(response.error ?? 'Service stop failed');
-    const deadline = Date.now() + 15000;
-    while (Date.now() < deadline) {
-      try {
-        await request(directory, 'status', Math.min(1000, Math.max(1, deadline - Date.now())));
-      } catch (error) {
-        if (absent(error)) {
-          const ownership = await lstat(join(directory, 'hub.lock')).catch(error => {
-            if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-            throw error;
-          });
-          if (!ownership) {
-            console.log('Agent hub stopped');
-            return;
-          }
-        } else {
-          // Shutdown can close an accepted probe before replying. Wait for both
-          // endpoint disappearance and lease release before reporting success.
-          const code = (error as NodeJS.ErrnoException)?.code;
-          if (code !== 'ECONNRESET' && code !== 'EPIPE' && messageOf(error) !== 'Hub closed without a response' && messageOf(error) !== 'Hub request timed out') throw error;
-        }
-      }
-      await delay(50);
-    }
-    throw new Error('Stop requested, but service control socket or ownership lock remained after 15 seconds');
-  }
-  const config = resolveConfig({ ...options, directory });
-  if (background) await backgroundStart(config);
-  else await foregroundStart(config);
-}
-
 main().catch(async error => {
-  const message = messageOf(error);
+  const message = error instanceof Error ? error.message : String(error);
   console.error(message);
   process.exitCode = 1;
-  await notifyParent({ error: message });
+  // A background start waits for this child's readiness or failure over IPC.
+  if (process.send) await (await import('./lifecycle.ts')).notifyParent({ error: message });
 });

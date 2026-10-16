@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const expand = path => path === '~' ? homedir() : path.startsWith('~/') ? join(homedir(), path.slice(2)) : path;
 const quote = text => `'${text.replace(/'/g, "'\\''")}'`;
@@ -53,9 +52,11 @@ try {
     }
     if (state && config.statusLine?.type !== 'command') throw new Error('Status-line type changed since installation; refusing to overwrite it.');
     const originalStatusLine = state?.originalStatusLine ?? config.statusLine;
-    const installedCommand = state?.installedCommand ?? `${quote(process.execPath)} --disable-warning=ExperimentalWarning ${quote(join(dirname(fileURLToPath(import.meta.url)), 'statusline-wrapper.mjs'))} --command ${quote(originalStatusLine.command)}`;
+    // Resolved by the shell when Claude runs it, so it survives Node upgrades and other machines.
+    // Reinstalling also replaces a command written by an older installer.
+    const installedCommand = `"$HOME/.local/bin/agent-hub" claude statusline --command ${quote(originalStatusLine.command)}`;
     // Save recovery information first; repeated installation can finish an interrupted write.
-    if (!uninstall && !state) atomicWrite(stateFile, { version: 1, originalStatusLine, installedCommand });
+    if (!uninstall && state?.installedCommand !== installedCommand) atomicWrite(stateFile, { version: 1, originalStatusLine, installedCommand });
     config.statusLine = { ...config.statusLine, command: uninstall ? originalStatusLine.command : installedCommand };
     const currentText = existsSync(settings) ? readFileSync(settings, 'utf8') : undefined;
     if (currentText !== originalText) throw new Error('Settings changed during installation; refusing to overwrite them.');

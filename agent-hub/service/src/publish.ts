@@ -2,12 +2,7 @@ import { join, resolve } from 'node:path';
 import { request } from '@agent-hub/registry/client';
 import { registryDirectory } from '@agent-hub/registry/paths';
 import { MAX_MESSAGE_BYTES, validateMessage } from '@agent-hub/registry/protocol';
-
-export const publishUsage = `agent-hub publish [--directory PATH]
-
-Read one versioned registry publisher message from stdin and send it to the
-running registry.
-  --directory PATH   State directory (AGENT_HUB_DIR, else XDG state/agent-hub)`;
+import { publishUsage } from './usage.ts';
 
 export async function publish(args: string[]): Promise<void> {
   let directory = registryDirectory();

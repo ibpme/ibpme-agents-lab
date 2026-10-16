@@ -106,7 +106,7 @@ test('supervisor startup failure rolls registry and control ownership back', asy
 });
 
 async function run(args, { env = process.env, input } = {}) {
-  const child = spawn(process.execPath, [new URL('../src/cli.ts', import.meta.url).pathname, ...args], { env });
+  const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', new URL('../src/cli.ts', import.meta.url).pathname, ...args], { env });
   let stdout = '', stderr = '';
   child.stdout.on('data', chunk => { stdout += chunk; });
   child.stderr.on('data', chunk => { stderr += chunk; });
@@ -158,6 +158,9 @@ test('commands dispatch, print help, and reject unknown commands and removed opt
   for (const args of [['bogus'], ['help', 'bogus'], ['start', '--registry-directory', root], ['route', 'bogus'], ['claude', 'install', '--bogus'], ['publish', '--bogus']]) {
     assert.equal((await run(args)).code, 1, args.join(' '));
   }
+  assert.deepEqual(await run(['claude', 'hook'], { input: '{"hook_event_name":"Stop"}' }), { code: 0, stdout: '', stderr: '' });
+  assert.deepEqual(await run(['claude', 'statusline', '--command', 'cat'], { input: 'rendered' }), { code: 0, stdout: 'rendered', stderr: '' });
+  assert.equal((await run(['claude', 'statusline', '--command', 'exit 3'], { input: '{}' })).code, 3);
   const settings = join(root, 'settings.json');
   await writeFile(settings, '{}\n');
   await cli(['claude', 'install', '--hooks', '--settings', settings]);

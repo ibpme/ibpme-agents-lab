@@ -2,20 +2,7 @@ import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { createRouter, loadRoutingConfig } from '@agent-hub/spawner/routing';
 import { resolveConfig } from './config.ts';
-
-export const routeUsage = `agent-hub route validate [--config PATH] [--directory PATH]
-agent-hub route test [--config PATH] [--directory PATH] [PROMPT | --prompt TEXT | --stdin]
-                     [--routing-hint TEXT] [--require-classifier]
-
-Check model routing configuration without spawning Pi.
-validate  Check every profile against Pi's local catalog and configured auth.
-test      Route a delegated prompt. With no prompt or only one configured
-          profile, resolve the default profile without calling System One.
---config defaults to routingConfigPath in the state directory's config.json.
---routing-hint supplies optional advisory routing context, not child instructions.
---require-classifier exits 2 unless System One selected the profile.
-JSON output does not echo the prompt, agent hint, profile system instructions, or credentials.
-TYPESAFE_API_KEY authenticates System 1. A real prompt test sends text to TypeSafe.`;
+import { routeUsage } from './usage.ts';
 
 export async function route(args: string[]): Promise<number> {
   const action = args[0];

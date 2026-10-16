@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { execFile, spawn } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const execute = promisify(execFile);
@@ -79,54 +81,60 @@ async function publish(input) {
   } catch { /* Best-effort metadata never contaminates status-line output. */ }
 }
 
-const args = process.argv.slice(2);
-if (args.length !== 2 || args[0] !== '--command' || !args[1].trim()) {
-  console.error('Usage: statusline-wrapper.mjs --command <existing shell command>');
-  process.exit(2);
+/** Runs the existing status-line command, passing Claude's input through, and publishes its metadata. */
+export async function runStatusline(command) {
+  const child = spawn('/bin/bash', ['-c', command], { stdio: ['pipe', 'pipe', 'pipe'], detached: true });
+  // Node handles nonblocking output pipes and backpressure for native renderers too.
+  child.stdout.pipe(process.stdout);
+  child.stderr.pipe(process.stderr);
+  const signals = new Map();
+  const removeSignals = () => {
+    for (const [signal, handler] of signals) process.removeListener(signal, handler);
+  };
+  for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+    const handler = () => {
+      if (child.pid) {
+        try { process.kill(-child.pid, signal); } catch { /* Renderer may have exited. */ }
+      }
+      removeSignals();
+      process.kill(process.pid, signal);
+    };
+    signals.set(signal, handler);
+    process.on(signal, handler);
+  }
+  const rendering = new Promise(done => {
+    child.on('error', error => {
+      console.error(`Status-line renderer failed to start: ${error.message}`);
+      done({ code: 1 });
+    });
+    child.on('close', (code, signal) => done({ code, signal }));
+  });
+  const input = new Promise(done => {
+    let bytes = 0;
+    const chunks = [];
+    process.stdin.on('data', chunk => {
+      bytes += chunk.length;
+      if (bytes <= 8 * 1024 * 1024) chunks.push(chunk);
+      else chunks.length = 0;
+    });
+    process.stdin.on('end', () => done(bytes <= 8 * 1024 * 1024 ? Buffer.concat(chunks) : undefined));
+    process.stdin.on('error', () => done(undefined));
+    // Continue draining/capturing input even if a renderer exits without consuming it.
+    child.stdin.on('error', () => {});
+    child.stdin.on('close', () => process.stdin.resume());
+    process.stdin.pipe(child.stdin);
+  });
+  const [result] = await Promise.all([rendering, input.then(publish)]);
+  removeSignals();
+  if (result.signal) process.kill(process.pid, result.signal);
+  else process.exitCode = result.code ?? 1;
 }
 
-const child = spawn('/bin/bash', ['-c', args[1]], { stdio: ['pipe', 'pipe', 'pipe'], detached: true });
-// Node handles nonblocking output pipes and backpressure for native renderers too.
-child.stdout.pipe(process.stdout);
-child.stderr.pipe(process.stderr);
-const signals = new Map();
-const removeSignals = () => {
-  for (const [signal, handler] of signals) process.removeListener(signal, handler);
-};
-for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
-  const handler = () => {
-    if (child.pid) {
-      try { process.kill(-child.pid, signal); } catch { /* Renderer may have exited. */ }
-    }
-    removeSignals();
-    process.kill(process.pid, signal);
-  };
-  signals.set(signal, handler);
-  process.on(signal, handler);
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const args = process.argv.slice(2);
+  if (args.length !== 2 || args[0] !== '--command' || !args[1].trim()) {
+    console.error('Usage: statusline-wrapper.mjs --command <existing shell command>');
+    process.exit(2);
+  }
+  await runStatusline(args[1]);
 }
-const rendering = new Promise(done => {
-  child.on('error', error => {
-    console.error(`Status-line renderer failed to start: ${error.message}`);
-    done({ code: 1 });
-  });
-  child.on('close', (code, signal) => done({ code, signal }));
-});
-const input = new Promise(done => {
-  let bytes = 0;
-  const chunks = [];
-  process.stdin.on('data', chunk => {
-    bytes += chunk.length;
-    if (bytes <= 8 * 1024 * 1024) chunks.push(chunk);
-    else chunks.length = 0;
-  });
-  process.stdin.on('end', () => done(bytes <= 8 * 1024 * 1024 ? Buffer.concat(chunks) : undefined));
-  process.stdin.on('error', () => done(undefined));
-  // Continue draining/capturing input even if a renderer exits without consuming it.
-  child.stdin.on('error', () => {});
-  child.stdin.on('close', () => process.stdin.resume());
-  process.stdin.pipe(child.stdin);
-});
-const [result] = await Promise.all([rendering, input.then(publish)]);
-removeSignals();
-if (result.signal) process.kill(process.pid, result.signal);
-else process.exitCode = result.code ?? 1;

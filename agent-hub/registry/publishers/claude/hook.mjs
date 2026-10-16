@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const execute = promisify(execFile);
@@ -54,40 +56,45 @@ async function identify(parseProcesses, fields) {
   return undefined;
 }
 
-try {
-  const chunks = [];
-  let bytes = 0;
-  for await (const chunk of process.stdin) {
-    bytes += chunk.length;
-    // Tool payloads can exceed the registry's message limit; only small metadata is forwarded.
-    if (bytes > 8 * 1024 * 1024) break;
-    chunks.push(chunk);
-  }
-  if (bytes <= 8 * 1024 * 1024) {
-    const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    if (data && typeof data === 'object' && !Array.isArray(data) && !data.agent_id) {
-      const state = activity(data);
-      if (state) {
-        // Keep even a missing daemon dependency from breaking Claude's hook.
-        const [{ request }, { parseProcesses, PS_FIELDS }, { registryDirectory }] = await Promise.all([
-          import('../../src/client.ts'), import('../../src/discovery/processes.ts'), import('../../src/paths.ts'),
-        ]);
-        const reportedAt = Date.now();
-        const identity = await identify(parseProcesses, PS_FIELDS);
-        if (identity) {
-          const session = {};
-          for (const [target, source] of [['id', 'session_id'], ['file', 'transcript_path'], ['cwd', 'cwd']]) {
-            const value = text(data[source]);
-            if (value !== undefined) session[target] = value;
+/** Publishes one Claude hook event from stdin; never writes output or fails. */
+export async function runHook() {
+  try {
+    const chunks = [];
+    let bytes = 0;
+    for await (const chunk of process.stdin) {
+      bytes += chunk.length;
+      // Tool payloads can exceed the registry's message limit; only small metadata is forwarded.
+      if (bytes > 8 * 1024 * 1024) break;
+      chunks.push(chunk);
+    }
+    if (bytes <= 8 * 1024 * 1024) {
+      const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (data && typeof data === 'object' && !Array.isArray(data) && !data.agent_id) {
+        const state = activity(data);
+        if (state) {
+          // Keep even a missing daemon dependency from breaking Claude's hook.
+          const [{ request }, { parseProcesses, PS_FIELDS }, { registryDirectory }] = await Promise.all([
+            import('../../src/client.ts'), import('../../src/discovery/processes.ts'), import('../../src/paths.ts'),
+          ]);
+          const reportedAt = Date.now();
+          const identity = await identify(parseProcesses, PS_FIELDS);
+          if (identity) {
+            const session = {};
+            for (const [target, source] of [['id', 'session_id'], ['file', 'transcript_path'], ['cwd', 'cwd']]) {
+              const value = text(data[source]);
+              if (value !== undefined) session[target] = value;
+            }
+            const directory = registryDirectory();
+            await request(directory, {
+              version: 1, type: 'publish', harness: 'claude', source: 'claude-hook',
+              process: identity, reportedAt,
+              patch: { ...(Object.keys(session).length ? { session } : {}), activity: state },
+            }, 500);
           }
-          const directory = registryDirectory();
-          await request(directory, {
-            version: 1, type: 'publish', harness: 'claude', source: 'claude-hook',
-            process: identity, reportedAt,
-            patch: { ...(Object.keys(session).length ? { session } : {}), activity: state },
-          }, 500);
         }
       }
     }
-  }
-} catch { /* Best-effort telemetry must never output hook decisions or interrupt Claude. */ }
+  } catch { /* Best-effort telemetry must never output hook decisions or interrupt Claude. */ }
+}
+
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) await runHook();
