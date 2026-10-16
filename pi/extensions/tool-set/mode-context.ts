@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerStateNotice } from "../shared/state-notice.ts";
 import type { Mode, ToolSet } from "./contracts.ts";
 
 const ENTRY_TYPE = "tool-set-mode";
@@ -7,21 +8,13 @@ const ENTRY_TYPE = "tool-set-mode";
 export function registerModeContext(pi: ExtensionAPI, toolSet: ToolSet) {
   let restoring = false;
 
-  function announce() {
-    const mode = toolSet.getMode();
-    pi.sendMessage({
-      customType: "tool-set-mode-context",
-      content: mode === "safe"
-        ? 'Execution policy: SAFE. Tool declarations are unchanged, but write/edit and shell execution (local or remote), and MCP tools not marked read-only, are blocked. Use read-only tools; ls/grep/find and SSH tools are discoverable through tool_search or codemode. Request user approval through change_mode with mode "yolo" if blocked operations are needed.'
-        : "Execution policy: YOLO. SAFE restrictions are lifted; other permission guards still apply. Tool declarations and SSH connection state are unchanged.",
-      display: false,
-    }, { triggerTurn: false });
-  }
+  registerStateNotice(pi, "tool-set-mode-context", () => toolSet.getMode() === "safe"
+    ? 'Execution policy: SAFE. Tool declarations are unchanged, but write/edit and shell execution (local or remote), and MCP tools not marked read-only, are blocked. Use read-only tools; ls/grep/find and SSH tools are discoverable through tool_search or codemode. Request user approval through change_mode with mode "yolo" if blocked operations are needed.'
+    : "Execution policy: YOLO. SAFE restrictions are lifted; other permission guards still apply. Tool declarations and SSH connection state are unchanged.");
 
   const unsubscribe = toolSet.onChange(() => {
     if (restoring) return;
     pi.appendEntry(ENTRY_TYPE, { mode: toolSet.getMode() });
-    announce();
   });
 
   pi.on("session_start", (_event, ctx) => {
@@ -35,8 +28,6 @@ export function registerModeContext(pi: ExtensionAPI, toolSet: ToolSet) {
     }
     restoring = true;
     try { toolSet.setMode(mode); } finally { restoring = false; }
-    announce();
   });
-  pi.on("session_tree", announce);
   pi.on("session_shutdown", () => unsubscribe());
 }

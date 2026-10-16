@@ -10,6 +10,7 @@ import {
   createStylishWriteTool,
 } from "../stylish-tools/factories.ts";
 import { clearOperationsOverride, setOperationsOverride } from "../stylish-tools/overrides.ts";
+import { registerStateNotice } from "../shared/state-notice.ts";
 import { getRequiredToolSet } from "../tool-set/service.ts";
 import { connectSsh, listSshConfigHosts } from "./connection.ts";
 import {
@@ -138,27 +139,18 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setStatus(SSH_REMOTE_TOOLS_STATUS_KEY, sessionSsh ? ctx.ui.theme.fg("dim", "remote: deferred") : undefined);
   }
 
-  function announceConnection() {
-    pi.sendMessage({
-      customType: "ssh-connection-context",
-      content: cliSsh
-        ? `SSH override mode is active: unqualified read/write/edit/bash/grep/ls/find tools execute on ${cliSsh.remote}:${cliSsh.remoteCwd}, not locally. The _remote tools require a separate /ssh connection and are unavailable in this mode. Execution permissions are unchanged.`
-        : sessionSsh
-        ? `SSH connected to ${sessionSsh.remote}:${sessionSsh.remoteCwd}. The deferred read_remote/write_remote/edit_remote/bash_remote/grep_remote/ls_remote/find_remote tools target this host; discover them through tool_search or codemode. Unqualified tools still operate locally. Execution permissions are unchanged.`
-        : "SSH disconnected. Remote tools remain discoverable but cannot execute until the user connects through /ssh. Unqualified tools still operate locally.",
-      display: false,
-    }, { triggerTurn: false });
-  }
+  registerStateNotice(pi, "ssh-connection-context", () => cliSsh
+    ? `SSH override mode is active: unqualified read/write/edit/bash/grep/ls/find tools execute on ${cliSsh.remote}:${cliSsh.remoteCwd}, not locally. The _remote tools require a separate /ssh connection and are unavailable in this mode. Execution permissions are unchanged.`
+    : sessionSsh
+    ? `SSH connected to ${sessionSsh.remote}:${sessionSsh.remoteCwd}. The deferred read_remote/write_remote/edit_remote/bash_remote/grep_remote/ls_remote/find_remote tools target this host; discover them through tool_search or codemode. Unqualified tools still operate locally. Execution permissions are unchanged.`
+    : "SSH disconnected. Remote tools remain discoverable but cannot execute until the user connects through /ssh. Unqualified tools still operate locally.");
 
   pi.on("session_start", async (_event, ctx) => {
     getRequiredToolSet().addBlockedTools(["write_remote", "edit_remote", "bash_remote"]);
     updateRemoteToolsStatus(ctx);
 
     const arg = pi.getFlag("ssh") as string | undefined;
-    if (!arg) {
-      announceConnection();
-      return;
-    }
+    if (!arg) return;
 
     cliSsh = await connectSsh(arg);
     setOperationsOverride({
@@ -172,7 +164,6 @@ export default function (pi: ExtensionAPI) {
       tag: cliSsh.remote,
     });
     ctx.ui.setStatus(SSH_STATUS_KEY, sshStatusText(ctx.ui.theme, "SSH", cliSsh));
-    announceConnection();
     ctx.ui.notify(
       `SSH override mode: ${cliSsh.remote}:${cliSsh.remoteCwd} (read/write/edit/bash/grep/ls/find run remotely)`,
       "info",
@@ -217,7 +208,6 @@ export default function (pi: ExtensionAPI) {
         const previous = sessionSsh;
         sessionSsh = null;
         updateRemoteToolsStatus(ctx);
-        announceConnection();
         await previous.close();
         ctx.ui.notify("SSH disconnected.", "info");
         return;
@@ -233,7 +223,6 @@ export default function (pi: ExtensionAPI) {
       const previous = sessionSsh;
       sessionSsh = next;
       updateRemoteToolsStatus(ctx);
-      announceConnection();
       await previous?.close();
       ctx.ui.notify(
         `SSH connected: ${sessionSsh.remote}:${sessionSsh.remoteCwd} — remote tools are deferred (tool_search or codemode).`,
@@ -241,8 +230,6 @@ export default function (pi: ExtensionAPI) {
       );
     },
   });
-
-  pi.on("session_tree", announceConnection);
 
   // Handle user ! commands via SSH — only in CLI override mode, since in
   // session mode local bash remains the default and bash_remote is opt-in.

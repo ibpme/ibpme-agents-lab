@@ -32,14 +32,24 @@ export function extensionTestHost(initial: string[] = ["read", "write", "edit", 
   const ctx = {
     cwd: process.cwd(), mode: "tui", hasUI: true,
     ui: { theme, setStatus() {}, notify() {}, confirm: async () => false },
-    sessionManager: { getEntries: () => entries, getBranch: () => entries },
+    sessionManager: {
+      getEntries: () => entries, getBranch: () => entries,
+      buildSessionProjection: () => ({ messages: messages.map((message) => ({ role: "custom", ...message })) }),
+    },
   } as unknown as ExtensionContext;
   return {
     pi, ctx, tools, commands, messages, entries, handlers,
     loadoutWrites: () => loadoutWrites,
     async emit(name: string, event: object = {}) {
       const results = [];
-      for (const handler of handlers.get(name) ?? []) results.push(await handler({ type: name, ...event }, ctx));
+      for (const handler of handlers.get(name) ?? []) {
+        const result = await handler({ type: name, context: { contextMessages: messages.map((message) => ({ role: "custom", ...message })) }, ...event }, ctx);
+        results.push(result);
+        if (result?.message) messages.push(result.message);
+        for (const entry of result?.entries ?? []) {
+          if (entry.type === "custom_message") messages.push(entry);
+        }
+      }
       return results;
     },
   };

@@ -75,10 +75,15 @@ Requires Pi 1.3.0 or newer for native restoration of tools loaded during a sessi
   Other extension tools retain their existing policy unless explicitly registered as blocked.
 - `change_mode` remains declared in both modes and requests user confirmation before leaving SAFE.
   It is model-only: scripts cannot use it to open approval dialogs. Without a UI, escalation is denied.
-- Mode changes append context notices instead of rewriting the system prompt or earlier messages.
+- Permission enforcement, the status badge, and mode persistence update immediately. Model notices
+  are coalesced: idle toggles append nothing until a run starts, when only the final state is announced
+  if it differs from the latest notice in the current projected context. A round trip to the already
+  announced mode adds no notice. Mid-run changes are announced at the turn boundary without forcing
+  another model response. Notices remain visible in the TUI (`display: true`).
   New sessions default to YOLO, preserving the previous default. Explicit choices are saved in session
   metadata and restored on resume/reload. Permissions are live session-wide control: `/tree` does not
-  rewind them or reset SAFE to YOLO, and appends the current policy to the destination branch.
+  rewind them or reset SAFE to YOLO. Notices missing from the destination branch or compacted context
+  are restored at the next run/turn boundary; already-present notices are not repeated.
 - Local `ls`, `grep`, and `find`, and all seven SSH `_remote` tools, are registered with **deferred**
   exposure. Codemode can call them without adding declarations; `tool_search` can load them for direct
   calls. Once loaded, tools may remain declared across turns and resume. Permission switches do not
@@ -87,10 +92,15 @@ Requires Pi 1.3.0 or newer for native restoration of tools loaded during a sessi
 - `/ssh user@host[:/path]` connects the deferred remote tools; unqualified tools remain local.
   `/ssh off` disconnects without changing tool exposure or declarations. Disconnected remote tools
   remain discoverable, but execution fails rather than falling back to local I/O. Connections are not
-  persisted; reconnect after resume. Connection/target changes append context notices.
+  persisted; reconnect after resume. Connection/target notices use the same run/turn-boundary
+  coalescing as permission notices, while connection changes and user-facing status update immediately.
 - `--ssh user@host[:/path]` is distinct: it redirects the unqualified tools to that remote for the
   session. Their exposure and execution permissions are unchanged.
 - `/tools` shows reachability separately from permission, for example `deferred · blocked (SAFE)`.
 
 SAFE is a harness execution policy, not an operating-system sandbox. MCP read-only annotations are
 server assertions, not verified guarantees; trusted extensions can perform I/O outside nested tool calls.
+
+Questionnaire re-answer messages are intentionally not coalesced: they carry revised user answers and
+start a new model run immediately, rather than reporting an intermediate configuration state. Usage
+statistics and saved permission metadata do not enter model context and need no notice coalescing.

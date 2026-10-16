@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream, InMemoryCredentialStore, type AssistantMessage } from "@earendil-works/pi-ai";
 import {
   createAgentSession, createCodemodeExtension, createToolSearchExtension,
   DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, initTheme,
@@ -29,13 +29,15 @@ test("real Pi 1.3 session preserves restored declarations and gates codemode's d
     role: "system", content: "Restored session", timestamp: 0,
     toolsAdded: ["read", "write", "edit", "bash", "grep"].map((name) => ({ name, description: name, parameters: {} })),
   });
+  const credentials = new InMemoryCredentialStore();
+  await credentials.modify("openai", async () => ({ type: "api_key", key: "test-not-used-for-network" }));
   const runtime = await ModelRuntime.create({
-    credentials: new InMemoryCredentialStore(), modelsPath: null,
+    credentials, modelsPath: null,
     allowModelNetwork: false, refreshOnCreate: false,
   });
   const { session } = await createAgentSession({
     cwd: dir, agentDir: dir, resourceLoader: loader, sessionManager: manager,
-    settingsManager, modelRuntime: runtime, model: runtime.getModels()[0],
+    settingsManager, modelRuntime: runtime, model: runtime.getModels("openai")[0],
   });
   t.after(async () => {
     await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
@@ -57,8 +59,28 @@ test("real Pi 1.3 session preserves restored declarations and gates codemode's d
   }
   assert.ok(!session.getCallableToolNames().includes("change_mode"));
 
+  function response(content: AssistantMessage["content"], stopReason: "stop" | "toolUse" = "stop") {
+    const stream = createAssistantMessageEventStream();
+    stream.push({ type: "done", reason: stopReason, message: {
+      role: "assistant", api: "openai-responses", provider: "openai", model: "test", stopReason, timestamp: Date.now(), content,
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    } });
+    return stream;
+  }
+  // Replace only the provider call; lifecycle, projection, persistence and tools are real Pi.
+  session.agent.streamFunction = () => response([{ type: "text", text: "Acknowledged" }]);
+  const notices = () => session.messages.filter((message) => message.role === "custom");
   await session.prompt("/safe");
-  assert.ok(session.messages.some((message) => message.role === "custom" && String(message.content).includes("Execution policy: SAFE")), "mode notice must not wait for another user prompt");
+  assert.equal(notices().length, 0, "idle commands must not append notices");
+  await session.prompt("Inspect permissions");
+  assert.equal(notices().length, 2, "mode and SSH notices must both reach the run");
+  assert.ok(notices().some((message) => String(message.content).includes("Execution policy: SAFE")));
+  const announced = notices().length;
+  await session.prompt("/yolo");
+  await session.prompt("/safe");
+  await session.prompt("Still inspecting");
+  assert.equal(notices().length, announced, "idle round trips must not add notices");
   assert.equal(session.systemPrompt, initialPrompt);
   assert.deepEqual(session.agent.state.tools.map(({ name, description, parameters }) => ({ name, description, parameters })), declarations);
   assert.deepEqual(session.getActiveToolNames(), active);
@@ -98,4 +120,30 @@ test("real Pi 1.3 session preserves restored declarations and gates codemode's d
   assert.match(JSON.stringify(remote.content), /Blocked by SAFE/);
   await session.prompt("/yolo");
   assert.deepEqual(session.getActiveToolNames(), discoveredLoadout);
+
+  let requests = 0;
+  session.agent.streamFunction = async (_model, context) => {
+    requests++;
+    if (requests === 1) {
+      await session.prompt("/safe");
+      return response([{ type: "toolCall", id: "mid-run-read", name: "read", arguments: { path: blockedPath } }], "toolUse");
+    }
+    const text = JSON.stringify(context.messages);
+    assert.ok(text.lastIndexOf("Execution policy: SAFE") > text.lastIndexOf('"role":"toolResult"'), "mid-run notice must follow the tool result and reach the next request");
+    return response([{ type: "text", text: "Done" }]);
+  };
+  await session.prompt("Inspect the file");
+  assert.equal(requests, 2, "notice must not force another provider request");
+
+  // Retain only the final assistant response, as a compaction that drops both notices would.
+  manager.appendCompaction("Earlier work summarized", manager.getLeafId()!, 0);
+  session.refreshContext();
+  assert.equal(notices().length, 0);
+  session.agent.streamFunction = () => response([{ type: "text", text: "After compaction" }]);
+  await session.prompt("Continue inspecting");
+  assert.equal(notices().length, 2);
+  assert.ok(notices().some((message) => String(message.content).includes("Execution policy: SAFE")));
+  await session.prompt("Continue again");
+  assert.equal(notices().length, 2);
+  assert.deepEqual(errors, []);
 });

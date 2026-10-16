@@ -10,23 +10,69 @@ function setup() {
   return h;
 }
 
-test("startup and permission switches preserve restored tools and append mode notices", async (t) => {
+test("idle permission changes persist immediately but announce only the final state at run start", async (t) => {
   const h = setup();
   t.after(() => h.emit("session_shutdown"));
   await h.emit("session_start");
+  assert.equal(h.messages.length, 0);
   const original = h.pi.getActiveTools();
-  const before = [...h.messages];
+  await h.commands.get("safe")!.handler("", h.ctx);
+  await h.commands.get("yolo")!.handler("", h.ctx);
   await h.commands.get("safe")!.handler("", h.ctx);
   assert.equal(getRequiredToolSet().getMode(), "safe");
+  assert.equal(h.entries.length, 3);
+  assert.equal(h.messages.length, 0);
+  await h.emit("before_agent_start");
+  assert.equal(h.messages.length, 1);
+  assert.match(String(h.messages[0].content), /SAFE/);
+  assert.match(String(h.messages[0].content), /change_mode/);
+  assert.equal(h.messages[0].display, true);
+  assert.equal(h.handlers.has("context"), false);
   assert.deepEqual(h.pi.getActiveTools(), original);
   assert.equal(h.loadoutWrites(), 0);
-  assert.deepEqual(h.messages.slice(0, before.length), before);
-  assert.match(String(h.messages.at(-1)?.content), /SAFE/);
-  assert.match(String(h.messages.at(-1)?.content), /change_mode/);
-  assert.equal(h.handlers.has("context"), false);
+});
+
+test("returning to the already announced mode does not add a notice", async (t) => {
+  const h = setup();
+  t.after(() => h.emit("session_shutdown"));
+  await h.emit("session_start");
+  await h.emit("before_agent_start");
+  assert.equal(h.messages.length, 1);
+  await h.commands.get("safe")!.handler("", h.ctx);
   await h.commands.get("yolo")!.handler("", h.ctx);
-  assert.match(String(h.messages.at(-1)?.content), /YOLO/);
-  assert.equal(h.loadoutWrites(), 0);
+  await h.emit("before_agent_start", { messageType: "custom" });
+  assert.equal(h.messages.length, 1);
+});
+
+test("mid-run changes announce at the turn boundary without requesting continuation", async (t) => {
+  const h = setup();
+  t.after(() => h.emit("session_shutdown"));
+  await h.emit("session_start");
+  await h.emit("before_agent_start");
+  await h.commands.get("safe")!.handler("", h.ctx);
+  assert.equal(h.messages.length, 1);
+  const results = await h.emit("turn_end");
+  assert.equal(h.messages.length, 2);
+  assert.match(String(h.messages.at(-1)?.content), /SAFE/);
+  assert.ok(results.every((result) => !result?.continue));
+  await h.emit("turn_end");
+  assert.equal(h.messages.length, 2);
+});
+
+test("tree navigation and compacted-away notices are refreshed only at the next run", async (t) => {
+  const h = setup();
+  t.after(() => h.emit("session_shutdown"));
+  await h.emit("session_start");
+  await h.commands.get("safe")!.handler("", h.ctx);
+  await h.emit("before_agent_start");
+  h.messages.length = 0;
+  await h.emit("session_tree");
+  await h.emit("session_compact");
+  assert.equal(getRequiredToolSet().getMode(), "safe");
+  assert.equal(h.messages.length, 0);
+  await h.emit("before_agent_start");
+  assert.equal(h.messages.length, 1);
+  assert.match(String(h.messages[0].content), /SAFE/);
 });
 
 test("resume restores permission state and tree navigation does not escalate", async (t) => {
