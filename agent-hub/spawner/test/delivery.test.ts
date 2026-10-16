@@ -5,8 +5,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { notifyParent } from '../dist/delivery.js';
-import { atomic, processStart } from '../dist/io.js';
+import { notifyParent } from '../src/delivery.ts';
+import { atomic, processStart } from '../src/io.ts';
 import type { Task } from '../src/types.ts';
 
 test('notifies the verified parent with a stable ID and receiver-side session guard', async t => {

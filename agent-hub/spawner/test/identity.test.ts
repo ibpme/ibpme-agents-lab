@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { agentId, taskSummary } from '../dist/client.js';
+import { agentId, taskSummary } from '../src/client.ts';
 import type { Task } from '../src/types.ts';
 
 test('agent IDs match the messaging identity and distinguish process lifetimes and harnesses', () => {

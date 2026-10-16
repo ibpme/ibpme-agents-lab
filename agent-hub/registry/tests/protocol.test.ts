@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { validateMessage, validateSnapshot } from '../src/protocol.js';
+import { validateMessage, validateSnapshot } from '../src/protocol.ts';
 const base = { version: 1, type: 'publish', harness: 'claude', process: { pid: 1, startedAt: 100 }, source: 'claude-hook', reportedAt: 1000, patch: { activity: { state: 'busy' } } };
 
 test('validates publisher input and rejects invalid source combinations and pane injection', () => {

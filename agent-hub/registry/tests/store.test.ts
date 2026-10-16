@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AgentStore } from '../src/store.js';
-import type { AgentSnapshot, ProcessInfo, PublishMessage } from '../src/types.js';
+import { AgentStore } from '../src/store.ts';
+import type { AgentSnapshot, ProcessInfo, PublishMessage } from '../src/types.ts';
 
 const identity = { pid: 101, startedAt: 100 };
 const processInfo: ProcessInfo = { ...identity, ppid: 1, command: 'pi', args: 'pi' };

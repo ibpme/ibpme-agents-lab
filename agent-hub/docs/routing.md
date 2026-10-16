@@ -85,11 +85,10 @@ server environment for environment-based credentials).
 
 ## Enable at supervisor startup
 
-Build from `agent-hub/`:
+Install dependencies from `agent-hub/`:
 
 ```bash
 npm ci
-npm run build
 ```
 
 Export `TYPESAFE_API_KEY` in the environment used to start the supervisor, then

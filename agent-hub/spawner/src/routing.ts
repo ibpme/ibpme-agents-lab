@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { choice, TypeSafeClient } from '@typesafe-ai/sdk';
-import { createProfileValidator } from './profile-validator.js';
+import { createProfileValidator } from './profile-validator.ts';
 
 export const effortSchema = z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
 const selector = z.string().trim().min(1).max(256).regex(/^[^\s\0]+$/);

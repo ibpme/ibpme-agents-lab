@@ -6,8 +6,8 @@ import { createConnection } from 'node:net';
 import { isAbsolute, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
-import type { SendMessageInput } from './tools.js';
-import { formatAgentMessage } from './message-format.js';
+import type { SendMessageInput } from './tools.ts';
+import { formatAgentMessage } from './message-format.ts';
 import { registryDirectory } from '@agent-hub/registry/paths';
 
 const execute = promisify(execFile);
@@ -22,7 +22,8 @@ const rowSchema = z.object({
 type Agent = z.infer<typeof rowSchema>;
 export interface MessagingOptions { registryDirectory?: string; callerAgentId?: string; callerPid?: number | null; spawnerDirectory?: string; injectParentContext?: boolean; routingEnabled?: boolean; deliverAs?: 'steer' | 'followUp' }
 export class MessagingError extends Error {
-  constructor(public code: string, message: string) { super(message); }
+  code: string;
+  constructor(code: string, message: string) { super(message); this.code = code; }
 }
 const fail = (code: string, message: string): never => { throw new MessagingError(code, message); };
 const fresh = (time: number): boolean => time <= Date.now() + 5000 && Date.now() - time <= 20000;

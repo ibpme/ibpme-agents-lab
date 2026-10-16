@@ -195,7 +195,6 @@ A supervisor limits available/starting child processes to 32.
 
 ```sh
 cd agent-hub/spawner
-npm run build
 npm run typecheck
 npm test
 ```

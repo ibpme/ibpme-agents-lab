@@ -5,8 +5,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { Request, Response } from 'express';
-import { createConfiguredAgentsServer } from './server.js';
-import type { MessagingOptions } from './messaging.js';
+import { createConfiguredAgentsServer } from './server.ts';
+import type { MessagingOptions } from './messaging.ts';
 
 interface Session {
   server: McpServer;

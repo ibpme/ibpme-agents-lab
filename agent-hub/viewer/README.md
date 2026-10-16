@@ -63,7 +63,6 @@ browser is read-only for pane actions.
 
 ```bash
 cd agent-hub
-npm run build
 npm run check --workspace @agent-hub/viewer
 ```
 

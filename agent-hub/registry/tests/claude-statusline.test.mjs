@@ -6,7 +6,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { validateMessage } from '../dist/protocol.js';
+import { validateMessage } from '../src/protocol.ts';
 
 const exec = promisify(execFile);
 const publishers = resolve('publishers/claude');
@@ -45,7 +45,7 @@ async function fixture(t, { root = '/opt/bin/claude claude', reply = true } = {}
   });
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, AGENT_HUB_DIR: hub };
   const start = (input, command = 'cat') => {
-    const child = spawn(process.execPath, [join(publishers, 'statusline-wrapper.mjs'), '--command', command], { env });
+    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', join(publishers, 'statusline-wrapper.mjs'), '--command', command], { env });
     child.stdin.on('error', () => {});
     child.stdin.end(input);
     return child;

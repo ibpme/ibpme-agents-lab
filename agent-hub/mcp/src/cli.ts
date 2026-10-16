@@ -1,8 +1,8 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --disable-warning=ExperimentalWarning
 import { parseArgs } from 'node:util';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { startHttpServer } from './http.js';
-import { createConfiguredAgentsServer } from './server.js';
+import { startHttpServer } from './http.ts';
+import { createConfiguredAgentsServer } from './server.ts';
 
 async function main(): Promise<void> {
   const { values } = parseArgs({ options: {

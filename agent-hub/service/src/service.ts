@@ -6,8 +6,8 @@ import { startDaemon, type Daemon } from '@agent-hub/registry/daemon';
 import { request as registryRequest } from '@agent-hub/registry/client';
 import { startSupervisor } from '@agent-hub/spawner/supervisor';
 import { prepareTmux } from '@agent-hub/spawner/tmux';
-import { request } from './client.js';
-import type { Config } from './config.js';
+import { request } from './client.ts';
+import type { Config } from './config.ts';
 
 export async function startService(config: Config) {
   const socketPath = join(config.directory, 'hub.sock');

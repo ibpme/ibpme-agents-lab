@@ -2,12 +2,12 @@ import { chmod, lstat, unlink } from 'node:fs/promises';
 import { createConnection, createServer, type Socket } from 'node:net';
 import { join } from 'node:path';
 import lockfile from 'proper-lockfile';
-import { discover } from './discovery/index.js';
-import { listProcesses } from './discovery/processes.js';
-import { AgentStore } from './store.js';
-import { MAX_MESSAGE_BYTES, validateMessage } from './protocol.js';
-import { persist, privateDirectory } from './persistence.js';
-import type { DiscoveryResult, Health, ProcessInfo, Response } from './types.js';
+import { discover } from './discovery/index.ts';
+import { listProcesses } from './discovery/processes.ts';
+import { AgentStore } from './store.ts';
+import { MAX_MESSAGE_BYTES, validateMessage } from './protocol.ts';
+import { persist, privateDirectory } from './persistence.ts';
+import type { DiscoveryResult, Health, ProcessInfo, Response } from './types.ts';
 
 export interface DaemonOptions { directory: string; intervalMs?: number; tmuxServers?: string[]; activityTtlMs?: number; collect?: () => Promise<DiscoveryResult>; verify?: (pid: number) => Promise<ProcessInfo | undefined> }
 export interface Daemon { closed: Promise<void>; stop(): Promise<void>; reconcile(): Promise<void> }

@@ -123,7 +123,7 @@ test('package entry points load and implementation deep imports are blocked', as
   assert.equal(typeof supervisor.startSupervisor, 'function');
   assert.equal(typeof reader.readRegistry, 'function');
   assert.equal(typeof listener.startListener, 'function');
-  for (const specifier of ['@agent-hub/registry/src/types.ts', '@agent-hub/spawner/dist/io.js', '@agent-hub/viewer/session.ts']) {
+  for (const specifier of ['@agent-hub/registry/src/types.ts', '@agent-hub/spawner/src/io.ts', '@agent-hub/viewer/session.ts']) {
     await assert.rejects(import(specifier), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
   }
 });

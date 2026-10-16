@@ -1,5 +1,5 @@
-import type { Pane, ProcessInfo, Runner } from '../types.js';
-import { ancestryDistance } from './processes.js';
+import type { Pane, ProcessInfo, Runner } from '../types.ts';
+import { ancestryDistance } from './processes.ts';
 interface RootPane extends Pane { pid: number }
 const FORMAT = ['#{session_id}', '#{session_name}', '#{window_index}', '#{pane_index}', '#{pane_id}', '#{pane_pid}', '#{pane_current_path}'].join('\t');
 export async function listPanes(server: string, runner: Runner): Promise<RootPane[]> {

@@ -1,7 +1,7 @@
 import { createSpawnerClient } from '@agent-hub/spawner';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerAgentTools } from './tools.js';
-import type { MessagingOptions } from './messaging.js';
+import { registerAgentTools } from './tools.ts';
+import type { MessagingOptions } from './messaging.ts';
 
 export function createAgentsServer(options: MessagingOptions = {}): McpServer {
   const server = new McpServer({ name: 'agents', version: '0.1.0' }, {

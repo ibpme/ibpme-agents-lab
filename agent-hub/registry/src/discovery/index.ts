@@ -1,8 +1,8 @@
-import type { ActivityState, AgentSnapshot, DiscoveryResult, Runner } from '../types.js';
-import { listProcesses, run } from './processes.js';
-import { parseClaudeSessions, type ClaudeSession } from './claude.js';
-import { isInteractive, isPi } from './pi.js';
-import { listPanes, matchPane } from './tmux.js';
+import type { ActivityState, AgentSnapshot, DiscoveryResult, Runner } from '../types.ts';
+import { listProcesses, run } from './processes.ts';
+import { parseClaudeSessions, type ClaudeSession } from './claude.ts';
+import { isInteractive, isPi } from './pi.ts';
+import { listPanes, matchPane } from './tmux.ts';
 
 export async function discover(options: { tmuxServers: string[]; runner?: Runner; now?: () => number }): Promise<DiscoveryResult> {
   const runner = options.runner ?? run;

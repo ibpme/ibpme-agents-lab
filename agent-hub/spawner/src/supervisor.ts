@@ -1,5 +1,5 @@
-import { createRouter, loadRoutingConfig, validateRoutingHint } from './routing.js';
-import type { RoutingConfig, RoutingDependencies } from './routing.js';
+import { createRouter, loadRoutingConfig, validateRoutingHint } from './routing.ts';
+import type { RoutingConfig, RoutingDependencies } from './routing.ts';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
@@ -8,10 +8,10 @@ import { createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { atomic, json, execute, processStart } from './io.js';
-import { taskSummary } from './client.js';
-import { notifyParent } from './delivery.js';
-import type { Completion, Ready, Request, SpawnInput, Task } from './types.js';
+import { atomic, json, execute, processStart } from './io.ts';
+import { taskSummary } from './client.ts';
+import { notifyParent } from './delivery.ts';
+import type { Completion, Ready, Request, SpawnInput, Task } from './types.ts';
 
 export interface SupervisorOptions {
   directory: string;
@@ -171,7 +171,7 @@ export async function startSupervisor(options: SupervisorOptions) {
       const log = await open(join(task.directory, 'stderr.log'), 'a', 0o600);
       try {
         shutdown.signal.throwIfAborted();
-        const child = spawn(process.execPath, [fileURLToPath(new URL('./headless-runner.js', import.meta.url)), options.pi ?? 'pi', '--mode', 'rpc', ...args], {
+        const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fileURLToPath(new URL('./headless-runner.ts', import.meta.url)), options.pi ?? 'pi', '--mode', 'rpc', ...args], {
           cwd: task.input.cwd, env: { ...process.env, AGENT_HUB_SPAWN_DIR: task.directory, ...(options.hubDirectory ? { AGENT_HUB_DIR: options.hubDirectory } : {}) },
           stdio: ['ignore', 'ignore', log.fd], detached: true,
         });

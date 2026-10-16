@@ -8,14 +8,12 @@
     "node": ">=22.18.0"
   },
   "bin": {
-    "agents-mcp": "dist/cli.js"
+    "agents-mcp": "src/cli.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
-    "test": "npm run build && tsx --test test/*.test.ts",
-    "start": "node dist/cli.js",
-    "dev": "tsx src/cli.ts"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test 'test/*.test.ts'",
+    "start": "node src/cli.ts"
   },
   "dependencies": {
     "@agent-hub/registry": "0.1.0",

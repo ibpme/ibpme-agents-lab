@@ -26,7 +26,6 @@ See [setup](setup.md) to install the `agent-hub` command.
 ```bash
 cd agent-hub
 npm ci
-npm run build
 npm test --workspace @agent-hub/registry
 ```
 
@@ -147,7 +146,7 @@ globally unique process identifier. `observedAt`, `reportedAt`, and daemon healt
 timestamps use millisecond-resolution clock readings.
 
 Publishers can obtain numeric process identities through the exported
-`listProcesses()` helper in `dist/discovery/processes.js`. Date strings are not
+`listProcesses()` helper in `src/discovery/processes.ts`. Date strings are not
 accepted as `process.startedAt`.
 
 - Pi processes are recognized by their command or known Node/Bun entrypoint.
@@ -239,7 +238,7 @@ replace it; the hook is not an authoritative or permanently preferred source.
 command-hook JSON on stdin and publishes activity/session metadata with source
 `claude-hook`. **It does not publish model metadata or touch the status line.**
 
-To explicitly enable it, build the workspace, then run:
+To explicitly enable it, run:
 
 ```bash
 agent-hub claude install --hooks
@@ -261,8 +260,8 @@ does not start the daemon. Restart Claude Code or
 review `/hooks` to ensure the new hook configuration is loaded.
 
 The installer uses the current Node executable and an absolute path to the hook;
-keep both paths available. The hook imports the built `dist/` client and process
-parser. An unbuilt/moved installation silently skips publication. Claude must
+keep both paths available. The hook imports the registry's `src/` client and process
+parser. A moved or broken installation silently skips publication. Claude must
 inherit the same state directory configuration as the daemon:
 `AGENT_HUB_DIR`, then `XDG_STATE_HOME`, then `~/.local/state/agent-hub`.
 
@@ -357,7 +356,7 @@ until rendering and the bounded publication attempt finish; telemetry can delay
 final command completion, but not renderer output. Cancellation stops the wrapper
 without waiting for telemetry.
 
-The wrapper imports the built `dist/` client and process parser. Claude must
+The wrapper imports the registry's `src/` client and process parser. Claude must
 inherit the same state-directory environment as the daemon (`AGENT_HUB_DIR`,
 then `XDG_STATE_HOME`, then `~/.local/state/agent-hub`). There is no heartbeat:
 model/session metadata is republished on the next Claude status-line invocation,
@@ -442,7 +441,7 @@ agent-hub publish < message.json
 Other TypeScript/JavaScript publishers can use the bounded-time client:
 
 ```js
-import { request } from './dist/client.js';
+import { request } from './src/client.ts';
 
 try {
   const response = await request(runtimeDirectory, publication, 1000);

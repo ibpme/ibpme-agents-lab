@@ -41,7 +41,7 @@ try {
   if (uninstall && !state) {
     console.log('Claude registry hooks are not installed.');
   } else {
-    const command = state?.command ?? `${quote(process.execPath)} ${quote(join(dirname(fileURLToPath(import.meta.url)), 'hook.mjs'))}`;
+    const command = state?.command ?? `${quote(process.execPath)} --disable-warning=ExperimentalWarning ${quote(join(dirname(fileURLToPath(import.meta.url)), 'hook.mjs'))}`;
     const hooks = config.hooks ?? {};
     const originalEvents = state?.originalEvents ?? Object.keys(hooks);
     const hadHooks = state?.hadHooks ?? config.hooks !== undefined;

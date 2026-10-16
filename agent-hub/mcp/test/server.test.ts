@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createAgentsServer } from '../src/server.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createAgentsServer } from '../src/server.ts';
+
+// Keep these tests independent of a hub running in the default state directory.
+process.env.AGENT_HUB_DIR = mkdtempSync(join(tmpdir(), 'mcp-hub-'));
 
 const calls = [
   { name: 'spawn_agent', arguments: { harness: 'any-backend', prompt: 'Start here' } },

@@ -68,9 +68,9 @@ try {
     if (data && typeof data === 'object' && !Array.isArray(data) && !data.agent_id) {
       const state = activity(data);
       if (state) {
-        // Keep even a missing/unbuilt daemon dependency from breaking Claude's hook.
+        // Keep even a missing daemon dependency from breaking Claude's hook.
         const [{ request }, { parseProcesses, PS_FIELDS }, { registryDirectory }] = await Promise.all([
-          import('../../dist/client.js'), import('../../dist/discovery/processes.js'), import('../../dist/paths.js'),
+          import('../../src/client.ts'), import('../../src/discovery/processes.ts'), import('../../src/paths.ts'),
         ]);
         const reportedAt = Date.now();
         const identity = await identify(parseProcesses, PS_FIELDS);

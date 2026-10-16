@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { test } from 'node:test';
-import { createRouter, parseRoutingConfig } from '../dist/routing.js';
+import { createRouter, parseRoutingConfig } from '../src/routing.ts';
 import type { Classifier, RoutingDependencies } from '../src/routing.ts';
 
 const config = () => parseRoutingConfig({ routing: {

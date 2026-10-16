@@ -7,27 +7,14 @@
     "node": ">=22.18.0"
   },
   "exports": {
-    ".": {
-      "types": "./dist/client.d.ts",
-      "import": "./dist/client.js"
-    },
-    "./supervisor": {
-      "types": "./dist/supervisor.d.ts",
-      "import": "./dist/supervisor.js"
-    },
-    "./tmux": {
-      "types": "./dist/tmux.d.ts",
-      "import": "./dist/tmux.js"
-    },
-    "./routing": {
-      "types": "./dist/routing.d.ts",
-      "import": "./dist/routing.js"
-    }
+    ".": "./src/client.ts",
+    "./supervisor": "./src/supervisor.ts",
+    "./tmux": "./src/tmux.ts",
+    "./routing": "./src/routing.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
-    "test": "npm run build && node --experimental-strip-types --test test/*.test.ts test/*.test.mjs"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test 'test/*.test.ts' 'test/*.test.mjs'"
   },
   "dependencies": {
     "@agent-hub/pi": "0.1.0",

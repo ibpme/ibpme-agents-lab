@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { listProcesses, parseProcesses } from '../src/discovery/processes.js';
+import { listProcesses, parseProcesses } from '../src/discovery/processes.ts';
 
 test('UTC ps start time becomes epoch milliseconds regardless of reader timezone', () => {
   const previous = process.env.TZ;

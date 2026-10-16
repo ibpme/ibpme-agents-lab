@@ -38,7 +38,7 @@ pi -e ./agent-hub/pi/extensions/agents/index.ts
 
 Inside tmux, `/agents` launches the standalone browser in a 90% tmux popup instead
 of Pi's overlay. Install its dependencies with
-`cd agent-hub && npm ci && npm run build`. The popup runs the viewer with Pi's own Node.
+`cd agent-hub && npm ci`. The popup runs the viewer with Pi's own Node.
 Outside tmux, `/agents` retains its native overlay.
 
 The browser can also launch independently from any shell or a tmux keybinding;
@@ -222,7 +222,7 @@ Shared implementation and tests live in `agent-hub/viewer/`:
 - `tmux-actions.ts`: numeric identity/ancestry checks and pane operations.
 
 Snapshot types and schema come from `agent-hub/registry`; the reader has no dependency
-on its build output or daemon installation. Ajv is installed with the shared viewer package.
+on daemon installation. Ajv is installed with the shared viewer package.
 
 ```bash
 (cd agent-hub && npm run check)

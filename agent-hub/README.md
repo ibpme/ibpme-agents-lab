@@ -18,7 +18,6 @@ Requires Node.js 22.18+ and npm 10+ on Linux or macOS. From the repository root:
 ```bash
 cd agent-hub
 npm ci
-npm run build
 npm run cli:install
 ```
 
@@ -42,21 +41,12 @@ watch additional servers; the first selects the spawning server.
 
 ## Picking up changes
 
-`agent-hub` links to this checkout, so `cli:install` never needs re-running.
-Source edits take effect as follows:
-
-| Edited | Takes effect |
-|---|---|
-| `service/`, `registry/`, `spawner/`, `mcp/` | after `npm run build` |
-| `viewer/` | next `agent-hub view` or `/agents` |
-| `pi/` extensions | after `/reload` in pi |
-| `registry/publishers/claude/` | next hook or status-line call |
-
-The viewer, pi extensions and Claude publishers import the registry's built
-`dist/`, so registry changes reach them only after a build. After building,
-restart a running hub (`agent-hub stop && agent-hub start --background`) and
-reconnect MCP clients. After `git pull`, run `npm ci` if dependencies changed,
-then `npm run build`.
+`agent-hub` links to this checkout and Node runs its TypeScript source directly,
+so there is no build step and `cli:install` never needs re-running. Edits apply
+to the next command, `agent-hub view`, hook or status-line call. Long-running
+processes keep the code they started with: restart the hub
+(`agent-hub stop && agent-hub start --background`), `/reload` pi, and reconnect
+MCP clients. After `git pull`, run `npm ci` if dependencies changed.
 
 See **[docs/](docs/README.md)** for installation, Pi setup, protocols, security,
 architecture, and development checks.
@@ -71,12 +61,11 @@ use the `@agent-hub/` scope. `agent-hub` (in `service/`) and `agents-mcp` (in
 ```bash
 cd agent-hub
 npm ci
-npm run build       # compiled packages, in dependency order
-npm run typecheck   # builds prerequisites, then checks every package and tests
-npm test            # builds prerequisites, then runs boundary and package tests
+npm run typecheck   # checks every package and its tests
+npm test            # boundary and package tests
 npm run check       # typecheck and tests
 ```
 
-After the root build, target individual packages with, for example,
+Target individual packages with, for example,
 `npm test --workspace @agent-hub/mcp`. See [workspace conventions](docs/workspace.md)
 for exports, dependency boundaries, and runtime-specific TypeScript settings.

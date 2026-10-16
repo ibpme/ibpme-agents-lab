@@ -6,7 +6,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { validateMessage } from '../dist/protocol.js';
+import { validateMessage } from '../src/protocol.ts';
 const exec = promisify(execFile);
 const publishers = resolve('publishers/claude');
 const payload = { session_id: 'session-1', transcript_path: '/repo/session.jsonl', cwd: '/repo' };
@@ -41,7 +41,7 @@ async function fixture(t, { ancestor = true, reply = true, root } = {}) {
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, AGENT_HUB_DIR: hub };
   async function run(script, input, args = []) {
     return new Promise((done, reject) => {
-      const child = spawn(process.execPath, [join(publishers, script), ...args], { env });
+      const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', join(publishers, script), ...args], { env });
       let stdout = '', stderr = '';
       child.stdout.on('data', data => { stdout += data; });
       child.stderr.on('data', data => { stderr += data; });

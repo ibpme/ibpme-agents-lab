@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import type { ProcessInfo } from '../types.js';
+import type { ProcessInfo } from '../types.ts';
 export function isPi(info: ProcessInfo): boolean {
   const command = basename(info.command);
   if (command === 'pi') return true;

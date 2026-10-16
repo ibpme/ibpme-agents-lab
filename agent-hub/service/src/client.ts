@@ -1,7 +1,7 @@
 import { createConnection } from 'node:net';
 import { join } from 'node:path';
 import type { Health } from '@agent-hub/registry/types';
-import type { Config } from './config.js';
+import type { Config } from './config.ts';
 
 export interface HubResponse {
   ok: boolean;

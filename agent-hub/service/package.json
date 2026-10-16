@@ -7,12 +7,11 @@
     "node": ">=22.18.0"
   },
   "bin": {
-    "agent-hub": "dist/cli.js"
+    "agent-hub": "src/cli.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "test": "node --test 'test/*.test.mjs'",
     "cli:install": "node scripts/install-cli.mjs install",
     "cli:uninstall": "node scripts/install-cli.mjs uninstall"
   },

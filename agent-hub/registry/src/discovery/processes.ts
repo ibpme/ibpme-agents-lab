@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { ProcessInfo, Runner } from '../types.js';
+import type { ProcessInfo, Runner } from '../types.ts';
 
 const execute = promisify(execFile);
 export const run: Runner = async (command, args) => (await execute(command, args, {

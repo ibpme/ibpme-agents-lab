@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
 const execute = promisify(execFile);
-const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+const cli = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'routing-cli-'));
   t.after(() => rm(directory, { recursive: true, force: true }));

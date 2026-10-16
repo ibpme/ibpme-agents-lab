@@ -1,4 +1,4 @@
-import type { AgentSnapshot, DiscoveryResult, ProcessInfo, PublishMessage } from './types.js';
+import type { AgentSnapshot, DiscoveryResult, ProcessInfo, PublishMessage } from './types.ts';
 
 type Stamp = { at: number; priority: number };
 interface Entry { row: AgentSnapshot; clocks: Map<string, Stamp> }

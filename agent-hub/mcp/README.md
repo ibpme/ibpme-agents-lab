@@ -12,7 +12,6 @@ installation is required. From the repository root:
 ```bash
 cd agent-hub
 npm ci
-npm run build
 npm run cli:install
 agent-hub start --background
 agent-hub status
@@ -42,7 +41,7 @@ use the absolute Node executable path from `command -v node`.
 For Pi versions with built-in MCP support, register the server at user scope:
 
 ```bash
-pi mcp add agent-hub -- node /absolute/path/to/ibpme-agents-lab/agent-hub/mcp/dist/cli.js
+pi mcp add agent-hub -- node /absolute/path/to/ibpme-agents-lab/agent-hub/mcp/src/cli.ts
 pi mcp list
 ```
 
@@ -56,7 +55,7 @@ Alternatively, merge this entry into `~/.pi/agent/mcp.json` (user scope) or
     "agent-hub": {
       "command": "node",
       "args": [
-        "/absolute/path/to/ibpme-agents-lab/agent-hub/mcp/dist/cli.js"
+        "/absolute/path/to/ibpme-agents-lab/agent-hub/mcp/src/cli.ts"
       ]
     }
   }
@@ -98,7 +97,7 @@ the CLI path in the MCP entry's `args` array, then reconnect the server:
 
 ```json
 "args": [
-  "/absolute/path/to/ibpme-agents-lab/agent-hub/mcp/dist/cli.js",
+  "/absolute/path/to/ibpme-agents-lab/agent-hub/mcp/src/cli.ts",
   "--inject-parent-context"
 ]
 ```
@@ -113,7 +112,7 @@ in the child or change automatic final-answer delivery. See the
 Register the local stdio server at user scope:
 
 ```bash
-claude mcp add --transport stdio --scope user agent-hub -- node /absolute/path/to/ibpme-agents-lab/agent-hub/mcp/dist/cli.js
+claude mcp add --transport stdio --scope user agent-hub -- node /absolute/path/to/ibpme-agents-lab/agent-hub/mcp/src/cli.ts
 claude mcp list
 ```
 
@@ -152,16 +151,16 @@ let each client launch its own server rather than detaching a shared one.
 From `agent-hub/`:
 
 ```bash
-node mcp/dist/cli.js                              # stdio
-node mcp/dist/cli.js --deliver-as followUp         # fixed follow-up delivery
-node mcp/dist/cli.js --transport http --port 3000  # loopback /mcp
+node mcp/src/cli.ts                              # stdio
+node mcp/src/cli.ts --deliver-as followUp         # fixed follow-up delivery
+node mcp/src/cli.ts --transport http --port 3000  # loopback /mcp
 ```
 
 Delivery mode is fixed at startup with `--deliver-as steer|followUp` (default
 `steer`) for stdio and HTTP. `send_message` does not accept a delivery-mode argument.
 
-After updating the checkout, run `npm ci` and `npm run build` from `agent-hub/`,
-then reconnect/restart MCP clients. Restart the background service as well when
+After updating the checkout, run `npm ci` from `agent-hub/` if dependencies
+changed, then reconnect/restart MCP clients. Restart the background service as well when
 updating its code:
 
 ```bash

@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { createRouter, loadRoutingConfig } from '@agent-hub/spawner/routing';
-import { resolveConfig } from './config.js';
+import { resolveConfig } from './config.ts';
 
 export const routeUsage = `agent-hub route validate [--config PATH] [--directory PATH]
 agent-hub route test [--config PATH] [--directory PATH] [PROMPT | --prompt TEXT | --stdin]

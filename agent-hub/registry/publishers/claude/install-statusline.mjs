@@ -53,7 +53,7 @@ try {
     }
     if (state && config.statusLine?.type !== 'command') throw new Error('Status-line type changed since installation; refusing to overwrite it.');
     const originalStatusLine = state?.originalStatusLine ?? config.statusLine;
-    const installedCommand = state?.installedCommand ?? `${quote(process.execPath)} ${quote(join(dirname(fileURLToPath(import.meta.url)), 'statusline-wrapper.mjs'))} --command ${quote(originalStatusLine.command)}`;
+    const installedCommand = state?.installedCommand ?? `${quote(process.execPath)} --disable-warning=ExperimentalWarning ${quote(join(dirname(fileURLToPath(import.meta.url)), 'statusline-wrapper.mjs'))} --command ${quote(originalStatusLine.command)}`;
     // Save recovery information first; repeated installation can finish an interrupted write.
     if (!uninstall && !state) atomicWrite(stateFile, { version: 1, originalStatusLine, installedCommand });
     config.statusLine = { ...config.statusLine, command: uninstall ? originalStatusLine.command : installedCommand };

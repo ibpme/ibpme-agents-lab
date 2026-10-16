@@ -1,10 +1,10 @@
-import { agentId } from './identity.js';
-export { agentId } from './identity.js';
+import { agentId } from './identity.ts';
+export { agentId } from './identity.ts';
 import { join } from 'node:path';
 import { spawnerDirectory } from '@agent-hub/registry/paths';
-import { exchange } from './io.js';
-import type { Request, Task } from './types.js';
-export type { SpawnInput, Parent, Task } from './types.js';
+import { exchange } from './io.ts';
+import type { Request, Task } from './types.ts';
+export type { SpawnInput, Parent, Task } from './types.ts';
 export { spawnerDirectory };
 export function createSpawnerClient(directory = spawnerDirectory()) {
   return {

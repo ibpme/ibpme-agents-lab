@@ -24,12 +24,11 @@ and popups. From the repository root:
 ```bash
 cd agent-hub
 npm ci
-npm run build
 npm run cli:install
 ```
 
 `cli:install` creates `~/.local/bin/agent-hub` as a symlink to this checkout's
-built CLI. Keep the checkout available and `~/.local/bin` on `PATH`. Re-running it
+CLI source; Node runs it directly, so there is no build step. Keep the checkout available and `~/.local/bin` on `PATH`. Re-running it
 is safe; files or links belonging to another checkout are never overwritten.
 `npm run cli:uninstall` removes only this checkout's link and keeps all state.
 
@@ -61,7 +60,7 @@ pi install /absolute/path/to/ibpme-agents-lab/agent-hub/pi
 
 `pi.extensions` in `pi/package.json` lists `agents`, `message-listener` and `registry-publisher`. The extensions
 import declared `@agent-hub/registry` and `@agent-hub/viewer` APIs, so install from a
-built checkout of this repository, not a copy of `pi/` alone. Use `pi remove` to uninstall.
+checkout of this repository, not a copy of `pi/` alone. Use `pi remove` to uninstall.
 
 Inside tmux, `/agents` opens the `agent-hub view` popup. Outside tmux, `/agents` keeps the native Pi overlay. See the
 [viewer guide](../viewer/README.md) for a tmux keybinding.
@@ -82,4 +81,4 @@ npm test --workspace @agent-hub/mcp
 npm run typecheck --workspace @agent-hub/pi
 ```
 
-See [workspace conventions](workspace.md) for package APIs and build ordering.
+See [workspace conventions](workspace.md) for package APIs and TypeScript conventions.

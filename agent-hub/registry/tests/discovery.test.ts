@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { discover } from '../src/discovery/index.js';
-import { parseProcesses } from '../src/discovery/processes.js';
-import type { Runner } from '../src/types.js';
+import { discover } from '../src/discovery/index.ts';
+import { parseProcesses } from '../src/discovery/processes.ts';
+import type { Runner } from '../src/types.ts';
 
 const ps = [
   '10 1 Wed Oct 7 09:00:00 2026 /bin/zsh -zsh',

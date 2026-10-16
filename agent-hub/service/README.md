@@ -13,7 +13,6 @@ Run from `agent-hub/`:
 
 ```sh
 npm ci
-npm run build
 npm run cli:install
 agent-hub start --background
 agent-hub status

@@ -1,8 +1,8 @@
 import { chmod, lstat, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { AgentSnapshot, Health } from './types.js';
-import { validateSnapshot } from './protocol.js';
+import type { AgentSnapshot, Health } from './types.ts';
+import { validateSnapshot } from './protocol.ts';
 
 export async function privateDirectory(directory: string): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 });

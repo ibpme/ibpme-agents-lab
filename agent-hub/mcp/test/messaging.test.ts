@@ -5,13 +5,13 @@ import { createServer } from 'node:net';
 import { webcrypto } from 'node:crypto';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { startHttpServer } from '../src/http.js';
+import { startHttpServer } from '../src/http.ts';
 import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createAgentsServer } from '../src/server.js';
+import { createAgentsServer } from '../src/server.ts';
 import { startListener } from '@agent-hub/pi/listener';
 import type { IncomingMessage } from '@agent-hub/pi/listener/protocol';
 
@@ -231,7 +231,7 @@ test('stdio CLI fixes delivery mode at startup', async t => {
   const client = new Client({ name: 'stdio-delivery', version: '1' });
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [new URL('../dist/cli.js', import.meta.url).pathname, '--deliver-as', 'followUp'],
+    args: [new URL('../src/cli.ts', import.meta.url).pathname, '--deliver-as', 'followUp'],
     env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), AGENT_HUB_DIR: f.hub },
     stderr: 'pipe',
   });

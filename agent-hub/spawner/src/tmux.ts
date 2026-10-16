@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
-import { execute } from './io.js';
+import { execute } from './io.ts';
 
 interface TmuxOptions {
   directory: string;

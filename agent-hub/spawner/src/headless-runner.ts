@@ -1,7 +1,7 @@
 // A detached pipe owner keeps RPC stdin alive across supervisor restarts.
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { atomic } from './io.js';
+import { atomic } from './io.ts';
 const [pi, ...args] = process.argv.slice(2);
 const child = spawn(pi!, args, { stdio: ['pipe', 'ignore', 'inherit'], env: process.env });
 process.once('SIGTERM', () => child.kill('SIGTERM'));

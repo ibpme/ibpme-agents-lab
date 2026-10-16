@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { registryDirectory as defaultRegistryDirectory } from '@agent-hub/registry/paths';
-import { json, exchange, processStart } from './io.js';
-import type { Task } from './types.js';
+import { json, exchange, processStart } from './io.ts';
+import type { Task } from './types.ts';
 interface Row {
   harness: string;
   process: { pid: number; startedAt: number };

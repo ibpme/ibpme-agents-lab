@@ -6,12 +6,18 @@ import { test } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { startHttpServer } from '../src/http.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { startHttpServer } from '../src/http.ts';
 
-const cliPath = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+// Keep these tests independent of a hub running in the default state directory.
+process.env.AGENT_HUB_DIR = mkdtempSync(join(tmpdir(), 'mcp-hub-'));
+
+const cliPath = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 
 test('stdio CLI negotiates MCP and reserves stdout for protocol messages', async t => {
-  const transport = new StdioClientTransport({ command: process.execPath, args: [cliPath], stderr: 'pipe' });
+  const transport = new StdioClientTransport({ command: process.execPath, args: [cliPath], env: { AGENT_HUB_DIR: process.env.AGENT_HUB_DIR!, PATH: process.env.PATH! }, stderr: 'pipe' });
   const client = new Client({ name: 'stdio-test', version: '1.0.0' });
   t.after(() => client.close());
   await client.connect(transport);

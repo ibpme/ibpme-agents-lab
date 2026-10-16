@@ -10,7 +10,7 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createAgentsServer, createConfiguredAgentsServer } from '../src/server.js';
+import { createAgentsServer, createConfiguredAgentsServer } from '../src/server.ts';
 import { startSupervisor } from '@agent-hub/spawner/supervisor';
 import { listProcesses } from '@agent-hub/registry/processes';
 import { startListener } from '@agent-hub/pi/listener';

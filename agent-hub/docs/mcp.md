@@ -2,7 +2,7 @@
 
 [Documentation index](README.md) · [Agent hub](../README.md)
 
-After the initial `cd`, run build and launch commands from `agent-hub/mcp/`.
+After the initial `cd`, run launch commands from `agent-hub/mcp/`.
 
 Backend-neutral MCP interface for discovering and messaging live agents.
 Discovery and messaging use `list_agents` and `send_message`. Pi spawning and task
@@ -17,15 +17,14 @@ Requires Node.js 22.18+ and npm on macOS or Linux.
 ```bash
 cd agent-hub
 npm ci
-npm run build
 cd mcp
 npm run typecheck
 npm test
 
 # stdout is exclusively MCP JSON-RPC; launch node directly, not npm start
-node dist/cli.js                         # stdio, steering delivery
-node dist/cli.js --deliver-as followUp    # fixed follow-up delivery
-node dist/cli.js --transport http --port 3000  # loopback /mcp
+node src/cli.ts                         # stdio, steering delivery
+node src/cli.ts --deliver-as followUp    # fixed follow-up delivery
+node src/cli.ts --transport http --port 3000  # loopback /mcp
 npm run dev -- --transport http --port 3000
 ```
 
@@ -280,7 +279,7 @@ By default, children receive the initial prompt unchanged and are not told the
 parent's agent ID. To opt in, launch the MCP server with:
 
 ```bash
-node /absolute/path/to/agent-hub/mcp/dist/cli.js --inject-parent-context
+node /absolute/path/to/agent-hub/mcp/src/cli.ts --inject-parent-context
 ```
 
 This also works with `--transport http`. For a configured stdio MCP server, add

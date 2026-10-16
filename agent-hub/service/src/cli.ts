@@ -1,17 +1,17 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --disable-warning=ExperimentalWarning
 import { spawn } from 'node:child_process';
 import { closeSync, constants, fstatSync, fchmodSync, openSync } from 'node:fs';
 import { chmod, lstat, mkdir } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hubDirectory } from '@agent-hub/registry/paths';
-import { request } from './client.js';
-import { resolveConfig } from './config.js';
-import { startService } from './service.js';
-import { claude, claudeUsage } from './claude.js';
-import { publish, publishUsage } from './publish.js';
-import { route, routeUsage } from './route.js';
-import { view } from './view.js';
+import { request } from './client.ts';
+import { resolveConfig } from './config.ts';
+import { startService } from './service.ts';
+import { claude, claudeUsage } from './claude.ts';
+import { publish, publishUsage } from './publish.ts';
+import { route, routeUsage } from './route.ts';
+import { view } from './view.ts';
 
 const lifecycleUsage = `agent-hub <start|status|stop> [options]
   --directory PATH          State directory (AGENT_HUB_DIR, else XDG state/agent-hub)

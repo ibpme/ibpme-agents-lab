@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { prepareTmux } from '../dist/tmux.js';
-import { execute } from '../dist/io.js';
+import { prepareTmux } from '../src/tmux.ts';
+import { execute } from '../src/io.ts';
 
 async function fixture(t: { after: (fn: () => Promise<void>) => void }) {
   const directory = await mkdtemp(join(tmpdir(), 'spawn-tmux-'));

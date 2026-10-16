@@ -1,7 +1,7 @@
 import { createConnection } from 'node:net';
 import { join } from 'node:path';
-import type { Response } from './types.js';
-import { MAX_MESSAGE_BYTES } from './protocol.js';
+import type { Response } from './types.ts';
+import { MAX_MESSAGE_BYTES } from './protocol.ts';
 
 export async function request(directory: string, message: unknown, timeoutMs = 1000): Promise<Response> {
   const input = `${JSON.stringify(message)}\n`;

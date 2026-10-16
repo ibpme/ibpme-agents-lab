@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import test from 'node:test';
-import { resolveConfig } from '../dist/config.js';
+import { resolveConfig } from '../src/config.ts';
 import { createSpawnerClient } from '@agent-hub/spawner';
-import { startService } from '../dist/service.js';
-import { request } from '../dist/client.js';
+import { startService } from '../src/service.ts';
+import { request } from '../src/client.ts';
 import { listProcesses } from '@agent-hub/registry/processes';
 import { request as registryRequest } from '@agent-hub/registry/client';
 
@@ -106,7 +106,7 @@ test('supervisor startup failure rolls registry and control ownership back', asy
 });
 
 async function run(args, { env = process.env, input } = {}) {
-  const child = spawn(process.execPath, [new URL('../dist/cli.js', import.meta.url).pathname, ...args], { env });
+  const child = spawn(process.execPath, [new URL('../src/cli.ts', import.meta.url).pathname, ...args], { env });
   let stdout = '', stderr = '';
   child.stdout.on('data', chunk => { stdout += chunk; });
   child.stderr.on('data', chunk => { stderr += chunk; });

@@ -1,14 +1,14 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
     "noUncheckedIndexedAccess": true,
     "verbatimModuleSyntax": true,
-    "declaration": true,
-    "sourceMap": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "tests/**/*.ts"
   ]
 }

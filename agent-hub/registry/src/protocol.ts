@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { Ajv2020 } from 'ajv/dist/2020.js';
-import type { AgentSnapshot, Message } from './types.js';
+import type { AgentSnapshot, Message } from './types.ts';
 
 const ajv = new Ajv2020({ allErrors: true });
 const schema = (name: string): object => JSON.parse(readFileSync(new URL(`../schemas/${name}.schema.json`, import.meta.url), 'utf8')) as object;

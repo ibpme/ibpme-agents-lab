@@ -1,4 +1,4 @@
-import type { Execution, RoutingDecision } from './routing.js';
+import type { Execution, RoutingDecision } from './routing.ts';
 export interface Parent {
   agentId: string;
   pid: number;

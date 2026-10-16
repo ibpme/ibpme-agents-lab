@@ -11,7 +11,6 @@ create per-package npm or Bun lockfiles. Everything runs on Node.
 ```bash
 cd agent-hub
 npm ci
-npm run build
 npm run typecheck
 npm test
 # Or run both typechecking and tests:
@@ -19,11 +18,9 @@ npm run check
 ```
 
 The root workspace list is deliberately dependency-ordered: registry, browser,
-Pi, spawner, MCP, service. npm executes workspace scripts in that order. Root typecheck
-and test commands build prerequisites automatically. For individual-package
-commands, run the root build first; package scripts never build sibling packages.
+Pi, spawner, MCP, service. npm executes workspace scripts in that order.
 
-TypeScript, tsx, and the Node type definitions are development tools owned by the
+TypeScript and the Node type definitions are development tools owned by the
 workspace root. Runtime dependencies belong to the packages that use them.
 
 ### Dependency versions
@@ -84,22 +81,21 @@ exports instead of assuming sibling directory locations.
 Cross-package integration tests may use repository fixtures, such as the
 spawner's fake Pi executable. Production code must not depend on sibling paths.
 `npm run test:packages` checks workspace ordering, exported files, declared local
-imports, and production relative-import boundaries; build first when running
-that command on its own.
+imports, and production relative-import boundaries.
 
 ## TypeScript and ESM
 
 All packages use ESM and extend `tsconfig.base.json`, which contains the common
-strict NodeNext policy. There are intentionally two runtime profiles:
+strict NodeNext policy. Nothing is compiled: Node 22.18+ runs the TypeScript
+source by stripping types, and Pi's extension loader handles the Pi package.
 
-- **Compiled Node packages:** registry, spawner, and MCP emit JavaScript and
-  declarations from `src/` to `dist/`. Relative imports use `.js`, matching the
-  emitted files. Library exports point to JavaScript plus declaration files.
-- **Source-loaded packages:** Pi extensions and browser code use `noEmit` and
-  `allowImportingTsExtensions`. Their relative imports use `.ts`, and their
-  exports point to source. Pi's extension loader and Node's type stripping
-  handle those entry points. Node's TypeScript stripping runs their tests.
+- `tsc` only typechecks (`noEmit`). Relative imports use `.ts`
+  (`allowImportingTsExtensions`) and package exports point to source files.
+- Only erasable syntax is allowed (`erasableSyntaxOnly`): no `enum`, `namespace`
+  or constructor parameter properties.
+- Executables start with `#!/usr/bin/env -S node --disable-warning=ExperimentalWarning`
+  so type stripping's notice stays off stderr; child Node processes pass the
+  same flag.
 
-Do not replace these profiles with a single emit configuration or introduce
-TypeScript path aliases to bypass package exports. No CommonJS build, bundler,
-project-reference graph, or monorepo task runner is needed at this scale.
+Do not introduce TypeScript path aliases to bypass package exports. No CommonJS
+build, bundler, project-reference graph, or monorepo task runner is needed.

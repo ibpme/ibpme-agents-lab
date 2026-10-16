@@ -64,9 +64,9 @@ async function publish(input) {
     const context = contextUsage(data.context_window);
     if (context) patch.context = context;
     if (!Object.keys(patch).length) return;
-    // A missing build must not prevent the existing renderer from running.
+    // A broken installation must not prevent the existing renderer from running.
     const [{ request }, { parseProcesses, PS_FIELDS }, { registryDirectory }] = await Promise.all([
-      import('../../dist/client.js'), import('../../dist/discovery/processes.js'), import('../../dist/paths.js'),
+      import('../../src/client.ts'), import('../../src/discovery/processes.ts'), import('../../src/paths.ts'),
     ]);
     const reportedAt = Date.now();
     const identity = await identify(parseProcesses, PS_FIELDS);

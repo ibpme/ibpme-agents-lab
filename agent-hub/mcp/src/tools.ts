@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { createMessaging, MessagingError } from './messaging.js';
+import { createMessaging, MessagingError } from './messaging.ts';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { resolve } from 'node:path';
 import { createSpawnerClient } from '@agent-hub/spawner';
-import type { MessagingOptions } from './messaging.js';
+import type { MessagingOptions } from './messaging.ts';
 
 const nonBlank = z.string().min(1).regex(/\S/, 'Must contain a non-whitespace character');
 const spawnFields = {
