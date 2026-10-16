@@ -92,6 +92,22 @@ test('statusline omits unavailable/invalid fields and only explicit null clears 
   assert.equal(messages.length, count);
 });
 
+test('statusline publishes context fill from current usage, falling back to the used percentage', async t => {
+  const { run, messages } = await fixture(t);
+  for (const [context_window, context] of [
+    [{ context_window_size: 200000, used_percentage: 99, current_usage: { input_tokens: 8500, output_tokens: 1200, cache_creation_input_tokens: 5000, cache_read_input_tokens: 2000 } }, { tokens: 15500, window: 200000 }],
+    [{ context_window_size: 1000000, used_percentage: 12.5, current_usage: null }, { tokens: 125000, window: 1000000 }],
+    [{ context_window_size: 200000 }, { tokens: null, window: 200000 }],
+  ]) {
+    await run(JSON.stringify({ cwd: '/repo', context_window }));
+    assert.deepEqual(messages.at(-1).patch, { session: { cwd: '/repo' }, context });
+  }
+  const count = messages.length;
+  await run(JSON.stringify({ cwd: '/repo', context_window: { context_window_size: 0, used_percentage: 5 } }));
+  assert.equal(messages.length, count + 1);
+  assert.deepEqual(messages.at(-1).patch, { session: { cwd: '/repo' } });
+});
+
 test('statusline identifies npm Claude but skips unrelated ancestry without affecting rendering', async t => {
   for (const [root, count] of [
     ['/usr/bin/node /usr/bin/node /opt/node_modules/@anthropic-ai/claude-code/cli.js --resume session-1', 1],

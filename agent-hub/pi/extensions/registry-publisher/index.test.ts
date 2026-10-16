@@ -37,9 +37,11 @@ async function setup(t: test.TestContext) {
   let idle = true;
   let name: string | undefined = "Review";
   let file: string | undefined = "/sessions/one.jsonl";
+  let context: { tokens: number | null; contextWindow: number; percent: number | null } | undefined = { tokens: 45_210.4, contextWindow: 200_000, percent: 22.6 };
   const ctx = {
     mode: "tui", cwd: "/repo", model: { id: "model-one", provider: "provider", name: "Model One" },
     isIdle: () => idle,
+    getContextUsage: () => context,
     sessionManager: { getSessionId: () => "session-one", getSessionFile: () => file, getSessionName: () => name },
   } as unknown as ExtensionContext;
   const fire = (name: string, event = {}) => handlers.get(name)?.(event, ctx);
@@ -57,7 +59,7 @@ async function setup(t: test.TestContext) {
     }
     assert.fail("No publication received");
   }
-  return { ctx, messages, fire, next, server, directory, bus, set idle(value: boolean) { idle = value; }, clearSession() { name = undefined; file = undefined; } };
+  return { ctx, messages, fire, next, server, directory, bus, set idle(value: boolean) { idle = value; }, set context(value: typeof context) { context = value; }, clearSession() { name = undefined; file = undefined; } };
 }
 
 test("publishes verified own identity and full metadata only after session startup", async t => {
@@ -74,6 +76,20 @@ test("publishes verified own identity and full metadata only after session start
   assert.deepEqual(message.patch.session, { id: "session-one", file: "/sessions/one.jsonl", name: "Review", cwd: "/repo", mode: "interactive" });
   assert.deepEqual(message.patch.model, { id: "model-one", provider: "provider", displayName: "Model One" });
   assert.equal(message.patch.activity?.state, "idle");
+  assert.deepEqual(message.patch.context, { tokens: 45_210, window: 200_000 });
+});
+
+test("publishes context fill after turns and clears it when Pi cannot report a window", async t => {
+  const h = await setup(t);
+  h.fire("session_start");
+  let count = (await h.next(0), h.messages.length);
+  h.context = { tokens: null, contextWindow: 1_000_000, percent: null };
+  h.fire("turn_end");
+  assert.deepEqual((await h.next(count)).patch.context, { tokens: null, window: 1_000_000 });
+  count = h.messages.length;
+  h.context = undefined;
+  h.fire("session_compact");
+  assert.equal((await h.next(count)).patch.context, null);
 });
 
 test("stays busy through agent_end and reports nested UI waits without exposing titles", async t => {

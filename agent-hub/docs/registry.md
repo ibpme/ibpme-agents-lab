@@ -446,9 +446,16 @@ forwarded in full but are not published.
 Each invocation publishes valid session ID, transcript path, cwd, and
 `model.id`/`model.display_name` (normalized to `displayName`) with source
 `claude-statusline`. No model provider is inferred. Missing/invalid fields are
-omitted; an explicit `model: null` clears the model. Activity, usage/cost,
-prompts, and messaging endpoints are never published. Usage is not currently
-supported by the registry schemas.
+omitted; an explicit `model: null` clears the model. Context-window fill is
+published as `context: { tokens, window }` from `context_window`: tokens are the
+`current_usage` input + cache-creation + cache-read counts, falling back to
+`used_percentage` × `context_window_size`, or `null` when neither is present.
+Activity, cumulative usage/cost, prompts, and messaging endpoints are never
+published.
+
+Snapshots carry `context: { tokens, window, source, reportedAt }` only from the
+Pi publisher (`ctx.getContextUsage()`) and this status line; `tokens: null` means
+the window is known but current usage is not (e.g. right after compaction).
 
 Like the hook, it identifies the nearest native/npm Claude ancestor through
 `TZ=UTC LC_ALL=C ps`, never the wrapper PID or a session-ID lookup. Missing

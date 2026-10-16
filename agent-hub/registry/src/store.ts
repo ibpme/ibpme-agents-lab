@@ -60,6 +60,10 @@ export class AgentStore {
       if (message.patch.model) entry.row.model = { ...message.patch.model, source, reportedAt: at };
       else delete entry.row.model;
     }
+    if ('context' in message.patch && (source === 'pi-registry' || source === 'claude-statusline') && this.accept(entry, 'context', at, 2)) {
+      if (message.patch.context) entry.row.context = { ...message.patch.context, source, reportedAt: at };
+      else delete entry.row.context;
+    }
   }
 
   reconcile(result: DiscoveryResult): void {

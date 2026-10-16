@@ -104,3 +104,13 @@ test('messaging endpoints are timestamped, cleared with tombstones and expire wi
   store.publish(message(22500, { messaging: endpoint }), processInfo, 23000);
   assert.equal(store.snapshot(23000)[0]!.messaging, undefined);
 });
+
+test('context usage follows publisher clocks and only trusts Pi and the Claude status line', () => {
+  const store = new AgentStore();
+  store.publish(message(2000, { context: { tokens: 50_000, window: 200_000 } }), processInfo, 2000);
+  assert.deepEqual(store.snapshot(2000)[0]!.context, { tokens: 50_000, window: 200_000, source: 'pi-registry', reportedAt: 2000 });
+  store.publish(message(1500, { context: { tokens: 1, window: 2 } }), processInfo, 2100);
+  assert.equal(store.snapshot(2100)[0]!.context?.tokens, 50_000);
+  store.publish(message(2200, { context: null }), processInfo, 2200);
+  assert.equal(store.snapshot(2200)[0]!.context, undefined);
+});

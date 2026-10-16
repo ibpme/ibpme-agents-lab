@@ -6,6 +6,22 @@ import { promisify } from 'node:util';
 
 const execute = promisify(execFile);
 const text = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 4096 ? value : undefined;
+const count = value => Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+
+// Claude Code's status-line `context_window`: prefer exact current usage, else the reported percentage.
+function contextUsage(value) {
+  if (!value || typeof value !== 'object') return undefined;
+  const window = count(value.context_window_size);
+  if (!window) return undefined;
+  const usage = value.current_usage;
+  if (usage && typeof usage === 'object') {
+    const parts = [usage.input_tokens, usage.cache_creation_input_tokens, usage.cache_read_input_tokens].map(count);
+    if (parts.some(part => part !== undefined)) return { tokens: parts.reduce((sum, part) => sum + (part ?? 0), 0), window };
+  }
+  const percent = value.used_percentage;
+  if (typeof percent === 'number' && Number.isFinite(percent) && percent >= 0) return { tokens: Math.round(window * percent / 100), window };
+  return { tokens: null, window };
+}
 
 async function identify(parseProcesses, fields) {
   const { stdout } = await execute('ps', ['-axo', fields], {
@@ -46,6 +62,8 @@ async function publish(input) {
       const displayName = text(data.model.display_name);
       if (displayName !== undefined) patch.model.displayName = displayName;
     }
+    const context = contextUsage(data.context_window);
+    if (context) patch.context = context;
     if (!Object.keys(patch).length) return;
     // A missing build must not prevent the existing renderer from running.
     const [{ request }, { parseProcesses, PS_FIELDS }] = await Promise.all([

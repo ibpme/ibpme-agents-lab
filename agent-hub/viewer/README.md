@@ -62,10 +62,15 @@ silently switching UI modes.
 
 See [browser controls](../docs/agents-pi.md#controls). List navigation, live
 transcript previews, metadata, refresh, split, attach, and kill confirmations are
-shared. Escape/Ctrl+C/`q` backs out of previews/details or closes the list. The UI
-refreshes every two seconds and restores terminal state on exit/signals.
+shared, as are `/` filtering and Tab group jumps. Escape/Ctrl+C/`q` backs out of
+previews/details/filters or closes the list. The UI refreshes every two seconds, animates
+activity glyphs only while an agent is busy or waiting, and restores terminal state on
+exit/signals.
 
-Standalone colors use the terminal's ANSI palette; `NO_COLOR` disables styling.
+Standalone colors use the terminal's 16-color ANSI palette, plus a subtle 256-color
+selected-row highlight when `TERM`/`COLORTERM` advertise it. Harness badges use Pi purple
+and Claude orange (truecolor, 256-color, or magenta/yellow fallback, matching Pi's color
+mode in the native overlay); `NO_COLOR` disables styling.
 Pi's active theme and in-memory session branch are not available in this separate
 process. All transcripts come from persisted files. Outside tmux the standalone
 browser is read-only for pane actions.
@@ -81,7 +86,8 @@ npm run check --workspace @agent-hub/viewer
 ## Code organization
 
 This directory owns the shared renderer (`browser.ts`, `view.ts`, `theme.ts`),
-registry reader (`reader.ts`), transcript reader (`session.ts`), verified pane
+registry reader (`reader.ts`), transcript reader (`session.ts`) and its Markdown/metrics
+rendering (`transcript.ts`), verified pane
 actions (`tmux-actions.ts`), CLI, and popup launcher. Shared code has no dependency
 on the Pi coding-agent package or extension directory.
 

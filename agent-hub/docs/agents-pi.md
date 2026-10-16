@@ -33,8 +33,8 @@ changing its configuration. Multiple `--tmux-socket` arguments are supported.
 
 Browser and publisher resolve the same directory: `AGENTS_REGISTRY_DIR`, then
 `$XDG_STATE_HOME/agents-registry`, then `~/.local/state/agents-registry`.
-The independent `registry-publisher.ts` extension reports Pi session, model, and
-activity metadata. Without it, Pi processes still appear but have unknown activity
+The independent `registry-publisher.ts` extension reports Pi session, model,
+context-window fill, and activity metadata. Without it, Pi processes still appear but have unknown activity
 and limited metadata. Claude activity comes from the daemon's Claude CLI queries.
 
 For a one-off browser without the package:
@@ -69,8 +69,10 @@ colors use the terminal ANSI palette rather than Pi's active theme.
 | `V` | Move the existing pane into a top/bottom split |
 | `H` or Shift+Enter | Move the existing pane into a left/right split |
 | Ctrl+X | Confirm killing the entire selected pane with `y`/`n` |
+| `/` | Filter the list by name, harness, state, model, cwd, or group; Enter keeps it, Escape clears it |
+| Tab / Shift+Tab | Jump to the next/previous group |
 | `r` | Refresh |
-| Escape, Ctrl+C, or `q` | Cancel confirmation, return from transcript/details, or close |
+| Escape, Ctrl+C, or `q` | Cancel confirmation, return from transcript/details, clear an active filter, or close |
 
 The browser refreshes every two seconds. Inside tmux it opens in a 90% popup.
 The native Pi overlay outside tmux fills the terminal with a one-cell margin,
@@ -80,7 +82,21 @@ The Non-tmux group also includes every non-interactive, background, or unknown-m
 agent, even when it has a mapped tmux pane. Only interactive agents with mapped
 panes belong to Interactive (tmux); the pinned current session is the exception.
 Within each group, sessions sort by **waiting → busy → idle → unknown**, then name.
-Status badges, section headings, selection, and registry health use theme colors.
+Rows show an animated activity glyph (spinner for busy, pulsing diamond for
+waiting, dot for idle), a harness badge, model, shortened cwd, what a waiting agent
+needs, context-window fill (`◑ 52%`: green below 50%, yellow below 80%, red above),
+listener status, and uptime. Previews and details add a `ctx ▰▰▰▰▱▱▱▱ 52% 104K/200K`
+gauge. A spark marks agents whose activity changed in the
+last few seconds; the header counts agents per state next to a live/stale registry pill.
+Transcripts render assistant replies and summaries as Markdown (headings, emphasis,
+lists, quotes, tables, code blocks), tool calls inline as `tool(args)` with a
+per-kind glyph (`$` shell, `≡` read, `✎` edit, `⌕` search, `↯` web, `◈` agents) and
+`⎿` results with red failures, and a live `Working…`/`Waiting for input` trailer
+while the agent is active. Messages that arrive while scrolling is paused are
+announced. Above the transcript, token metrics are compacted to K/M units
+(`↑ 12K in ↓ 820 out ⟳ 40K cache read ✎ 0 cache write · $0.0412`), followed by
+prompt/reply/tool/failure counts and a cache-hit meter. Successful pane
+actions show a short confirmation. All styling uses theme colors.
 PID and tmux pane numbers are hidden in the list and remain available in details.
 Selection follows harness + PID + numeric process start
 time, independent of pane moves. Details show process identity, observation time,
@@ -196,7 +212,7 @@ killed; attaching to it is a verified no-op.
 The browser has no job-store dependency, job history/results, job ownership,
 job/process deduplication, cancel/acknowledge/background controls, or spawning.
 
-Claude model names reach the registry through its separate
+Claude model names and context fill reach the registry through its separate
 [opt-in status-line publisher](registry.md#optional-claude-status-line-model-publisher);
 this extension only reads registry snapshots.
 

@@ -189,7 +189,10 @@ test("current Pi process is pinned even outside tmux", async () => {
   const current = { ...agents[1], process: { pid: process.pid, startedAt: now }, pane: undefined };
   const browser = createBrowser({ readRegistry: async () => ({ ...fresh(), agents: [agents[0], current] }), performPaneAction: async () => {} }, { columns: 100, rows: 30 }, theme, () => {}, () => {});
   await browser.refresh();
-  assert.ok(browser.render(100).some(line => line.includes("→") && line.includes("review") && line.includes("current")));
+  const lines = browser.render(100);
+  const heading = lines.findIndex(line => line.includes("Current session"));
+  assert.ok(heading >= 0 && lines[heading + 1].includes("→") && lines[heading + 1].includes("review"));
+  assert.ok(!lines[heading + 1].includes("current"), "the group heading already says current");
   browser.dispose();
 });
 
@@ -317,7 +320,7 @@ test("registry listener advertisements update list badges and details without ex
   setView({ ...fresh(), agents: [{ ...agents[0], messaging }] });
   await browser.refresh();
   let text = browser.render(120).join("\n");
-  assert.ok(text.includes("[listening]"));
+  assert.ok(text.includes("◉ listening"));
   assert.ok(!text.includes(messaging.path));
   for (const width of [1, 10, 40, 120]) assert.ok(browser.render(width).every(line => visibleWidth(line) <= width));
   browser.handleInput("i");
@@ -328,7 +331,7 @@ test("registry listener advertisements update list badges and details without ex
   await browser.refresh();
   assert.ok(browser.render(120).join("\n").includes("listener: off (not advertised)"));
   browser.handleInput("\x1b");
-  assert.ok(browser.render(120).join("\n").includes("[listener off]"));
+  assert.ok(browser.render(120).join("\n").includes("○ listener off"));
   browser.dispose();
 });
 
@@ -341,8 +344,8 @@ for (const reason of ["registry", "unavailable", "endpoint", "future", "observat
     setView({ ...fresh(), state: reason === "registry" ? "stale" : reason === "unavailable" ? "unavailable" : "fresh", agents: [agent] });
     await browser.refresh();
     const text = browser.render(120).join("\n");
-    assert.ok(text.includes("[listener stale]"));
-    assert.ok(!text.includes("[listening]"));
+    assert.ok(text.includes("◎ listener stale"));
+    assert.ok(!text.includes("◉ listening"));
     browser.handleInput("i");
     assert.ok(browser.render(120).join("\n").includes("listener: stale advertisement (not probed)"));
     browser.dispose();
@@ -367,13 +370,125 @@ test("listener badges follow file-backed registry snapshots and health", async t
     { columns: 120, rows: 30 }, theme, () => {}, () => {});
   t.after(() => browser.dispose());
   await browser.refresh();
-  assert.ok(browser.render(120).join("\n").includes("[listening]"));
+  assert.ok(browser.render(120).join("\n").includes("◉ listening"));
   await writeFile(join(dir, "registry-health.json"), JSON.stringify({ ...health, state: "stopped" }));
   await browser.refresh();
-  assert.ok(browser.render(120).join("\n").includes("[listener stale]"));
+  assert.ok(browser.render(120).join("\n").includes("◎ listener stale"));
   const { messaging, ...withoutListener } = target;
   await writeFile(join(dir, "registry-health.json"), JSON.stringify(health));
   await writeFile(join(dir, "agents.jsonl"), JSON.stringify(withoutListener) + "\n");
   await browser.refresh();
-  assert.ok(browser.render(120).join("\n").includes("[listener off]"));
+  assert.ok(browser.render(120).join("\n").includes("○ listener off"));
+});
+
+test("slash filter narrows the list, keeps navigation keys as text, and Escape clears it", async () => {
+  const { browser, actions } = setup();
+  await browser.refresh();
+  for (const key of ["/", "r", "e", "v"]) browser.handleInput(key);
+  let text = browser.render(120).join("\n");
+  assert.ok(text.includes("review") && !text.includes("main") && text.includes("1/2"));
+  browser.handleInput("\r");
+  browser.handleInput("\r");
+  await tick();
+  assert.deepEqual(actions, [[200, "attach"]]);
+  browser.handleInput("q");
+  text = browser.render(120).join("\n");
+  assert.ok(text.includes("main") && text.includes("review"));
+  browser.handleInput("/");
+  browser.handleInput("zzz");
+  assert.ok(browser.render(120).join("\n").includes("No agents match"));
+  browser.handleInput("\x1b");
+  assert.ok(browser.render(120).join("\n").includes("main"));
+  browser.dispose();
+});
+
+test("successful pane actions show a notice that the next key clears", async () => {
+  const { browser } = setup();
+  await browser.refresh();
+  browser.handleInput("j");
+  browser.handleInput("V");
+  for (let i = 0; i < 5; i++) await tick();
+  assert.ok(browser.render(120).join("\n").includes("✓ Moved pane below this one · review"));
+  browser.handleInput("k");
+  assert.ok(!browser.render(120).join("\n").includes("✓ Moved"));
+  browser.dispose();
+});
+
+test("preview renders tool calls inline with results and announces messages while paused", async () => {
+  let snapshot = { entries: [
+    { label: "USER", text: "run the tests" },
+    { label: "TOOL Bash", text: JSON.stringify({ command: "npm test" }) },
+    { label: "RESULT Bash ERROR", text: "boom" },
+    ...Array.from({ length: 30 }, (_, i) => ({ label: "ASSISTANT", text: `reply-${i}` })),
+  ], usage: "", warnings: [] };
+  const browser = createBrowser({ readRegistry: async () => fresh(), readSession: async () => snapshot, performPaneAction: async () => {} }, { columns: 100, rows: 20 }, theme, () => {}, () => {});
+  await browser.refresh();
+  browser.handleInput("\x1b[C");
+  await tick();
+  browser.handleInput("\x1b[H");
+  const text = browser.render(100).join("\n");
+  assert.ok(text.includes("❯ run the tests") && text.includes("$ Bash(npm test)") && text.includes("⎿  ✗ boom"));
+  snapshot = { ...snapshot, entries: [...snapshot.entries, { label: "ASSISTANT", text: "a" }, { label: "ASSISTANT", text: "b" }] };
+  await browser.refresh();
+  assert.ok(browser.render(100).join("\n").includes("↓ 2 new"));
+  browser.dispose();
+});
+
+test("animation ticks stop once the browser closes", async () => {
+  let renders = 0;
+  const busy = { ...fresh(), agents: agents.map(agent => ({ ...agent, activity: { state: "busy" as const, source: "pi-registry" as const } })) };
+  const browser = createBrowser({ readRegistry: async () => busy, performPaneAction: async () => {} }, { columns: 100, rows: 30 }, theme, () => { renders++; }, () => {});
+  await browser.refresh();
+  const before = renders;
+  await new Promise(resolve => setTimeout(resolve, 250));
+  assert.ok(renders > before, "busy agents animate");
+  browser.handleInput("q");
+  const closedAt = renders;
+  await new Promise(resolve => setTimeout(resolve, 250));
+  assert.equal(renders, closedAt);
+  browser.dispose();
+});
+
+test("Tab and Shift+Tab jump between groups", async () => {
+  const { browser, setView } = setup();
+  const background: AgentSnapshot = { ...agents[1], process: { pid: 900, startedAt: now }, session: { mode: "background", name: "worker" }, pane: undefined };
+  setView({ ...fresh(), agents: [...agents, background] });
+  await browser.refresh();
+  browser.handleInput("\t");
+  assert.ok(browser.render(120).some(line => line.includes("→") && line.includes("review")));
+  browser.handleInput("\t");
+  assert.ok(browser.render(120).some(line => line.includes("→") && line.includes("worker")));
+  browser.handleInput("\x1b[Z");
+  assert.ok(browser.render(120).some(line => line.includes("→") && line.includes("review")));
+  browser.dispose();
+});
+
+test("selected row highlight survives inner resets with a plain bg wrapper", async () => {
+  const highlight = { fg: (_tone: string, s: string) => `\x1b[31m${s}\x1b[39m`, bold: (s: string) => `\x1b[1m${s}\x1b[0m`, bg: (_tone: string, s: string) => `\x1b[44m${s}\x1b[49m` };
+  const browser = createBrowser({ readRegistry: async () => fresh(), origin: { server: "/socket", paneId: "%0" }, performPaneAction: async () => {} }, { columns: 100, rows: 30 }, highlight, () => {}, () => {});
+  await browser.refresh();
+  const row = browser.render(100).find(line => line.includes("→"))!;
+  assert.ok(row.split("\x1b[0m").slice(1, -1).every(part => part.startsWith("\x1b[44m")));
+  browser.dispose();
+});
+
+test("context fill renders a compact colored badge in rows and a gauge in details", async () => {
+  const tones: string[] = [];
+  const toned = { fg: (tone: string, s: string) => { if (/%/.test(s)) tones.push(tone); return s; }, bold: (s: string) => s };
+  const at = Date.now();
+  const withContext = (pid: number, name: string, tokens: number | null): AgentSnapshot => ({ ...agents[1], process: { pid, startedAt: now },
+    session: { mode: "interactive", name }, context: { tokens, window: 200_000, source: "pi-registry", reportedAt: at } });
+  const browser = createBrowser({ readRegistry: async () => ({ ...fresh(), agents: [withContext(1, "low", 20_000), withContext(2, "mid", 120_000), withContext(3, "high", 190_000), withContext(4, "unknown-ctx", null), agents[0]] }),
+    origin: { server: "/socket", paneId: "%0" }, performPaneAction: async () => {} }, { columns: 140, rows: 30 }, toned, () => {}, () => {});
+  await browser.refresh();
+  const text = browser.render(140).join("\n");
+  for (const badge of ["◔ 10%", "◑ 60%", "● 95%", "◌ –"]) assert.ok(text.includes(badge), badge);
+  assert.ok(tones.includes("success") && tones.includes("warning") && tones.includes("error"));
+  assert.ok(browser.render(140).every(line => visibleWidth(line) <= 140));
+  browser.handleInput("j");
+  browser.handleInput("i");
+  const details = browser.render(140).join("\n");
+  assert.ok(details.includes("ctx ▰▰▰▰▰▰▰▰ 95% 190K/200K"), details);
+  assert.ok(details.includes("context: 190K / 200K tokens (95%)"));
+  browser.dispose();
 });

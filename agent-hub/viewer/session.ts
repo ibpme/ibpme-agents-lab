@@ -4,9 +4,20 @@ import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import type { AgentSnapshot } from "./reader.ts";
 
+export interface SessionMetrics {
+  /** Summed per-response tokens; null when no response reported the field. */
+  tokens: { input: number | null; output: number | null; cacheRead: number | null; cacheWrite: number | null };
+  partial: boolean;
+  cost: number | null;
+  costPartial: boolean;
+  /** Claude's cost comes from a periodically written snapshot. */
+  costMayLag: boolean;
+}
+
 export interface SessionSnapshot {
   entries: Array<{ label: string; text: string }>;
   usage: string;
+  metrics?: SessionMetrics;
   warnings: string[];
 }
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -109,7 +120,11 @@ export function sessionSnapshot(harness: AgentSnapshot["harness"], values: reado
   const dollars = harness === "claude" ? loggedCost : costs.some(value => value !== null) ? costs.reduce<number>((sum, value) => sum + (value ?? 0), 0) : null;
   const partialCost = harness === "claude" ? unknownCost : costs.some(value => value === null);
   const usage = `Observed tokens: ${["input", "output", "cache-read", "cache-write"].map((field, i) => `${field}=${totals[i] ?? "unavailable"}`).join(" ")}${partial ? " (partial)" : ""} · Recorded cost: ${dollars === null ? "unavailable" : `$${dollars.toFixed(6)}`}${harness === "claude" && dollars !== null ? " (latest snapshot; may lag)" : ""}${partialCost ? " (partial)" : ""}`;
-  return { entries, usage, warnings: [] };
+  const metrics: SessionMetrics = {
+    tokens: { input: totals[0], output: totals[1], cacheRead: totals[2], cacheWrite: totals[3] },
+    partial, cost: dollars, costPartial: partialCost, costMayLag: harness === "claude" && dollars !== null,
+  };
+  return { entries, usage, metrics, warnings: [] };
 }
 
 async function claudeFile(id: string | undefined, roots: string[]): Promise<string> {

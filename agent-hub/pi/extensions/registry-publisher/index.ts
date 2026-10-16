@@ -10,6 +10,15 @@ import { LISTENER_CHANGED_EVENT, LISTENER_QUERY_EVENT, isListenerEndpoint } from
 
 const execute = promisify(execFile);
 
+function contextUsage(ctx: ExtensionContext): { tokens: number | null; window: number } | null {
+  try {
+    const usage = ctx.getContextUsage();
+    if (!usage || !Number.isSafeInteger(usage.contextWindow) || usage.contextWindow < 1) return null;
+    const tokens = usage.tokens !== null && Number.isFinite(usage.tokens) && usage.tokens >= 0 ? Math.round(usage.tokens) : null;
+    return { tokens, window: usage.contextWindow };
+  } catch { return null; }
+}
+
 export default function (pi: ExtensionAPI): void {
   let active = false;
   let generation = 0;
@@ -92,6 +101,7 @@ export default function (pi: ExtensionAPI): void {
         },
         activity: prompts > 0 ? { state: "waiting", waitingFor: "ui_prompt" } : { state: ctx.isIdle() ? "idle" : "busy" },
         model: model ? { id: model.id, provider: model.provider, displayName: model.name } : null,
+        context: contextUsage(ctx),
       },
     };
     if (Buffer.byteLength(JSON.stringify(pending)) + 1 > 64 * 1024) { pending = undefined; return; }
@@ -149,6 +159,8 @@ export default function (pi: ExtensionAPI): void {
   pi.on("before_agent_start", (_event, ctx) => { publish(ctx); });
   pi.on("agent_start", (_event, ctx) => { publish(ctx); });
   pi.on("agent_settled", (_event, ctx) => { publish(ctx); });
+  pi.on("turn_end", (_event, ctx) => { publish(ctx); });
+  pi.on("session_compact", (_event, ctx) => { publish(ctx); });
   pi.on("ui_prompt_start", (_event, ctx) => { if (active) prompts++; publish(ctx); });
   pi.on("ui_prompt_end", (_event, ctx) => { prompts = Math.max(0, prompts - 1); publish(ctx); });
 }

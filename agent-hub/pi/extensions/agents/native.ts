@@ -1,6 +1,12 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { OverlayOptions } from "@earendil-works/pi-tui";
 import { createBrowser, type BrowserDependencies } from "@agent-hub/viewer/browser";
+import { harnessPainter, type BrowserTheme } from "@agent-hub/viewer/theme";
+
+/** Pi's theme plus harness brand colors at Pi's detected color depth. */
+export function viewerTheme(theme: BrowserTheme & { getColorMode?(): "256color" | "truecolor" }): BrowserTheme {
+  return Object.assign(Object.create(theme) as BrowserTheme, { harness: harnessPainter(theme.getColorMode?.() ?? "16color") });
+}
 
 export function overlayOptions(terminal: { columns: number; rows: number }): OverlayOptions {
   return {
@@ -17,7 +23,7 @@ export async function openBrowser(ctx: ExtensionCommandContext, deps: BrowserDep
   try {
     await ctx.ui.custom<void>((tui, theme, _keys, done) => {
       terminal = tui.terminal;
-      browser = createBrowser({ ...deps, currentPi: deps.currentPi ?? (() => ({ records: ctx.sessionManager.getEntries(), branch: ctx.sessionManager.getBranch() })) }, terminal, theme, () => tui.requestRender(), () => done());
+      browser = createBrowser({ ...deps, currentPi: deps.currentPi ?? (() => ({ records: ctx.sessionManager.getEntries(), branch: ctx.sessionManager.getBranch() })) }, terminal, viewerTheme(theme), () => tui.requestRender(), () => done());
       void browser.refresh();
       timer = setInterval(() => { void browser?.refresh(); }, 2000);
       timer.unref();

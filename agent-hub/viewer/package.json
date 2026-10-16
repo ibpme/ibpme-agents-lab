@@ -27,6 +27,7 @@
     "./reader": "./reader.ts",
     "./tmux-actions": "./tmux-actions.ts",
     "./view": "./view.ts",
-    "./popup": "./popup.ts"
+    "./popup": "./popup.ts",
+    "./theme": "./theme.ts"
   }
 }

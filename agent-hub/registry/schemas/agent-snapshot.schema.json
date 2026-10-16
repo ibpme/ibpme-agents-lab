@@ -140,6 +140,45 @@
         }
       }
     },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokens",
+        "window",
+        "source",
+        "reportedAt"
+      ],
+      "properties": {
+        "tokens": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tokens currently occupying the context window, or null when unknown (e.g. right after compaction)."
+        },
+        "window": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "source": {
+          "enum": [
+            "pi-registry",
+            "claude-statusline"
+          ]
+        },
+        "reportedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
     "pane": {
       "description": "Nearest matching pane ancestry among configured tmux servers; omitted when unmapped.",
       "type": "object",
