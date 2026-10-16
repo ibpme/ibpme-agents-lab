@@ -492,3 +492,28 @@ test("context fill renders a compact colored badge in rows and a gauge in detail
   assert.ok(details.includes("context: 190K / 200K tokens (95%)"));
   browser.dispose();
 });
+
+test("footer stays bottom-aligned with breathing room above a full transcript", async () => {
+  const terminal = { columns: 100, rows: 20 };
+  const browser = createBrowser({ readRegistry: async () => ({ ...fresh(), agents: agents.map(agent => ({ ...agent, activity: { state: "idle" as const, source: "pi-registry" as const } })) }),
+    readSession: async () => ({ entries: Array.from({ length: 40 }, (_, i) => ({ label: "ASSISTANT", text: `reply-${i}` })), usage: "input=12", warnings: [] }),
+    performPaneAction: async () => {} }, terminal, theme, () => {}, () => {});
+  try {
+    await browser.refresh();
+    browser.handleInput("\x1b[C");
+    await tick();
+    for (const rows of [11, 16, 30]) {
+      terminal.rows = rows;
+      const lines = browser.render(100);
+      assert.equal(lines.length, rows - 2);
+      assert.ok(lines.at(-2)!.includes("Following") && lines.at(-2)!.includes("scroll"));
+      assert.match(lines.at(-3)!, /^│\s*│$/);
+      assert.ok(lines.at(-4)!.includes("reply-39"), "the latest message remains visible above the spacer");
+      assert.ok(lines.every(line => visibleWidth(line) <= 100));
+    }
+    terminal.rows = 8;
+    const compact = browser.render(100);
+    assert.ok(compact.some(line => line.includes("Following")));
+    assert.ok(compact.length <= 6);
+  } finally { browser.dispose(); }
+});

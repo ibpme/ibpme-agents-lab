@@ -51,8 +51,13 @@ previews/details/filters or closes the list. The UI refreshes every two seconds,
 activity glyphs only while an agent is busy or waiting, and restores terminal state on
 exit/signals.
 
-Standalone colors use the terminal's 16-color ANSI palette, plus a subtle 256-color
-selected-row highlight when `TERM`/`COLORTERM` advertise it. Harness badges use Pi purple
+Standalone colors match Pi 1.3's built-in `dark` theme: lavender accents, blue
+borders and links, green statuses, amber warnings, and bright neutral text.
+Truecolor terminals use the resolved Pi colors; 256-color terminals use indexed
+approximations, and basic terminals use non-bright ANSI colors. Group headings,
+model names, and keyboard hints use the theme's accents, with a blue selected-row
+highlight. This palette is bundled, not dynamically loaded from Pi settings.
+Harness badges use Pi purple
 and Claude orange (truecolor, 256-color, or magenta/yellow fallback, matching Pi's color
 mode in the native overlay); `NO_COLOR` disables styling.
 Pi's active theme and in-memory session branch are not available in this separate

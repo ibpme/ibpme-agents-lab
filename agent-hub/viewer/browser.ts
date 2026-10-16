@@ -39,7 +39,7 @@ const ACTION_DONE: Record<PaneAction, string> = { attach: "Attached", vertical: 
 
 const keyHints = (theme: BrowserTheme, hints: Array<[string, string] | false | undefined>): string =>
   hints.filter((hint): hint is [string, string] => !!hint)
-    .map(([key, label]) => `${theme.fg("accent", theme.bold(key))} ${theme.fg("muted", label)}`).join(theme.fg("dim", " · "));
+    .map(([key, label]) => `${theme.fg("accent", key)} ${theme.fg("muted", label)}`).join(theme.fg("dim", " · "));
 
 export function createBrowser(
   deps: BrowserDependencies, terminal: { columns: number; rows: number }, theme: BrowserTheme,
@@ -168,7 +168,8 @@ export function createBrowser(
       const inner = Math.max(1, width - 4);
       const usageLines = preview ? metricsLines(preview.snapshot, inner, theme).slice(0, Math.max(1, Math.min(4, height - 7))) : [];
       if (usageLines.length && height >= 12) usageLines.push("");
-      page = Math.max(1, height - 5 - usageLines.length);
+      const footerGap = height >= 9 ? [""] : [];
+      page = Math.max(1, height - 5 - usageLines.length - footerGap.length);
       if (notice && now - notice.at > NOTICE_MS) notice = undefined;
       const warningText = error || preview?.error || [view.warnings.join(" · "), preview?.snapshot?.warnings.join(" · ")].filter(Boolean).join(" · ");
       const status = error || preview?.error ? theme.fg("error", `✗ ${clean(warningText)}`)
@@ -240,15 +241,15 @@ export function createBrowser(
               : detail ? keyHints(theme, [["↑↓", "scroll"], ["→", "session"], ["Esc", "back"], ["r", "refresh"], ...paneHints])
                 : keyHints(theme, [["↑↓", "navigate"], ["→", "session"], ["Enter", eligible ? "attach" : "details"], ["i", "details"], ...paneHints,
                   ["/", "filter"], ["r", "refresh"], ["q", filter ? "clear" : "close"]]);
-      const title = preview ? `${theme.fg("accent", "◀ ")}${theme.fg("accent", theme.bold(`Session · ${clean(preview.agent.session.name ?? preview.agent.session.id ?? preview.agent.harness)}`))}`
+      const title = preview ? `${theme.fg("accent", "◀ ")}${theme.fg("accent", theme.bold(`Session · ${agentName(preview.agent)}`))}`
         : detail ? `${theme.fg("accent", "◀ ")}${theme.fg("accent", theme.bold(`Details · ${agentName(detail)}`))}`
           : `${theme.fg("accent", "◆")} ${theme.fg("accent", theme.bold("Agents"))}`;
       const lines = height < 7
         ? pendingKill ? [` ${footer}`] : [status ? ` ${status}` : body[0], ` ${footer}`]
-        : [` ${headline}`, status ? ` ${status}` : "", ...usageLines.map(line => ` ${line}`), ...body.map(line => preview || detail ? ` ${line}` : line), ` ${footer}`];
+        : [` ${headline}`, status ? ` ${status}` : "", ...usageLines.map(line => ` ${line}`), ...body.map(line => preview || detail ? ` ${line}` : line), ...footerGap, ` ${footer}`];
       const start = 2 + usageLines.length;
       return frame(lines, width, height, theme, {
-        title, status: healthChip(), tone: preview || detail ? "borderAccent" : "border",
+        title, status: healthChip(), tone: "border",
         scroll: height < 7 || !scrollInfo ? undefined : { start, size: page, ...scrollInfo },
       });
     },

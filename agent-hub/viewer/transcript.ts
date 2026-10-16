@@ -25,14 +25,14 @@ export function metricsLines(snapshot: SessionSnapshot | undefined, width: numbe
   if (!metrics) return wrapTextWithAnsi(usageText(snapshot?.usage ?? "Usage/cost: unavailable", theme), width);
   const { input, output, cacheRead, cacheWrite } = metrics.tokens;
   const chip = (glyph: string, value: number | null, label: string, tone: BrowserTone) =>
-    `${theme.fg(tone, glyph)} ${value === null ? theme.fg("dim", "–") : theme.bold(theme.fg(tone, compactCount(value)))} ${theme.fg("dim", label)}`;
+    `${theme.fg(tone, glyph)} ${value === null ? theme.fg("dim", "–") : theme.fg(tone, compactCount(value))} ${theme.fg("dim", label)}`;
   const gap = "   ";
   const tokens = [
     chip("↑", input, "in", "syntaxType"), chip("↓", output, "out", "syntaxKeyword"),
     chip("⟳", cacheRead, "cache read", "syntaxString"), chip("✎", cacheWrite, "cache write", "syntaxNumber"),
   ].join(gap) + (metrics.partial ? theme.fg("warning", " ~partial") : "");
   const cost = metrics.cost === null ? theme.fg("dim", "$ –")
-    : theme.fg("success", theme.bold(formatCost(metrics.cost))) +
+    : theme.fg("success", formatCost(metrics.cost)) +
       (metrics.costPartial ? theme.fg("warning", " ~partial") : "") + (metrics.costMayLag ? theme.fg("dim", " (may lag)") : "");
   const entries = snapshot!.entries;
   const count = (kind: string) => entries.filter(entry => entry.label.split(" ")[0] === kind).length;

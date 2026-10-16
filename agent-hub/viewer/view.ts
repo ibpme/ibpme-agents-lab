@@ -122,7 +122,7 @@ export function contextGauge(agent: AgentSnapshot, theme: BrowserTheme, cells = 
   const filled = Math.max(ratio > 0 ? 1 : 0, Math.min(cells, Math.round(ratio * cells)));
   const tone = contextTone(ratio);
   return `${theme.fg("dim", "ctx")} ${theme.fg(tone, "▰".repeat(filled))}${theme.fg("dim", "▱".repeat(cells - filled))} ` +
-    `${theme.bold(theme.fg(tone, `${Math.round(ratio * 100)}%`))} ${theme.fg("dim", `${compactCount(agent.context.tokens!)}/${window}`)}`;
+    `${theme.fg(tone, `${Math.round(ratio * 100)}%`)} ${theme.fg("dim", `${compactCount(agent.context.tokens!)}/${window}`)}`;
 }
 
 export interface RowOptions {
@@ -155,7 +155,7 @@ export function agentRow(agent: AgentSnapshot, selected: boolean, theme: Browser
   const tags = !recentAgent(agent) ? theme.fg("warning", "stale") : "";
   const compact = options.width < 72;
   const left = `${marker} ${theme.fg(tone, stateGlyph(state, now))} ` +
-    theme.bold(theme.fg(selected ? "accent" : "text", nameText)) + " ".repeat(Math.max(0, nameWidth - visibleWidth(nameText))) +
+    (selected ? theme.bold(theme.fg("text", nameText)) : theme.fg("text", nameText)) + " ".repeat(Math.max(0, nameWidth - visibleWidth(nameText))) +
     (compact
       ? ` ${harnessText(agent.harness, theme, agent.harness === "pi" ? "π" : "✻")}${options.changed ? theme.fg("accent", "✦") : " "}`
       : `  ${harnessBadge(agent, theme)}  ${theme.fg(tone, state.padEnd(7))}${options.changed ? theme.fg("accent", "✦") : " "} `) +
@@ -179,7 +179,7 @@ export function agentRow(agent: AgentSnapshot, selected: boolean, theme: Browser
 }
 
 export function groupHeading(group: string, count: number, width: number, theme: BrowserTheme): string {
-  const label = ` ${theme.fg("mdHeading", theme.bold(group))} ${theme.fg("dim", String(count))} `;
+  const label = ` ${theme.fg("accent", theme.bold(group))} ${theme.fg("dim", String(count))} `;
   return theme.fg("borderMuted", "──") + label + theme.fg("borderMuted", "─".repeat(Math.max(0, width - visibleWidth(label) - 2)));
 }
 
