@@ -71,7 +71,7 @@ test("installed real launcher resolves checkout through the symlink", async t =>
 
 test("installer command supports help and rejects invalid actions", () => {
   const installer = fileURLToPath(new URL("./install.ts", import.meta.url));
-  assert.match(execFileSync("bun", ["run", installer, "--help"], { encoding: "utf8" }), /install\|uninstall/);
+  assert.match(execFileSync(process.execPath, [installer, "--help"], { encoding: "utf8" }), /install\|uninstall/);
   assert.throws(() => installCli("start"), /Usage:/);
-  assert.throws(() => execFileSync("bun", ["run", installer, "start"], { stdio: "pipe" }));
+  assert.throws(() => execFileSync(process.execPath, [installer, "start"], { stdio: "pipe" }));
 });

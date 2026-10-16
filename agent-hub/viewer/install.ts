@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const defaultCli = fileURLToPath(new URL("./agents-viewer", import.meta.url));
-const help = `Usage: bun run install.ts <install|uninstall>
+const help = `Usage: node install.ts <install|uninstall>
 
 Install a symlink at ~/.local/bin/agents-viewer pointing to this checkout's
 launcher. Run npm ci && npm run build from agent-hub/ first. Keep the checkout available after installation.

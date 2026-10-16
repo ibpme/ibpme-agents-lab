@@ -20,12 +20,24 @@ npm run check
 ```
 
 The root workspace list is deliberately dependency-ordered: registry, browser,
-Pi, spawner, MCP. npm executes workspace scripts in that order. Root typecheck
+Pi, spawner, MCP, service. npm executes workspace scripts in that order. Root typecheck
 and test commands build prerequisites automatically. For individual-package
 commands, run the root build first; package scripts never build sibling packages.
 
 TypeScript, tsx, and the Node type definitions are development tools owned by the
 workspace root. Runtime dependencies belong to the packages that use them.
+
+### Dependency versions
+
+An external dependency has one specifier across the workspace. Packages coupled
+to a host runtime or protocol are pinned exactly: `@earendil-works/pi-*`,
+`typebox`, `@modelcontextprotocol/sdk` and `typescript`. Everything else uses a
+caret range. `npm run test:packages` enforces both rules.
+
+The `@earendil-works/pi-*` packages track the newest Pi release. Pi substitutes
+its own copies when it loads an extension, so the pinned versions are what
+typechecking and the standalone viewer use; keep them equal to the current Pi
+release, and in step with the sibling `pi/` package.
 
 ## Packages and public APIs
 
@@ -36,6 +48,7 @@ workspace root. Runtime dependencies belong to the packages that use them.
 | `pi/` | `@agent-hub/pi` | `/listener`, `/listener/protocol`, `/spawn-lifecycle` |
 | `spawner/` | `@agent-hub/spawner` | root client API, `/supervisor` |
 | `mcp/` | `@agent-hub/mcp` | CLI only; no library exports |
+| `service/` | `@agent-hub/service` | CLI only; no library exports |
 
 CLI names are `agents-registry`, `agents-viewer`, `agent-spawn`, and
 `agents-mcp`. Packages are private and intended for this checkout; the workspace

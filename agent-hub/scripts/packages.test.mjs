@@ -23,6 +23,23 @@ test('workspaces declare local dependencies and are ordered for builds', () => {
   }
 });
 
+// Packages coupled to a host runtime or protocol are pinned exactly; everything else uses a caret range.
+const exactPins = [/^@earendil-works\/pi-/, /^typebox$/, /^@modelcontextprotocol\/sdk$/, /^typescript$/];
+
+test('external dependencies use one specifier across the workspace', () => {
+  const specifiers = new Map();
+  for (const pkg of [{ name: manifest.name, ...manifest }, ...packages]) {
+    for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
+      if (name.startsWith('@agent-hub/')) continue;
+      if (exactPins.some(pattern => pattern.test(name))) assert.match(version, /^\d+\.\d+\.\d+$/, `${pkg.name}: ${name} must be pinned exactly`);
+      else assert.match(version, /^\^\d+\.\d+\.\d+$/, `${pkg.name}: ${name} must use a caret range`);
+      const previous = specifiers.get(name);
+      assert.ok(!previous || previous.version === version, `${name}: ${previous?.pkg} uses ${previous?.version}, ${pkg.name} uses ${version}`);
+      specifiers.set(name, { pkg: pkg.name, version });
+    }
+  }
+});
+
 test('every explicit export resolves to an existing package file', async () => {
   for (const pkg of packages) {
     for (const [subpath, target] of Object.entries(pkg.exports ?? {})) {

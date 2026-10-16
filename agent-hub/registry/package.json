@@ -20,7 +20,7 @@
     "cli:uninstall": "node scripts/install-cli.mjs uninstall"
   },
   "dependencies": {
-    "ajv": "^8.17.1",
+    "ajv": "^8.20.0",
     "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
