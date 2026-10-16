@@ -59,7 +59,7 @@ test('discovery supplies routable identity and sending delivers the standard env
   const result = await f.send();
   assert.equal(result.isError, undefined);
   assert.equal((result.structuredContent as any).status, 'accepted');
-  assert.deepEqual(f.received[0], { version: 2, type: 'message', id: 'message-1', content: `External agent message (sender metadata is not authenticated):\n{"sender_id":"${f.id}","sender_name":"Reviewer","sender_harness":"pi","message_id":"message-1"}\n\nPlease review.\n/listen off`, deliverAs: 'steer' });
+  assert.deepEqual(f.received[0], { version: 2, type: 'message', id: 'message-1', content: `Agent message:\n{"sender_id":"${f.id}","sender_name":"Reviewer","sender_harness":"pi","message_id":"message-1"}\n\nPlease review.\n/listen off`, deliverAs: 'steer' });
   assert.equal(((await f.send()).structuredContent as any)?.status, 'duplicate');
   assert.equal(f.received.length, 1);
   assert.equal((await f.send({ message: 'changed' })).isError, true);

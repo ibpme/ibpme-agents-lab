@@ -97,7 +97,7 @@ export function registerAgentTools(server: McpServer, options: MessagingOptions 
   }, async () => result(() => messaging.listAgents()));
   server.registerTool('send_message', {
     title: 'Send a message to an agent',
-    description: 'Message an agent by agent_id. Sender identity is included but not authenticated. Success means queued, not answered.',
+    description: 'Message an agent by agent_id. Sender metadata is included so the recipient can reply. Success means queued, not answered.',
     inputSchema: sendMessageSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, async input => result(() => messaging.sendMessage(input)));
