@@ -34,13 +34,23 @@ disable an extension. Run `/reload` in pi after changes.
 | `stylish-tools` | Styled tool rendering and operation overrides | - |
 | `ssh` | Run tools against SSH remotes | `tool-set`, `stylish-tools`; contracts: status-keys |
 | `reasoning-tokens` | Live reasoning token counter | contracts: events |
-| `loaded-skills` | Loaded-skills indicator | contracts: status-keys |
+| `loaded-skills` | Loaded-skills indicator and `/loaded-skills` token-estimate viewer | shared: pager; contracts: status-keys |
 | `tool-call-stats` | Tool-call statistics | shared: pager; contracts: events |
 | `status-line` | Footer status line | shared: tool-status; contracts: status-keys, events |
 
 Runtime links beyond imports: `ssh` uses the `tool-set` service and `stylish-tools` operations override through
 process-wide `Symbol.for` keys, and `status-line` shows status entries published by `tool-set`, `ssh` and
 `loaded-skills` and events from `reasoning-tokens`. Those extensions still work if others are removed.
+
+The footer's tools list excludes built-ins and hidden tools. Tool and MCP colors indicate registered
+exposure: blue for direct (including model-only), and the original muted gray for deferred and codemode.
+Inactive direct tools are omitted; deferred and codemode tools remain visible. Mixed-exposure MCP
+servers show separate colored counts for each mode.
+
+`/loaded-skills` opens a scrollable list of skills observed on the active branch, their file paths,
+and per-skill and total token estimates. Estimates use current full skill files at roughly four
+characters per token, not exact tokenizer counts or remaining context after compaction. Reference
+files and repeated reads are excluded; unreadable files are marked unavailable.
 
 `extensions/shared/` holds helpers used by two or more extensions; `extensions/contracts/` holds constants and
 event payloads shared across extensions. Both are stateless (pi gives each extension its own module instance)

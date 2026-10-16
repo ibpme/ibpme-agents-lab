@@ -9,10 +9,13 @@ export function skillFromRead(tool: string, args: Record<string, unknown>): stri
 }
 
 /** Replay only the active branch, including nested reads made through codemode. */
-export function loadedSkills(entries: readonly SessionEntry[]): Set<string> {
-  const skills = new Set<string>();
+export function loadedSkillPaths(entries: readonly SessionEntry[]): Map<string, string> {
+  const skills = new Map<string, string>();
   const calls = new Map<string, { name: string; arguments: Record<string, unknown> }>();
-  const add = (name: string | undefined) => { if (name) skills.add(name); };
+  const add = (tool: string, args: Record<string, unknown>) => {
+    const name = skillFromRead(tool, args);
+    if (name) skills.set(name, args.path as string);
+  };
   for (const entry of entries) {
     if (entry.type !== "message") continue;
     const message = entry.message;
@@ -23,17 +26,22 @@ export function loadedSkills(entries: readonly SessionEntry[]): Set<string> {
     } else if (message.role === "toolResult") {
       if (!message.isError) {
         const call = calls.get(message.toolCallId);
-        if (call) add(skillFromRead(call.name, call.arguments));
+        if (call) add(call.name, call.arguments);
       }
       for (const call of message.nestedCalls?.calls ?? []) {
-        if (call.status === "ok" && call.arguments) add(skillFromRead(call.name, call.arguments));
+        if (call.status === "ok" && call.arguments) add(call.name, call.arguments);
       }
     } else if (message.role === "user") {
       const text = typeof message.content === "string" ? message.content
         : message.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
       // /skill:name expands to this wrapper rather than calling the read tool.
-      add(/^<skill name="([^"]+)" location="[^"]+">\n/.exec(text)?.[1]);
+      const match = /^<skill name="([^"]+)" location="([^"]+)">\n/.exec(text);
+      if (match) skills.set(match[1], match[2]);
     }
   }
   return skills;
+}
+
+export function loadedSkills(entries: readonly SessionEntry[]): Set<string> {
+  return new Set(loadedSkillPaths(entries).keys());
 }

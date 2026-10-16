@@ -1,6 +1,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { LOADED_SKILLS_STATUS_KEY } from "../contracts/status-keys.ts";
-import { loadedSkills, skillFromRead } from "./state.ts";
+import { openPager, textSource } from "../shared/pager.ts";
+import { skillReport } from "./report.ts";
+import { loadedSkillPaths, loadedSkills, skillFromRead } from "./state.ts";
 
 export default function loadedSkillsExtension(pi: ExtensionAPI) {
   let skills = new Set<string>();
@@ -14,6 +16,18 @@ export default function loadedSkillsExtension(pi: ExtensionAPI) {
     skills = loadedSkills(ctx.sessionManager.getBranch());
     update(ctx);
   }
+
+  pi.registerCommand("loaded-skills", {
+    description: "Show loaded skills and approximate token counts",
+    handler: async (_args, ctx) => {
+      const content = await skillReport(loadedSkillPaths(ctx.sessionManager.getBranch()), ctx.cwd);
+      await openPager(ctx, {
+        title: "Loaded Skills",
+        source: textSource(content),
+        plainText: content,
+      });
+    },
+  });
 
   pi.on("session_start", (_event, ctx) => restore(ctx));
   pi.on("session_tree", (_event, ctx) => restore(ctx));

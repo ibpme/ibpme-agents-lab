@@ -43,3 +43,14 @@ test("recognizes explicit skill command expansion, not mere mentions", () => {
   assert.deepEqual([...loadedSkills([entry({ role: "user", content: [{ type: "text", text }] })])], ["different-name"]);
   assert.deepEqual([...loadedSkills([entry({ role: "user", content: "Please use /skill:tdd" })])], []);
 });
+
+test("retains paths for ordinary reads, nested reads, and explicitly named skills", async () => {
+  const { loadedSkillPaths } = await import("./state.ts");
+  assert.equal(loadedSkillPaths([call, result()]).get("tdd"), "/skills/tdd/SKILL.md");
+  const explicit = entry({ role: "user", content: '<skill name="alias" location="/skills/folder/SKILL.md">\nBody\n</skill>' });
+  assert.equal(loadedSkillPaths([explicit]).get("alias"), "/skills/folder/SKILL.md");
+  const nested = entry({ role: "toolResult", nestedCalls: { calls: [
+    { name: "read", arguments: { path: "skills/tdd/SKILL.md" }, status: "ok" },
+  ] } });
+  assert.equal(loadedSkillPaths([nested]).get("tdd"), "skills/tdd/SKILL.md");
+});
