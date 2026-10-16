@@ -31,6 +31,7 @@ export default function spawnLifecycle(pi: ExtensionAPI): void {
   }
   let state = readState();
   let context: ExtensionContext | undefined;
+  let active = false;
   let poll: ReturnType<typeof setInterval> | undefined;
   let initial: ReturnType<typeof setTimeout> | undefined;
   let idleCheck: ReturnType<typeof setTimeout> | undefined;
@@ -45,6 +46,7 @@ export default function spawnLifecycle(pi: ExtensionAPI): void {
   }
   pi.on('session_start', (_event, ctx) => {
     context = ctx;
+    active = true;
     state = readState();
     if (existsSync(join(directory, 'completion.json'))) state.phase = 'done';
     const sessionId = ctx.sessionManager.getSessionId();
@@ -55,20 +57,6 @@ export default function spawnLifecycle(pi: ExtensionAPI): void {
     persist();
     write('ready.json', { pid: process.pid, sessionId: state.sessionId });
     if (!task.input.prompt) { state.phase = 'done'; persist(); return; }
-    if (state.phase === 'pending') {
-      // Defer until startup dispatch finishes; do not re-submit on /reload.
-      initial = setTimeout(() => {
-        state.phase = 'running';
-        persist();
-        try {
-          pi.sendUserMessage(task.input.prompt!, { deliverAs: 'steer', expandPromptTemplates: false });
-          idleCheck = setTimeout(() => {
-            if (state.phase === 'running' && !state.started && ctx.isIdle()) finish('failed', 'Initial prompt was handled without starting an agent run');
-          }, 5000);
-          idleCheck.unref();
-        } catch (error) { finish('failed', error instanceof Error ? error.message : String(error)); }
-      }, 0);
-    }
     if (poll) clearInterval(poll);
     poll = setInterval(() => {
       if (state.phase !== 'done' && existsSync(join(directory, 'cancel.json'))) {
@@ -76,6 +64,25 @@ export default function spawnLifecycle(pi: ExtensionAPI): void {
       }
     }, 250);
     poll.unref();
+  });
+  pi.on('resources_discover', (_event, ctx) => {
+    if (!active || !task.input.prompt || state.phase !== 'pending' || initial !== undefined) return;
+    if (ctx.sessionManager.getSessionId() !== state.sessionId) return;
+    // Resource discovery follows all session_start handlers, so MCP's readiness hook is initialized.
+    initial = setTimeout(() => {
+      initial = undefined;
+      if (!active || state.phase !== 'pending') return;
+      if (existsSync(join(directory, 'cancel.json'))) { finish('cancelled'); return; }
+      state.phase = 'running';
+      persist();
+      try {
+        pi.sendUserMessage(task.input.prompt!, { deliverAs: 'steer', expandPromptTemplates: false });
+        idleCheck = setTimeout(() => {
+          if (state.phase === 'running' && !state.started && ctx.isIdle()) finish('failed', 'Initial prompt was handled without starting an agent run');
+        }, 5000);
+        idleCheck.unref();
+      } catch (error) { finish('failed', error instanceof Error ? error.message : String(error)); }
+    }, 0);
   });
   const promptAdditions: string[] = [];
   if (task.execution?.append_system_prompt?.trim()) promptAdditions.push(task.execution.append_system_prompt);
@@ -107,7 +114,9 @@ export default function spawnLifecycle(pi: ExtensionAPI): void {
     finish(cancelled ? 'cancelled' : failed ? 'failed' : 'completed');
   });
   pi.on('session_shutdown', event => {
-    if (initial) clearTimeout(initial);
+    active = false;
+    if (initial !== undefined) clearTimeout(initial);
+    initial = undefined;
     if (idleCheck) clearTimeout(idleCheck);
     if (poll) clearInterval(poll);
     if (event.reason !== 'reload' && state.phase !== 'done' && task.input.prompt) {

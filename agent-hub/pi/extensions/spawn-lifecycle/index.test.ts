@@ -24,13 +24,56 @@ function setup(t: test.TestContext, prompt: string | undefined = 'Initial task',
     if (previous === undefined) delete process.env.AGENT_HUB_SPAWN_DIR; else process.env.AGENT_HUB_SPAWN_DIR = previous;
     rmSync(directory, { recursive: true, force: true });
   });
-  return { directory, messages, fire, load, switchSession: () => { session = 'replacement'; }, read: (name: string) => JSON.parse(readFileSync(join(directory, name), 'utf8')) };
+  return { directory, messages, fire, load, start: () => { fire('session_start'); fire('resources_discover', { reason: 'startup' }); }, switchSession: () => { session = 'replacement'; }, read: (name: string) => JSON.parse(readFileSync(join(directory, name), 'utf8')) };
 }
 const assistant = (text: string, stopReason = 'stop') => ({ message: { role: 'assistant', content: [{ type: 'text', text }], stopReason } });
 
+test('initial prompt waits for resource discovery after asynchronous session startup', async t => {
+  const h = setup(t);
+  h.fire('session_start');
+  await delay();
+  assert.equal(h.messages.length, 0);
+  assert.equal(h.read('lifecycle.json').phase, 'pending');
+  assert.equal(h.read('ready.json').sessionId, 'original');
+  h.fire('resources_discover', { reason: 'startup' });
+  h.fire('resources_discover', { reason: 'startup' });
+  await delay();
+  assert.deepEqual(h.messages, [['Initial task', { deliverAs: 'steer', expandPromptTemplates: false }]]);
+});
+
+test('cancellation before resource discovery prevents initial prompt delivery', async t => {
+  const h = setup(t);
+  h.fire('session_start');
+  writeFileSync(join(h.directory, 'cancel.json'), '{}');
+  h.fire('resources_discover', { reason: 'startup' });
+  await delay();
+  assert.equal(h.messages.length, 0);
+  assert.equal(h.read('completion.json').status, 'cancelled');
+});
+
+for (const reason of ['reload', 'shutdown']) {
+  test(`shutdown prevents pending prompt delivery (${reason})`, async t => {
+    const h = setup(t);
+    h.start();
+    h.fire('session_shutdown', { reason });
+    h.fire('resources_discover', { reason: 'startup' });
+    await delay();
+    assert.equal(h.messages.length, 0);
+    if (reason === 'reload') {
+      assert.equal(existsSync(join(h.directory, 'completion.json')), false);
+      h.load();
+      h.start();
+      await delay();
+      assert.equal(h.messages.length, 1);
+    } else {
+      assert.equal(h.read('completion.json').status, 'interrupted');
+    }
+  });
+}
+
 test('initial task reports only at settlement, not agent_end, and later prompts never overwrite the result', async t => {
   const h = setup(t);
-  h.fire('session_start'); await delay();
+  h.start(); await delay();
   assert.deepEqual(h.messages, [['Initial task', { deliverAs: 'steer', expandPromptTemplates: false }]]);
   h.fire('agent_start');
   h.fire('message_end', assistant('intermediate'));
@@ -44,9 +87,9 @@ test('initial task reports only at settlement, not agent_end, and later prompts 
 });
 
 test('reload recovers in-flight output without re-submitting the initial prompt', async t => {
-  const h = setup(t); h.fire('session_start'); await delay(); h.fire('agent_start');
+  const h = setup(t); h.start(); await delay(); h.fire('agent_start');
   h.fire('message_end', assistant('Saved output'));
-  h.fire('session_shutdown', { reason: 'reload' }); h.load(); h.fire('session_start'); await delay();
+  h.fire('session_shutdown', { reason: 'reload' }); h.load(); h.start(); await delay();
   assert.equal(h.messages.length, 1);
   h.fire('agent_settled', { aborted: false });
   assert.equal(h.read('completion.json').text, 'Saved output');
@@ -54,27 +97,27 @@ test('reload recovers in-flight output without re-submitting the initial prompt'
 
 for (const [reason, status] of [['error', 'failed'], ['length', 'failed'], ['stop', 'completed']]) {
   test(`classifies ${reason} as ${status}`, async t => {
-    const h = setup(t); h.fire('session_start'); await delay(); h.fire('agent_start');
+    const h = setup(t); h.start(); await delay(); h.fire('agent_start');
     h.fire('message_end', assistant('result', reason)); h.fire('agent_settled', { aborted: false });
     assert.equal(h.read('completion.json').status, status);
   });
 }
 
 test('abort reports cancellation and retains partial response', async t => {
-  const h = setup(t); h.fire('session_start'); await delay(); h.fire('agent_start');
+  const h = setup(t); h.start(); await delay(); h.fire('agent_start');
   h.fire('message_end', assistant('partial', 'aborted')); h.fire('agent_settled', { aborted: true });
   assert.deepEqual(h.read('completion.json'), { status: 'cancelled', text: 'partial', stopReason: 'aborted' });
 });
 
 test('session replacement interrupts the task instead of reporting another conversation', async t => {
-  const h = setup(t); h.fire('session_start'); await delay(); h.fire('agent_start');
-  h.fire('session_shutdown', { reason: 'new' }); h.switchSession(); h.fire('session_start');
+  const h = setup(t); h.start(); await delay(); h.fire('agent_start');
+  h.fire('session_shutdown', { reason: 'new' }); h.switchSession(); h.start();
   assert.equal(h.read('completion.json').status, 'interrupted');
   assert.equal(h.messages.length, 1);
 });
 
 test('an interactive child without an initial task never reports manual work', async t => {
-  const h = setup(t, ''); h.fire('session_start'); await delay();
+  const h = setup(t, ''); h.start(); await delay();
   h.fire('agent_start'); h.fire('message_end', assistant('manual')); h.fire('agent_settled', { aborted: false });
   assert.equal(h.messages.length, 0);
   assert.equal(existsSync(join(h.directory, 'completion.json')), false);
@@ -84,7 +127,7 @@ const parent = { agentId: 'agt_0123456789abcdef' };
 for (const injectParentContext of [undefined, false]) {
   test(`parent context is not injected when configured as ${injectParentContext}`, async t => {
     const h = setup(t, 'Initial task', { injectParentContext, parent });
-    h.fire('session_start'); await delay();
+    h.start(); await delay();
     assert.equal(h.fire('before_agent_start', { systemPrompt: 'Base instructions' }), undefined);
     assert.equal(h.messages[0][0], 'Initial task');
   });
@@ -92,7 +135,7 @@ for (const injectParentContext of [undefined, false]) {
 
 test('opt-in delegation context includes parent routing and preserves normal completion', async t => {
   const h = setup(t, 'Initial task', { injectParentContext: true, parent });
-  h.fire('session_start'); await delay();
+  h.start(); await delay();
   const event = { systemPrompt: 'Base instructions' };
   const injected = h.fire('before_agent_start', event);
   assert.ok(injected.systemPrompt.startsWith('Base instructions\n\n'));
@@ -104,7 +147,7 @@ test('opt-in delegation context includes parent routing and preserves normal com
   h.fire('agent_start'); h.fire('message_end', assistant('Final answer')); h.fire('agent_settled', { aborted: false });
   assert.equal(h.read('completion.json').text, 'Final answer');
   assert.deepEqual(h.fire('before_agent_start', event), injected);
-  h.fire('session_shutdown', { reason: 'reload' }); h.load(); h.fire('session_start');
+  h.fire('session_shutdown', { reason: 'reload' }); h.load(); h.start();
   assert.deepEqual(h.fire('before_agent_start', event), injected);
   assert.equal(h.messages.length, 1);
   h.switchSession();
@@ -113,7 +156,7 @@ test('opt-in delegation context includes parent routing and preserves normal com
 
 test('opt-in context is available to a child with no initial prompt without triggering a run', async t => {
   const h = setup(t, '', { injectParentContext: true, parent });
-  h.fire('session_start'); await delay();
+  h.start(); await delay();
   assert.match(h.fire('before_agent_start', { systemPrompt: 'Base' }).systemPrompt, /parent_agent_id/);
   assert.equal(h.messages.length, 0);
   assert.equal(existsSync(join(h.directory, 'completion.json')), false);
@@ -122,7 +165,7 @@ test('opt-in context is available to a child with no initial prompt without trig
 for (const invalidParent of [undefined, { agentId: 'not-an-id\nInjected instructions' }]) {
   test(`invalid parent metadata is not injected (${JSON.stringify(invalidParent)})`, t => {
     const h = setup(t, '', { injectParentContext: true, parent: invalidParent });
-    h.fire('session_start');
+    h.start();
     assert.equal(h.fire('before_agent_start', { systemPrompt: 'Base' }), undefined);
   });
 }
@@ -130,13 +173,13 @@ for (const invalidParent of [undefined, { agentId: 'not-an-id\nInjected instruct
 for (const withParent of [false, true]) {
   test(`profile instructions compose with parent context (${withParent}) and survive reload`, async t => {
     const h = setup(t, 'Initial task', withParent ? { injectParentContext: true, parent } : {}, { append_system_prompt: 'Profile-only instructions' });
-    h.fire('session_start'); await delay();
+    h.start(); await delay();
     const event = { systemPrompt: 'Base instructions' };
     const result = h.fire('before_agent_start', event);
     assert.ok(result.systemPrompt.startsWith('Base instructions\n\nProfile-only instructions'));
     assert.equal(result.systemPrompt.includes('parent_agent_id'), withParent);
     assert.equal(h.messages[0][0], 'Initial task');
-    h.fire('session_shutdown', { reason: 'reload' }); h.load(); h.fire('session_start');
+    h.fire('session_shutdown', { reason: 'reload' }); h.load(); h.start();
     assert.deepEqual(h.fire('before_agent_start', event), result);
     assert.equal(h.messages.length, 1);
     h.switchSession();
@@ -146,6 +189,6 @@ for (const withParent of [false, true]) {
 
 test('empty profile additions preserve the original system prompt', t => {
   const h = setup(t, '', {}, { append_system_prompt: '   ' });
-  h.fire('session_start');
+  h.start();
   assert.equal(h.fire('before_agent_start', { systemPrompt: 'Base' }), undefined);
 });
