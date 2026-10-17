@@ -64,3 +64,67 @@ export function toolStatus(
   }
   return status;
 }
+
+type Schema = Record<string, unknown>;
+
+function schemaObject(value: unknown): Schema {
+  return value !== null && typeof value === "object" ? value as Schema : {};
+}
+
+export function argumentType(value: unknown): string {
+  const schema = schemaObject(value);
+  if (Array.isArray(schema.enum)) return schema.enum.map((item) => JSON.stringify(item)).join(" | ");
+  if ("const" in schema) return JSON.stringify(schema.const);
+  const union = schema.anyOf ?? schema.oneOf;
+  if (Array.isArray(union)) return union.map(argumentType).join(" | ");
+  if (Array.isArray(schema.allOf)) return schema.allOf.map(argumentType).join(" & ");
+  if (schema.type === "array") return `Array<${argumentType(schema.items)}>`;
+  if (Array.isArray(schema.type)) return schema.type.join(" | ");
+  return typeof schema.type === "string" ? schema.type : schema.$ref ? String(schema.$ref).split("/").at(-1)! : "any";
+}
+
+export function toolArguments(tool: ToolInfo): { name: string; type: string; required: boolean; description: string }[] {
+  const schema = schemaObject(tool.parameters);
+  const required = new Set(Array.isArray(schema.required) ? schema.required : []);
+  return Object.entries(schemaObject(schema.properties)).map(([name, value]) => ({
+    name, type: argumentType(value), required: required.has(name),
+    description: String(schemaObject(value).description ?? ""),
+  }));
+}
+
+export function argumentSummary(tool: ToolInfo): string {
+  const args = toolArguments(tool);
+  return args.length ? args.map((arg) => `${arg.name}${arg.required ? "" : "?"}: ${arg.type}`).join(" · ") : "No arguments";
+}
+
+export function shortDescription(description: string): string {
+  const text = description.replace(/\s+/g, " ").trim();
+  return text.match(/^.*?[.!?](?=\s|$)/)?.[0] || text || "No description provided.";
+}
+
+export function toolDetails(
+  tool: ToolInfo,
+  snippet?: string,
+  guidelines: readonly string[] = tool.promptGuidelines ?? [],
+): string[] {
+  const args = toolArguments(tool);
+  return [
+    "Description", tool.description || "No description provided.",
+    "Arguments",
+    ...(args.length ? args.map((arg) =>
+      `${arg.name}: ${arg.type} (${arg.required ? "required" : "optional"})${arg.description ? ` — ${arg.description}` : ""}`,
+    ) : ["No arguments."]),
+    "Prompt snippet", snippet || "Not provided.",
+    "Prompt guidelines", ...(guidelines.length ? guidelines.map((line) => `• ${line}`) : ["None."]),
+    "Metadata",
+    `Name: ${tool.name}`,
+    `Exposure: ${tool.exposure}`,
+    ...(tool.namespace ? [
+      `Namespace: ${tool.namespace.name}`,
+      ...(tool.namespace.description ? [tool.namespace.description] : []),
+      ...(tool.namespace.instructions ? [tool.namespace.instructions] : []),
+    ] : []),
+    ...Object.entries(tool.annotations ?? {}).map(([key, value]) => `${key}: ${value}`),
+    ...Object.entries(tool.sourceInfo ?? {}).map(([key, value]) => `${key}: ${value}`),
+  ].flatMap((line) => line.split("\n"));
+}
