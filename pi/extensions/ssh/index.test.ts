@@ -72,7 +72,8 @@ test("SSH resume and tree navigation report the live disconnected state", async 
 
 test("connecting, switching hosts, and disconnecting append targets without changing tools", async (t) => {
   const { SshConnection } = await import("./transport.ts");
-  // Explicit paths avoid remote cwd discovery; only closing would launch ssh.
+  t.mock.method(SshConnection.prototype, "open", async () => {});
+  t.mock.method(SshConnection.prototype, "exec", async function (this: InstanceType<typeof SshConnection>) { return Buffer.from(this.remoteCwd); });
   t.mock.method(SshConnection.prototype, "close", async () => {});
   const h = extensionTestHost(["read", "write", "read_remote", "change_mode", "codemode", "tool_search"]);
   toolSetExtension(h.pi);
@@ -102,6 +103,8 @@ test("connecting, switching hosts, and disconnecting append targets without chan
 
 test("idle SSH connection round trips do not add redundant notices", async (t) => {
   const { SshConnection } = await import("./transport.ts");
+  t.mock.method(SshConnection.prototype, "open", async () => {});
+  t.mock.method(SshConnection.prototype, "exec", async function (this: InstanceType<typeof SshConnection>) { return Buffer.from(this.remoteCwd); });
   t.mock.method(SshConnection.prototype, "close", async () => {});
   const h = extensionTestHost(["change_mode", "codemode", "tool_search"]);
   toolSetExtension(h.pi);
@@ -121,6 +124,8 @@ test("idle SSH connection round trips do not add redundant notices", async (t) =
 
 test("mid-run SSH target changes announce only the final target at the turn boundary", async (t) => {
   const { SshConnection } = await import("./transport.ts");
+  t.mock.method(SshConnection.prototype, "open", async () => {});
+  t.mock.method(SshConnection.prototype, "exec", async function (this: InstanceType<typeof SshConnection>) { return Buffer.from(this.remoteCwd); });
   t.mock.method(SshConnection.prototype, "close", async () => {});
   const h = extensionTestHost(["change_mode", "codemode", "tool_search"]);
   toolSetExtension(h.pi);
@@ -145,6 +150,8 @@ test("mid-run SSH target changes announce only the final target at the turn boun
 
 test("SSH override enabled before the first prompt is announced despite the implicit disconnected default", async (t) => {
   const { SshConnection } = await import("./transport.ts");
+  t.mock.method(SshConnection.prototype, "open", async () => {});
+  t.mock.method(SshConnection.prototype, "exec", async function (this: InstanceType<typeof SshConnection>) { return Buffer.from(this.remoteCwd); });
   t.mock.method(SshConnection.prototype, "close", async () => {});
   const h = extensionTestHost(["change_mode", "codemode", "tool_search"]);
   t.mock.method(h.pi, "getFlag", () => "alice@host:/project");
@@ -157,4 +164,30 @@ test("SSH override enabled before the first prompt is announced despite the impl
   assert.equal(h.messages.length, 1);
   assert.match(String(h.messages[0].content), /SSH override mode is active/);
   assert.match(String(h.messages[0].content), /alice@host:\/project/);
+});
+
+test("a failed host switch keeps the previous connection active", async (t) => {
+  const { SshConnection } = await import("./transport.ts");
+  t.mock.method(SshConnection.prototype, "open", async function (this: InstanceType<typeof SshConnection>) {
+    if (this.remote === "bad-host") throw new Error("authentication cancelled");
+  });
+  t.mock.method(SshConnection.prototype, "exec", async function (this: InstanceType<typeof SshConnection>) {
+    return Buffer.from(this.remoteCwd);
+  });
+  const closed: string[] = [];
+  t.mock.method(SshConnection.prototype, "close", async function (this: InstanceType<typeof SshConnection>) {
+    closed.push(this.remote);
+  });
+  const h = extensionTestHost(["change_mode", "codemode", "tool_search"]);
+  toolSetExtension(h.pi);
+  extension(h.pi);
+  t.after(() => h.emit("session_shutdown"));
+  await h.emit("session_start");
+  const ssh = h.commands.get("ssh")!;
+  await ssh.handler("good-host:/project", h.ctx);
+  await ssh.handler("bad-host:/project", h.ctx);
+  await h.emit("before_agent_start");
+  assert.match(String(h.messages.at(-1)?.content), /good-host:\/project/);
+  assert.ok(!closed.includes("good-host"));
+  assert.ok(closed.includes("bad-host"));
 });

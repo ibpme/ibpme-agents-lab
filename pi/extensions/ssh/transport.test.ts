@@ -25,3 +25,9 @@ for (const [name, glob, path, matches] of [
     assert.equal(globToRegExp(glob).test(path), matches);
   });
 }
+
+for (const target of ["", "-oProxyCommand=bad", ":/project", "user@host\nother", "host name:/project"]) {
+  test(`invalid SSH target is rejected: ${JSON.stringify(target)}`, () => {
+    assert.throws(() => parseSshTarget(target), /Invalid SSH target/);
+  });
+}

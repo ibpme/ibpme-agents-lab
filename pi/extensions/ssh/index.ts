@@ -12,6 +12,7 @@ import {
 import { clearOperationsOverride, setOperationsOverride } from "../stylish-tools/overrides.ts";
 import { registerStateNotice } from "../shared/state-notice.ts";
 import { getRequiredToolSet } from "../tool-set/service.ts";
+import { terminalAuthentication } from "./auth.ts";
 import { connectSsh, listSshConfigHosts } from "./connection.ts";
 import {
   createRemoteBashOps,
@@ -153,7 +154,7 @@ export default function (pi: ExtensionAPI) {
     const arg = pi.getFlag("ssh") as string | undefined;
     if (!arg) return;
 
-    cliSsh = await connectSsh(arg);
+    cliSsh = await connectSsh(arg, terminalAuthentication(ctx));
     setOperationsOverride({
       read: createRemoteReadOps(cliSsh, localCwd),
       write: createRemoteWriteOps(cliSsh, localCwd),
@@ -216,7 +217,7 @@ export default function (pi: ExtensionAPI) {
 
       let next: SshConnection;
       try {
-        next = await connectSsh(trimmed);
+        next = await connectSsh(trimmed, terminalAuthentication(ctx));
       } catch (e) {
         ctx.ui.notify(`SSH connection failed: ${e instanceof Error ? e.message : String(e)}`, "error");
         return;

@@ -3,9 +3,10 @@
  * live children, and classifies failures.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync } from "node:fs";
-import { homedir } from "node:os";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AuthenticateInteractively } from "./auth.ts";
 
 export class TransportError extends Error {
   readonly name = "TransportError";
@@ -53,31 +54,33 @@ export interface RunResult {
   stderr: Buffer;
 }
 
-/**
- * Options applied to every ssh invocation. BatchMode stops ssh from prompting
- * on /dev/tty (password, host-key confirmation), which would otherwise hang
- * the agent. ServerAlive* detects dead links instead of waiting on TCP.
- * ControlMaster reuses one authenticated connection per host.
- */
-let baseArgsCache: string[] | undefined;
-export function sshBaseArgs(): string[] {
-  if (baseArgsCache) return baseArgsCache;
-  const controlDir = join(homedir(), ".ssh");
-  try {
-    mkdirSync(controlDir, { recursive: true, mode: 0o700 });
-  } catch {
-    // ssh falls back to a direct connection if the control socket cannot be created.
-  }
-  baseArgsCache = [
+/** Starts a background master without allowing prompts or askpass programs. */
+function startMaster(args: string[]): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("ssh", args, { stdio: "ignore", env: { ...process.env, SSH_ASKPASS_REQUIRE: "never" } });
+    const timer = setTimeout(() => child.kill("SIGKILL"), 15_000);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(new TransportError(`Failed to start ssh: ${error.message}`));
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      resolve(code === 0);
+    });
+  });
+}
+
+/** Tool invocations may reuse the owned master, but must never authenticate themselves. */
+export function sshBaseArgs(controlPath?: string): string[] {
+  return [
     "-o", "BatchMode=yes",
     "-o", "ConnectTimeout=10",
     "-o", "ServerAliveInterval=15",
     "-o", "ServerAliveCountMax=3",
-    "-o", "ControlMaster=auto",
-    "-o", "ControlPersist=10m",
-    "-o", `ControlPath=${join(controlDir, "cm-%C")}`,
+    "-o", "ControlMaster=no",
+    "-o", "ProxyCommand=false",
+    ...(controlPath ? ["-S", controlPath] : []),
   ];
-  return baseArgsCache;
 }
 
 const KILL_GRACE_MS = 2000;
@@ -93,13 +96,14 @@ export function spawnRemote(
   command: string,
   opts: RunOptions,
   children: Set<ChildProcess>,
+  controlPath?: string,
 ): Promise<RunResult & { timedOut: boolean; aborted: boolean }> {
   return new Promise((resolve, reject) => {
     if (opts.signal?.aborted) {
       resolve({ code: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), timedOut: false, aborted: true });
       return;
     }
-    const child = spawn("ssh", [...sshBaseArgs(), remote, command], {
+    const child = spawn("ssh", [...sshBaseArgs(controlPath), "--", remote, command], {
       stdio: [opts.stdin !== undefined ? "pipe" : "ignore", "pipe", "pipe"],
     });
     children.add(child);
@@ -170,9 +174,9 @@ export function spawnRemote(
 }
 
 /** Asks a ControlMaster to exit. A no-op (non-zero exit) when none is running. */
-function stopControlMaster(remote: string): Promise<void> {
+function stopControlMaster(remote: string, controlPath: string): Promise<void> {
   return new Promise((resolve) => {
-    const child = spawn("ssh", ["-O", "exit", ...sshBaseArgs(), remote], { stdio: "ignore" });
+    const child = spawn("ssh", ["-O", "exit", ...sshBaseArgs(controlPath), "--", remote], { stdio: "ignore" });
     const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
     child.on("error", () => {
       clearTimeout(timer);
@@ -191,13 +195,46 @@ function stopControlMaster(remote: string): Promise<void> {
  */
 export class SshConnection {
   readonly remote: string;
-  readonly remoteCwd: string;
+  remoteCwd: string;
   private readonly children = new Set<ChildProcess>();
   private closed = false;
+  private controlDirectory?: string;
+  private controlPath?: string;
 
   constructor(remote: string, remoteCwd: string) {
     this.remote = remote;
     this.remoteCwd = remoteCwd;
+  }
+
+  /** Establishes and owns a master before exposing any remote tools. */
+  async open(interactive?: AuthenticateInteractively): Promise<void> {
+    if (this.closed) throw new TransportError("SSH connection is closed.");
+    if (this.controlPath) throw new TransportError("SSH connection is already open.");
+    this.controlDirectory = mkdtempSync(join(tmpdir(), "pi-ssh-"));
+    this.controlPath = join(this.controlDirectory, "s");
+    const args = [
+      "-o", "ConnectTimeout=10",
+      "-o", "ServerAliveInterval=15",
+      "-o", "ServerAliveCountMax=3",
+      "-o", "ControlMaster=yes",
+      "-o", "ControlPersist=no",
+      "-o", "PermitLocalCommand=no",
+      "-o", "ClearAllForwardings=yes",
+      "-S", this.controlPath, "-f", "-N",
+    ];
+    try {
+      const ready = await startMaster(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", ...args, "--", this.remote]);
+      if (!ready) {
+        if (!interactive) {
+          throw new TransportError("SSH requires authentication or host-key approval. Run /ssh in an interactive Pi terminal, or configure SSH keys and known_hosts.");
+        }
+        await interactive(["-o", "BatchMode=no", "-o", "StrictHostKeyChecking=ask", ...args, "--", this.remote]);
+      }
+      await this.exec("true", { timeoutMs: 15_000 });
+    } catch (error) {
+      await this.close();
+      throw error;
+    }
   }
 
   /**
@@ -207,12 +244,13 @@ export class SshConnection {
    */
   async run(command: string, opts: RunOptions = {}): Promise<RunResult> {
     if (this.closed) throw new TransportError("SSH connection is closed.");
-    const result = await spawnRemote(this.remote, command, opts, this.children);
+    if (!this.controlPath) throw new TransportError("SSH is not connected. Run /ssh to connect.");
+    const result = await spawnRemote(this.remote, command, opts, this.children, this.controlPath);
     if (this.closed) throw new TransportError("SSH connection was closed.");
     if (result.aborted) throw new RemoteAbortError();
     if (result.timedOut) throw new RemoteTimeoutError((opts.timeoutMs ?? 0) / 1000);
     if (result.code === 255) {
-      throw new TransportError(`SSH transport failed: ${result.stderr.toString().trim()}`);
+      throw new TransportError(`SSH transport failed. Run /ssh to reconnect: ${result.stderr.toString().trim()}`);
     }
     return result;
   }
@@ -232,7 +270,8 @@ export class SshConnection {
     this.closed = true;
     for (const child of this.children) child.kill("SIGTERM");
     this.children.clear();
-    await stopControlMaster(this.remote);
+    if (this.controlPath) await stopControlMaster(this.remote, this.controlPath);
+    if (this.controlDirectory) rmSync(this.controlDirectory, { recursive: true, force: true });
   }
 }
 
@@ -244,6 +283,9 @@ export interface ParsedSshTarget {
 
 /** Parses `host` or `user@host:/path`. Splits on the first ':' only. */
 export function parseSshTarget(arg: string): ParsedSshTarget {
+  if (!arg || arg.startsWith(":") || arg.startsWith("-") || /[\s\x00-\x1f\x7f]/.test(arg.split(":", 1)[0])) {
+    throw new TransportError("Invalid SSH target. Expected user@host[:/path].");
+  }
   const idx = arg.indexOf(":");
   if (idx === -1) return { remote: arg };
   return { remote: arg.slice(0, idx), remoteCwd: arg.slice(idx + 1) };

@@ -1,14 +1,22 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parseSshTarget, SshConnection } from "./transport.ts";
+import { parseSshTarget, shq, SshConnection } from "./transport.ts";
+import type { AuthenticateInteractively } from "./auth.ts";
 
 /** Opens a connection. Without an explicit path, the remote cwd is the login directory. */
-export async function connectSsh(arg: string): Promise<SshConnection> {
+export async function connectSsh(arg: string, interactive?: AuthenticateInteractively): Promise<SshConnection> {
   const { remote, remoteCwd } = parseSshTarget(arg);
-  if (remoteCwd !== undefined) return new SshConnection(remote, remoteCwd);
-  const home = (await new SshConnection(remote, "").exec("pwd")).toString().trim();
-  return new SshConnection(remote, home);
+  const connection = new SshConnection(remote, remoteCwd ?? "");
+  try {
+    await connection.open(interactive);
+    const directory = remoteCwd === undefined ? "pwd" : `cd -- ${shq(remoteCwd)} && pwd`;
+    connection.remoteCwd = (await connection.exec(directory, { timeoutMs: 15_000 })).toString().trim();
+    return connection;
+  } catch (error) {
+    await connection.close();
+    throw error;
+  }
 }
 
 /** `Host` aliases from ~/.ssh/config, for /ssh argument hints. Wildcards excluded. */

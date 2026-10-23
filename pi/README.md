@@ -108,8 +108,17 @@ Requires Pi 1.3.0 or newer for native restoration of tools loaded during a sessi
   remain discoverable, but execution fails rather than falling back to local I/O. Connections are not
   persisted; reconnect after resume. Connection/target notices use the same run/turn-boundary
   coalescing as permission notices, while connection changes and user-facing status update immediately.
+- SSH connections first try non-interactive key/agent authentication. If authentication or host-key
+  approval is needed in a terminal session, Pi temporarily releases the terminal to OpenSSH for
+  password, key-passphrase, MFA, or host-key prompts, then restores its UI. Ctrl-C cancels; interactive
+  authentication times out after two minutes. Credentials are entered directly into SSH, not Pi's
+  editor or the model conversation. Changed host keys are not automatically accepted.
+  Each connection owns a private control socket, verifies its remote directory before activation,
+  and closes only its own master on disconnect/shutdown. Remote tools never prompt or open fresh
+  connections; if the master drops, run `/ssh` again. A failed host switch preserves the previous
+  connection. Headless/RPC sessions require working non-interactive SSH authentication and known hosts.
 - `--ssh user@host[:/path]` is distinct: it redirects the unqualified tools to that remote for the
-  session. Their exposure and execution permissions are unchanged.
+  session. Their exposure and execution permissions are unchanged. It uses the same authentication flow.
 - `/tools` shows reachability separately from permission, for example `deferred · blocked (SAFE)`.
 
 SAFE is a harness execution policy, not an operating-system sandbox. MCP read-only annotations are
