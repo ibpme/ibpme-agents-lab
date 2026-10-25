@@ -1,5 +1,5 @@
 import { SSH_STATUS_KEY, SSH_REMOTE_TOOLS_STATUS_KEY } from "../contracts/status-keys.ts";
-import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import {
   createStylishBashTool,
   createStylishEditTool,
@@ -23,7 +23,7 @@ import {
   createRemoteReadOps,
   createRemoteWriteOps,
 } from "./operations.ts";
-import { SshConnection } from "./transport.ts";
+import { RemoteAbortError, SshConnection } from "./transport.ts";
 
 const REMOTE_DESCRIPTIONS = {
   read: "Read a file on the SSH remote host connected via /ssh, not the local machine.",
@@ -53,6 +53,22 @@ export default function (pi: ExtensionAPI) {
 
   const localCwd = process.cwd();
   const timers = new Set<NodeJS.Timeout>();
+  let sessionAbort = new AbortController();
+
+  async function connectForSession(arg: string, ctx: ExtensionContext): Promise<SshConnection> {
+    const signal = sessionAbort.signal;
+    try {
+      const connection = await connectSsh(arg, terminalAuthentication(ctx, signal), signal);
+      if (signal.aborted) {
+        await connection.close();
+        throw new RemoteAbortError();
+      }
+      return connection;
+    } catch (error) {
+      if (signal.aborted) throw new RemoteAbortError();
+      throw error;
+    }
+  }
 
   // CLI override mode — resolved once at session_start, redirects the base
   // read/write/edit/bash tools via stylish-tools/overrides.ts.
@@ -148,13 +164,14 @@ export default function (pi: ExtensionAPI) {
     () => !cliSsh && !sessionSsh);
 
   pi.on("session_start", async (_event, ctx) => {
+    if (sessionAbort.signal.aborted) sessionAbort = new AbortController();
     getRequiredToolSet().addBlockedTools(["write_remote", "edit_remote", "bash_remote"]);
     updateRemoteToolsStatus(ctx);
 
     const arg = pi.getFlag("ssh") as string | undefined;
     if (!arg) return;
 
-    cliSsh = await connectSsh(arg, terminalAuthentication(ctx));
+    cliSsh = await connectForSession(arg, ctx);
     setOperationsOverride({
       read: createRemoteReadOps(cliSsh, localCwd),
       write: createRemoteWriteOps(cliSsh, localCwd),
@@ -217,8 +234,9 @@ export default function (pi: ExtensionAPI) {
 
       let next: SshConnection;
       try {
-        next = await connectSsh(trimmed, terminalAuthentication(ctx));
+        next = await connectForSession(trimmed, ctx);
       } catch (e) {
+        if (e instanceof RemoteAbortError) return;
         ctx.ui.notify(`SSH connection failed: ${e instanceof Error ? e.message : String(e)}`, "error");
         return;
       }
@@ -251,6 +269,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async () => {
+    sessionAbort.abort();
     for (const timer of timers) clearInterval(timer);
     timers.clear();
     if (cliSsh) clearOperationsOverride();

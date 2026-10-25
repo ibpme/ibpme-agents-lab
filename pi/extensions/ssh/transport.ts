@@ -55,17 +55,25 @@ export interface RunResult {
 }
 
 /** Starts a background master without allowing prompts or askpass programs. */
-function startMaster(args: string[]): Promise<boolean> {
+function startMaster(args: string[], signal?: AbortSignal): Promise<boolean> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new RemoteAbortError()); return; }
     const child = spawn("ssh", args, { stdio: "ignore", env: { ...process.env, SSH_ASKPASS_REQUIRE: "never" } });
-    const timer = setTimeout(() => child.kill("SIGKILL"), 15_000);
-    child.once("error", (error) => {
+    const abort = () => { child.kill("SIGKILL"); };
+    signal?.addEventListener("abort", abort, { once: true });
+    const cleanup = () => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+    };
+    const timer = setTimeout(abort, 15_000);
+    child.once("error", (error) => {
+      cleanup();
       reject(new TransportError(`Failed to start ssh: ${error.message}`));
     });
     child.once("exit", (code) => {
-      clearTimeout(timer);
-      resolve(code === 0);
+      cleanup();
+      if (signal?.aborted) reject(new RemoteAbortError());
+      else resolve(code === 0);
     });
   });
 }
@@ -207,7 +215,7 @@ export class SshConnection {
   }
 
   /** Establishes and owns a master before exposing any remote tools. */
-  async open(interactive?: AuthenticateInteractively): Promise<void> {
+  async open(interactive?: AuthenticateInteractively, signal?: AbortSignal): Promise<void> {
     if (this.closed) throw new TransportError("SSH connection is closed.");
     if (this.controlPath) throw new TransportError("SSH connection is already open.");
     this.controlDirectory = mkdtempSync(join(tmpdir(), "pi-ssh-"));
@@ -223,14 +231,15 @@ export class SshConnection {
       "-S", this.controlPath, "-f", "-N",
     ];
     try {
-      const ready = await startMaster(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", ...args, "--", this.remote]);
+      const ready = await startMaster(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", ...args, "--", this.remote], signal);
       if (!ready) {
         if (!interactive) {
           throw new TransportError("SSH requires authentication or host-key approval. Run /ssh in an interactive Pi terminal, or configure SSH keys and known_hosts.");
         }
         await interactive(["-o", "BatchMode=no", "-o", "StrictHostKeyChecking=ask", ...args, "--", this.remote]);
       }
-      await this.exec("true", { timeoutMs: 15_000 });
+      if (signal?.aborted) throw new RemoteAbortError();
+      await this.exec("true", { timeoutMs: 15_000, signal });
     } catch (error) {
       await this.close();
       throw error;

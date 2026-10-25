@@ -7,7 +7,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { extensionTestHost } from "../shared/extension-test-host.ts";
 import { terminalAuthentication } from "./auth.ts";
 
-test("terminal authentication restores Pi after success and failure", async (t) => {
+test("authentication modal uses a real controlling PTY with password echo disabled", { timeout: 10_000 }, async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "ssh-ui-test-"));
   const originalPath = process.env.PATH;
   process.env.PATH = `${directory}:${originalPath}`;
@@ -23,30 +23,55 @@ test("terminal authentication restores Pi after success and failure", async (t) 
     });
     rmSync(directory, { recursive: true, force: true });
   });
-  t.mock.method(process.stdout, "write", () => true);
+  writeFileSync(join(directory, "ssh"), `#!/bin/sh
+stty -echo < /dev/tty
+printf 'Password: '
+IFS= read -r password < /dev/tty
+stty echo < /dev/tty
+if [ "$password" = '密碼é🔑' ]; then exit 0; else exit 255; fi
+`, { mode: 0o700 });
   const h = extensionTestHost();
-  const events: string[] = [];
-  h.ctx.ui.custom = (async (factory: any) => {
-    let result: unknown;
-    factory({
-      stop: () => events.push("stop"),
-      start: () => events.push("start"),
-      requestRender: () => events.push("render"),
-    }, h.ctx.ui.theme, undefined, (value: unknown) => { result = value; });
-    return result;
+  const frames: string[] = [];
+  let submitted = false;
+  h.ctx.ui.custom = (async (factory: any, options: any) => {
+    assert.equal(options.overlay, true);
+    assert.equal(options.overlayOptions.anchor, "center");
+    return new Promise<unknown>((resolve, reject) => {
+      let modal: any;
+      let timer: ReturnType<typeof setInterval>;
+      modal = factory({
+        terminal: { rows: 30 }, requestRender() {},
+        stop() { throw new Error("must not stop Pi's UI"); },
+        start() { throw new Error("must not restart Pi's UI"); },
+      }, h.ctx.ui.theme, undefined, (value: unknown) => {
+        clearInterval(timer);
+        modal?.dispose();
+        resolve(value);
+      });
+      modal.focused = true;
+      timer = setInterval(() => {
+        try {
+          const text = modal.render(80).join("\n");
+          frames.push(text);
+          if (text.includes("SSH failed")) throw new Error("PTY bootstrap failed");
+          if (!submitted && text.includes("Password:")) {
+            submitted = true;
+            modal.handleInput("\x1b[200~密碼é🔑\x1b[201~");
+            modal.handleInput("\x1b[13u");
+          }
+        } catch (error) {
+          clearInterval(timer);
+          reject(error);
+          modal.dispose();
+        }
+      }, 10);
+    });
   }) as ExtensionContext["ui"]["custom"];
-
-  for (const status of [0, 255]) {
-    writeFileSync(join(directory, "ssh"), `#!/bin/sh\nexit ${status}\n`, { mode: 0o700 });
-    events.length = 0;
-    const authenticate = terminalAuthentication(h.ctx)!;
-    if (status === 0) await authenticate([]);
-    else await assert.rejects(() => authenticate([]), /failed, was cancelled, or timed out/);
-    assert.deepEqual(events, ["stop", "start", "render"]);
-  }
-
-  const headless = { ...h.ctx, mode: "rpc" } as ExtensionContext;
-  assert.equal(terminalAuthentication(headless), undefined);
+  await terminalAuthentication(h.ctx)!(["--", "test-host"]);
+  assert.equal(submitted, true);
+  assert.doesNotMatch(frames.join("\n"), /密碼é🔑/);
+  assert.deepEqual(h.messages, []);
+  assert.equal(terminalAuthentication({ ...h.ctx, mode: "rpc" } as ExtensionContext), undefined);
   Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
   assert.equal(terminalAuthentication(h.ctx), undefined);
 });

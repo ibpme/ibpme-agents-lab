@@ -5,13 +5,13 @@ import { parseSshTarget, shq, SshConnection } from "./transport.ts";
 import type { AuthenticateInteractively } from "./auth.ts";
 
 /** Opens a connection. Without an explicit path, the remote cwd is the login directory. */
-export async function connectSsh(arg: string, interactive?: AuthenticateInteractively): Promise<SshConnection> {
+export async function connectSsh(arg: string, interactive?: AuthenticateInteractively, signal?: AbortSignal): Promise<SshConnection> {
   const { remote, remoteCwd } = parseSshTarget(arg);
   const connection = new SshConnection(remote, remoteCwd ?? "");
   try {
-    await connection.open(interactive);
+    await connection.open(interactive, signal);
     const directory = remoteCwd === undefined ? "pwd" : `cd -- ${shq(remoteCwd)} && pwd`;
-    connection.remoteCwd = (await connection.exec(directory, { timeoutMs: 15_000 })).toString().trim();
+    connection.remoteCwd = (await connection.exec(directory, { timeoutMs: 15_000, signal })).toString().trim();
     return connection;
   } catch (error) {
     await connection.close();

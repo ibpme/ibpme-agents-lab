@@ -191,3 +191,30 @@ test("a failed host switch keeps the previous connection active", async (t) => {
   assert.ok(!closed.includes("good-host"));
   assert.ok(closed.includes("bad-host"));
 });
+
+test("shutdown aborts pending SSH authentication without activating a stale connection", async (t) => {
+  const { RemoteAbortError, SshConnection } = await import("./transport.ts");
+  let began = false;
+  let aborted = false;
+  t.mock.method(SshConnection.prototype, "open", async (_interactive: unknown, signal?: AbortSignal) => {
+    began = true;
+    return new Promise<void>((_resolve, reject) => signal!.addEventListener("abort", () => {
+      aborted = true;
+      reject(new RemoteAbortError());
+    }, { once: true }));
+  });
+  t.mock.method(SshConnection.prototype, "close", async () => {});
+  const h = extensionTestHost(["change_mode", "codemode", "tool_search"]);
+  const notifications: string[] = [];
+  t.mock.method(h.ctx.ui, "notify", (message: string) => { notifications.push(message); });
+  toolSetExtension(h.pi);
+  extension(h.pi);
+  await h.emit("session_start");
+  const connecting = h.commands.get("ssh")!.handler("pending-host:/project", h.ctx);
+  assert.equal(began, true);
+  await h.emit("session_shutdown");
+  await connecting;
+  assert.equal(aborted, true);
+  assert.deepEqual(notifications, []);
+  assert.deepEqual(h.messages, []);
+});

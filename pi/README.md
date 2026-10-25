@@ -5,6 +5,7 @@ pi extensions, one directory each under `extensions/`, loaded as a single packag
 ## Install
 
 ```bash
+(cd pi && npm ci)        # install runtime dependencies, including native PTY support
 pi/install.sh            # link this package into ~/.pi/agent/extensions/ibpme-pi-extensions
 pi/install.sh --remove   # remove the link
 ```
@@ -68,6 +69,13 @@ npm run check      # typecheck + tests + real-loader test
 Pi loads TypeScript through jiti in its own Node.js runtime, so there is no build step and no runtime of our
 own to install. Relative imports carry an explicit `.ts` extension. The scripts need Node.js 22.18+ and npm 10+.
 
+Interactive SSH authentication uses `node-pty` and `@xterm/headless`, loaded only when a modal is needed.
+`node-pty` may require native build tools on platforms without a suitable prebuild. The postinstall
+script restores execute permission on the spawn helper shipped in node-pty 1.1.0's macOS prebuilds;
+if installing with scripts disabled, run `npm run postinstall` before using password authentication.
+The SSH transport targets POSIX systems with OpenSSH. Its integration test runs a temporary local SSH
+server with synthetic credentials and verifies the real OpenSSH master survives modal PTY disposal.
+
 ## Configuration
 
 Extensions create their own config under `~/.pi/agent/` when needed; nothing is installed for them.
@@ -109,10 +117,14 @@ Requires Pi 1.3.0 or newer for native restoration of tools loaded during a sessi
   persisted; reconnect after resume. Connection/target notices use the same run/turn-boundary
   coalescing as permission notices, while connection changes and user-facing status update immediately.
 - SSH connections first try non-interactive key/agent authentication. If authentication or host-key
-  approval is needed in a terminal session, Pi temporarily releases the terminal to OpenSSH for
-  password, key-passphrase, MFA, or host-key prompts, then restores its UI. Ctrl-C cancels; interactive
-  authentication times out after two minutes. Credentials are entered directly into SSH, not Pi's
-  editor or the model conversation. Changed host keys are not automatically accepted.
+  approval is needed in a terminal session, Pi opens a centered authentication-only terminal modal.
+  OpenSSH runs in a private PTY for password, key-passphrase, MFA, or host-key prompts; Pi's UI stays
+  running. Esc or Ctrl-C cancels, PgUp/PgDn scrolls active output, and authentication times out after
+  two minutes. On failure, Enter closes the diagnostic screen. Pasted text cannot automatically submit
+  a response: line breaks and control characters are removed; press Enter explicitly.
+  OpenSSH controls password echo. Keystrokes pass transiently through the PTY bridge but are never
+  added to Pi's editor, conversation, or input logs by this extension. The modal is not isolation from
+  other trusted extensions. Changed host keys are not automatically accepted.
   Each connection owns a private control socket, verifies its remote directory before activation,
   and closes only its own master on disconnect/shutdown. Remote tools never prompt or open fresh
   connections; if the master drops, run `/ssh` again. A failed host switch preserves the previous
