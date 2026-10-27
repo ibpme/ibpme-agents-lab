@@ -31,4 +31,4 @@ The visual’s structure carries the idea; detailed prose stays outside it. Adap
 
 Use the current harness’s native rendering capabilities and tool descriptions to choose how to render and present visuals. Discover rendering tools exposed through MCP or other tool integrations when native rendering does not cover the needed format.
 
-When running in Pi, read [references/pi.md](references/pi.md) for native Mermaid rendering guidance.
+When running in Pi, read [harness/pi.md](harness/pi.md) for native Mermaid rendering guidance.
