@@ -2,7 +2,9 @@
 
 Pi supports automatic rendering of fenced Mermaid blocks in assistant messages. Present the block directly in the response; a dedicated rendering tool is not required. Rendering is controlled by `markdown.mermaid`, with modes `streaming`, `final`, and `off`.
 
-For a diagram, use a fenced `mermaid` block like this:
+## Example
+
+This illustrates Mermaid syntax and an optional caption, not a required diagram style or layout:
 
 ````markdown
 ```mermaid
@@ -14,4 +16,4 @@ flowchart LR
 _Figure 1. The client sends a request; the server returns a response._
 ````
 
-Replace the example with a diagram relevant to the explanation so the user sees the visual itself.
+Choose the diagram type, labels, and surrounding prose to suit the explanation.
