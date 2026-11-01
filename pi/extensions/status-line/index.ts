@@ -178,10 +178,10 @@ export default function statusLineExtension(pi: ExtensionAPI) {
             contextUsage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
           const percent = contextUsage?.percent ?? 0;
           const color = contextColor(percent);
-          const filled = Math.round((Math.min(100, percent) / 100) * BAR_WIDTH);
+          const filled = Math.round((Math.max(0, Math.min(100, percent)) / 100) * BAR_WIDTH);
           const bar =
-            theme.fg(color, "█".repeat(filled)) +
-            theme.fg("dim", "░".repeat(BAR_WIDTH - filled));
+            theme.fg(color, "━".repeat(filled)) +
+            theme.fg("dim", "─".repeat(BAR_WIDTH - filled));
           const percentText =
             contextUsage?.percent != null ? `${percent.toFixed(0)}%` : "?";
           const usedTokens = contextUsage?.tokens ?? 0;
