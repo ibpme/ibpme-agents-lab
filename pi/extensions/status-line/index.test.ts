@@ -8,7 +8,7 @@ import extension from "./index.ts";
 test("fast badge follows the thinking level, appears once, and disappears when cleared", () => {
   let start!: (event: unknown, ctx: ExtensionContext) => unknown;
   let footer!: { render(width: number): string[]; dispose(): void };
-  const statuses = new Map([[FAST_STATUS_KEY, "⚡ fast"]]);
+  const statuses = new Map([[FAST_STATUS_KEY, "fast"]]);
   const theme = { fg: (_color: string, text: string) => text, bold: (text: string) => text } as Theme;
   extension({
     events: { on: () => () => {} },
@@ -30,13 +30,13 @@ test("fast badge follows the thinking level, appears once, and disappears when c
   start({}, ctx);
   try {
     const lines = footer.render(200);
-    assert.match(lines[1], /openai\/.* • high • ⚡ fast$/);
-    assert.equal(lines.join("\n").split("⚡ fast").length - 1, 1);
+    assert.match(lines[1], /openai\/.* • high • fast$/);
+    assert.equal(lines.join("\n").split("fast").length - 1, 1);
     statuses.clear();
-    assert.doesNotMatch(footer.render(200).join("\n"), /⚡ fast/);
-    statuses.set(FAST_STATUS_KEY, "⚡ fast");
+    assert.doesNotMatch(footer.render(200).join("\n"), /fast/);
+    statuses.set(FAST_STATUS_KEY, "fast");
     ctx.model = { ...ctx.model!, reasoning: false };
-    assert.match(footer.render(200)[1], / • ⚡ fast$/);
+    assert.match(footer.render(200)[1], / • fast$/);
   } finally {
     footer.dispose();
   }

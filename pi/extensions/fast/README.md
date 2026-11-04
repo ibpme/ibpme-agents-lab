@@ -14,7 +14,7 @@ The command/badge say “fast”, but the wire value is `priority`, matching
 Some endpoints accept `fast` as an alias; subscription endpoints can reject it with
 `Unsupported service_tier: fast`, so this extension uses `priority` consistently.
 
-The footer shows **⚡ fast** after the thinking level (or after the model for non-reasoning models).
+The footer shows **fast** after the thinking level (or after the model for non-reasoning models).
 The badge indicates a **requested** tier, not confirmation that OpenAI honored it. With the custom
 status-line disabled, it remains a normal extension status in Pi's default footer.
 

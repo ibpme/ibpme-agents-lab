@@ -92,7 +92,7 @@ For custom labels, create `~/.pi/agent/openai-accounts.json` with `{"labels": ["
 run `/reload`. See its [setup guide](extensions/openai-accounts/README.md) for account-selection caveats.
 
 `/fast` toggles an OpenAI `service_tier: "priority"` request; `/fast on` and `/fast off` set it explicitly.
-The `⚡ fast` footer badge follows the thinking level and means requested, not server-confirmed.
+The `fast` footer badge follows the thinking level and means requested, not server-confirmed.
 The preference survives resume/reload, follows `/account` switches, and starts off in new sessions.
 Other providers are unaffected. Availability and increased cost/quota usage depend on OpenAI; see the
 [fast-tier guide](extensions/fast/README.md) for limitations.

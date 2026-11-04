@@ -46,7 +46,7 @@ test("fast defaults off; command toggles exact service tier without mutating the
   const payload = { model: h.ctx.model?.id, service_tier: "auto", store: false };
   assert.deepEqual(h.request(payload), { ...payload, service_tier: "priority" });
   assert.equal(payload.service_tier, "auto");
-  assert.equal(h.statuses.get(FAST_STATUS_KEY), "⚡ fast");
+  assert.equal(h.statuses.get(FAST_STATUS_KEY), "fast");
   assert.match(h.notices[0], /cost or quota/);
   await h.command();
   assert.equal(h.request(payload), undefined);
@@ -75,7 +75,7 @@ test("aliases and Codex are supported, other providers/APIs and unrelated payloa
     if (provider === "openai-codex") h.ctx.model = { ...h.ctx.model, api: "openai-codex-responses" };
     h.fire("model_select");
     assert.ok(h.request());
-    assert.equal(h.statuses.get(FAST_STATUS_KEY), "⚡ fast");
+    assert.equal(h.statuses.get(FAST_STATUS_KEY), "fast");
   }
   for (const payload of [null, [], "payload", { model: "other" }, {}]) assert.equal(h.request(payload), undefined);
   h.ctx.model = { ...h.ctx.model!, provider: "anthropic" };

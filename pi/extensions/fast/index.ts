@@ -11,7 +11,7 @@ export function supportsFast(model: ExtensionContext["model"]): boolean {
 export default function (pi: ExtensionAPI) {
   let enabled = false;
   const updateStatus = (ctx: ExtensionContext) => {
-    ctx.ui.setStatus(FAST_STATUS_KEY, enabled && supportsFast(ctx.model) ? ctx.ui.theme.fg("warning", "⚡ fast") : undefined);
+    ctx.ui.setStatus(FAST_STATUS_KEY, enabled && supportsFast(ctx.model) ? ctx.ui.theme.fg("warning", "fast") : undefined);
   };
 
   pi.registerCommand("fast", {
