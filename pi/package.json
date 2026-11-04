@@ -36,6 +36,7 @@
     "extensions": [
       "./extensions/alias/index.ts",
       "./extensions/loaded-skills/index.ts",
+      "./extensions/openai-accounts/index.ts",
       "./extensions/prompt-suggestions/index.ts",
       "./extensions/protected-paths/index.ts",
       "./extensions/question/index.ts",

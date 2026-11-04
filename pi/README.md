@@ -22,6 +22,7 @@ disable an extension. Run `/reload` in pi after changes.
 | Extension | Purpose | Depends on |
 |---|---|---|
 | `alias` | Command aliases | - |
+| [`openai-accounts`](extensions/openai-accounts/README.md) | Separate ChatGPT OAuth accounts (`openai:work`, custom labels) | - |
 | `thinking-style` | Thinking display style | - |
 | `question` | Structured questions with re-answer | - |
 | `thinking-cycle-backward` | Cycle thinking level backward | shared: shortcut-config |
@@ -82,6 +83,12 @@ Extensions create their own config under `~/.pi/agent/` when needed; nothing is 
 `prompt-suggestions` reads `~/.pi/agent/prompt-suggestions.json` (written when you toggle suggestions) with keys
 `enabled`, `provider`, `model` and `ollamaUrl`. Missing keys fall back to built-in defaults, and
 `PI_SUGGESTIONS_PROVIDER`, `PI_SUGGESTIONS_MODEL` and `PI_SUGGESTIONS_OLLAMA_URL` override the file.
+
+`openai-accounts` adds `openai:work` to `/login` and `/model`, with credentials independent of `openai`.
+Use `/account` or `/account switch` to toggle two available accounts directly, or pick from a menu when
+there are more, keeping the same model.
+For custom labels, create `~/.pi/agent/openai-accounts.json` with `{"labels": ["work", "personal"]}` and
+run `/reload`. See its [setup guide](extensions/openai-accounts/README.md) for account-selection caveats.
 
 ## Tools and execution permissions
 
