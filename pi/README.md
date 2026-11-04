@@ -22,6 +22,7 @@ disable an extension. Run `/reload` in pi after changes.
 | Extension | Purpose | Depends on |
 |---|---|---|
 | `alias` | Command aliases | - |
+| [`fast`](extensions/fast/README.md) | `/fast` OpenAI service-tier toggle and footer badge | contracts: status-keys |
 | [`openai-accounts`](extensions/openai-accounts/README.md) | Separate ChatGPT OAuth accounts (`openai:work`, custom labels) | - |
 | `thinking-style` | Thinking display style | - |
 | `question` | Structured questions with re-answer | - |
@@ -38,7 +39,7 @@ disable an extension. Run `/reload` in pi after changes.
 | `reasoning-tokens` | Live reasoning token counter | contracts: events |
 | `loaded-skills` | Loaded-skills indicator and `/loaded-skills` token-estimate viewer | shared: pager; contracts: status-keys |
 | `tool-call-stats` | Tool-call statistics | shared: pager; contracts: events |
-| `status-line` | Footer status line | shared: tool-status; contracts: status-keys, events |
+| `status-line` | Footer status line (including fast-tier badge after thinking level) | shared: tool-status; contracts: status-keys, events |
 
 Runtime links beyond imports: `ssh` uses the `tool-set` service and `stylish-tools` operations override through
 process-wide `Symbol.for` keys, and `status-line` shows status entries published by `tool-set`, `ssh` and
@@ -89,6 +90,12 @@ Use `/account` or `/account switch` to toggle two available accounts directly, o
 there are more, keeping the same model.
 For custom labels, create `~/.pi/agent/openai-accounts.json` with `{"labels": ["work", "personal"]}` and
 run `/reload`. See its [setup guide](extensions/openai-accounts/README.md) for account-selection caveats.
+
+`/fast` toggles an OpenAI `service_tier: "priority"` request; `/fast on` and `/fast off` set it explicitly.
+The `⚡ fast` footer badge follows the thinking level and means requested, not server-confirmed.
+The preference survives resume/reload, follows `/account` switches, and starts off in new sessions.
+Other providers are unaffected. Availability and increased cost/quota usage depend on OpenAI; see the
+[fast-tier guide](extensions/fast/README.md) for limitations.
 
 ## Tools and execution permissions
 
