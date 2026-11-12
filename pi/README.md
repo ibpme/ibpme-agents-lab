@@ -22,6 +22,7 @@ disable an extension. Run `/reload` in pi after changes.
 | Extension | Purpose | Depends on |
 |---|---|---|
 | `alias` | Command aliases | - |
+| `copy-command` | Browse replies and copy a cleaned shell command | shared: message-text |
 | [`fast`](extensions/fast/README.md) | `/fast` OpenAI service-tier toggle and footer badge | contracts: status-keys |
 | [`openai-accounts`](extensions/openai-accounts/README.md) | Separate ChatGPT OAuth accounts (`openai:work`, custom labels) | - |
 | `thinking-style` | Thinking display style | - |
