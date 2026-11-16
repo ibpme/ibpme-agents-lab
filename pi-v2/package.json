@@ -30,7 +30,8 @@
       "./extensions/thinking-cycle-backward/index.ts",
       "./extensions/thinking-style/index.ts",
       "./extensions/status-line/index.ts",
-      "./extensions/context-usage/index.ts"
+      "./extensions/context-usage/index.ts",
+      "./extensions/tool-styling/index.ts"
     ]
   }
 }

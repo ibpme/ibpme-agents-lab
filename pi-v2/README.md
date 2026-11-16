@@ -13,8 +13,9 @@ pi -e ./pi-v2
 
 This uses Pi's native package manifest and TypeScript loader. No build step or
 runtime dependency installation is needed for these extensions. Disable the old
-`alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, and `status-line`
-extensions before loading their v2 replacements. Duplicate commands receive invocation suffixes such as
+`alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `status-line`, and
+`stylish-tools` extensions before loading their v2 replacements (`tool-styling`
+replaces `stylish-tools`). Duplicate commands receive invocation suffixes such as
 `/clear:1` and `/clear:2`; duplicate shortcuts conflict.
 
 For persistent use, after disabling the original versions of these extensions:
@@ -110,6 +111,41 @@ Indicator customization is TUI-only; RPC, JSON, and print modes do not access UI
 methods. Another extension that changes working-indicator frames or working-message
 text (such as the original agent statistics extension) would compete for the same
 Pi-owned surface; disable one of the conflicting extensions.
+
+## Tool styling
+
+`extensions/tool-styling/` replaces the old `stylish-tools` presentation without
+replacing any tool implementation. It uses Pi 1.5.2's `registerToolRenderer()` for
+exactly `read`, `write`, `edit`, `bash`, `grep`, `find`, and `ls`; other tool names
+continue through Pi's renderer chain. These seven names deliberately use this
+extension's renderers instead of their stock rendering.
+
+- Compact call labels, paths, skill-read labels, and relevant arguments.
+- Collapsed previews: read 3 lines, write 10, grep 15, find/ls 20; bash shows its
+  last 5 lines. Hidden-line counts include the user's native expand-key hint.
+- Expanded output uses the old colored dot/gutter style and shows all returned
+  text, wrapping to the available width. Completed edit diffs remain visible
+  without expanding, with added/removed line counts.
+- Streaming results show `running`; final results show `done` or `failed`.
+  Durations come only from native `context.durationMs`. Missing durations are
+  omitted, not estimated or shown as zero. No timers or shared working-message
+  ownership are introduced.
+- Errors, native truncation/limit warnings, and saved full-output paths remain
+  visible. Read images remain Pi-owned; styling adds an image summary rather
+  than decoding or replacing image data. Self-shell rendering respects `outputPad`.
+
+The extension does not register tools, activate deferred tools, change schemas,
+rewrite results, execute commands, read files for previews, or route operations.
+Native execution retains shell settings, cancellation, streaming, and truncation.
+There is no operations-override registry or SSH dependency. Remote names such as
+`read_remote` are not styled automatically; SSH execution and policy migration
+remain separate work. If another extension replaces execution under one of the
+seven names, this extension does not undo that replacement—disable the original
+`stylish-tools` before trying this version.
+
+No new tool-styling tests are included in this visual pass. The existing package
+loader/reload tests and TypeScript checking validate registration and loading;
+renderer-specific coverage remains follow-up work.
 
 ## Modular status footer
 
@@ -248,7 +284,8 @@ pi-v2/
 │   ├── stash/index.ts
 │   ├── status-line/               # Layout/config, default-segments/, lifecycle
 │   ├── thinking-cycle-backward/index.ts
-│   └── thinking-style/index.ts
+│   ├── thinking-style/index.ts
+│   └── tool-styling/              # Renderer registration, per-tool views, formatting
 └── tests/
     ├── alias.test.mjs            # Real package discovery/reload + alias commands
     ├── context-usage.test.mjs
@@ -296,9 +333,11 @@ Keep these as review groups, not extra directory layers or a fixed migration pla
    Try native UI primitives before building a shared pager abstraction.
 3. **Model/provider behavior:** fast tier, account selection, prompt suggestions.
    Use the current model registry, provider hooks, and scoped models where relevant.
-4. **Tool policy and execution:** protected paths, execution modes, tool rendering,
-   SSH. Review their cooperation together: the original package has cross-extension
-   services here, and a one-file-at-a-time port could preserve the wrong design.
+4. **Tool policy and execution:** protected paths, execution modes, SSH. Rendering
+   is now independently migrated as `tool-styling`; keep execution and policy out
+   of it. Review the remaining cooperation together: the original package has
+   cross-extension services here, and a one-file-at-a-time port could preserve
+   the wrong design.
 5. **Presentation:** modular status-line placement is migrated. Future producers
    should publish independent statuses instead of owning footer placement or
    competing for working-message text.

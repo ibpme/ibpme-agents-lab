@@ -100,3 +100,24 @@ Rich-widget layout/registration is deferred. `statusline.json` currently control
 footer rows only; do not introduce a custom widget registry for single-line
 status text. Native editor widgets remain independent. Revisit centralized widget
 placement only when a real multiline or interactive use case requires it.
+
+## Tool styling migration decision
+
+`tool-styling` uses native `registerToolRenderer()` rather than re-registering
+built-in tool definitions. It deliberately replaces the presentation for the
+seven local tool names and delegates all other names to `next()`. Registration
+and reload cleanup belong to Pi; no session hooks, timers, execution factories,
+operations overrides, or tool activation are necessary.
+
+Native `context.durationMs` is the only duration source. Renderers neither start
+clocks nor reconstruct durations during historical replay. Errors use native
+`context.isError`; do not infer abort/timeout status from arbitrary command output.
+Expanded output is not capped at the old renderer's forty lines, and edit diffs
+remain fully visible. Native model-facing truncation remains untouched.
+
+SSH should later own its execution, cancellation, policy, and persisted destination
+identity. Reuse presentation only at an explicit seam if needed; do not make SSH
+import this extension's entry point or restore the global operations registry.
+Before migrating SSH, fix shell quoting with proper shell escaping and `--` where
+supported, and implement remote grep execution explicitly: native `GrepOperations`
+only overrides metadata checks, not the local ripgrep process.
