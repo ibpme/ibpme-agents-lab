@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 const WIDGET_KEY = "context-usage";
 const BAR_WIDTH = 10;
@@ -18,13 +19,19 @@ export default function contextUsage(pi: ExtensionAPI): void {
     const percent = usage?.percent;
     const color = percent != null && percent > 70 ? "error" : percent != null && percent > 40 ? "warning" : "success";
     const filled = Math.round(Math.max(0, Math.min(100, percent ?? 0)) / 100 * BAR_WIDTH);
-    const bar = ctx.ui.theme.fg(color, "━".repeat(filled)) + ctx.ui.theme.fg("dim", "─".repeat(BAR_WIDTH - filled));
     const label = percent == null ? "?" : `${percent.toFixed(0)}%`;
     const used = usage?.tokens == null ? "?" : formatTokens(usage.tokens);
     const capacity = window > 0 ? formatTokens(window) : "?";
-    ctx.ui.setWidget(WIDGET_KEY, [`${bar} ${ctx.ui.theme.fg(color, label)}${ctx.ui.theme.fg("dim", ` ${used}/${capacity}`)}`], {
-      placement: "aboveEditor",
-    });
+    ctx.ui.setWidget(WIDGET_KEY, () => ({
+      render(width) {
+        const theme = ctx.ui.theme;
+        const bar = theme.fg(color, "━".repeat(filled)) + theme.fg("dim", "─".repeat(BAR_WIDTH - filled));
+        const text = `${bar} ${theme.fg(color, label)}${theme.fg("dim", ` ${used}/${capacity}`)}`;
+        const clipped = truncateToWidth(text, Math.max(0, width), "...");
+        return [" ".repeat(Math.max(0, width - visibleWidth(clipped))) + clipped];
+      },
+      invalidate() {},
+    }), { placement: "aboveEditor" });
   }
 
   pi.on("session_start", publish);

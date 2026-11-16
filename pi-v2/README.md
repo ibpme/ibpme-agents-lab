@@ -155,8 +155,10 @@ colors remain intact, and disabling the footer does not clear producer statuses.
 ### Context usage
 
 `extensions/context-usage/index.ts` owns an independent native Pi widget named
-`context-usage`, placed **above the editor** with `ctx.ui.setWidget()`. It remains
-visible whether the modular or native footer is active. It does not publish a
+`context-usage`, **right-aligned above the editor** with `ctx.ui.setWidget()`.
+It uses display-width-aware padding and clips to fit narrow terminals, refreshing
+colors from the active theme during rendering. It remains visible whether the
+modular or native footer is active. It does not publish a
 footer status and is not selected or positioned by `statusline.json`.
 
 Its presentation follows the old footer: a ten-cell `━/─` bar, rounded
