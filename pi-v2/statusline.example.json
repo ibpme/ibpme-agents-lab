@@ -1,0 +1,26 @@
+{
+  "footer": [
+    {
+      "left": ["cwd", "git", "status:ssh", "session"],
+      "right": ["status:prompt-suggestions"]
+    },
+    {
+      "left": [
+        "status:mode",
+        "tokens",
+        "status:agent-stats",
+        "cost",
+        "status:context-usage",
+        "status:reasoning-tokens"
+      ],
+      "right": ["model", "thinking", "status:openai-fast"],
+      "separator": " · ",
+      "rightSeparator": " • "
+    },
+    {
+      "left": ["status:tools", "status:loaded-skills", "status:mcp-tools", "status:*"],
+      "separator": " · "
+    }
+  ],
+  "hidden": []
+}
