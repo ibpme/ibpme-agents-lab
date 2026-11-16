@@ -10,7 +10,6 @@
         "tokens",
         "status:agent-stats",
         "cost",
-        "status:context-usage",
         "status:reasoning-tokens"
       ],
       "right": ["model", "thinking", "status:openai-fast"],

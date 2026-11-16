@@ -154,16 +154,18 @@ colors remain intact, and disabling the footer does not clear producer statuses.
 
 ### Context usage
 
-`extensions/context-usage/index.ts` is an independent producer. It publishes
-`context-usage` through `setStatus()`, works with Pi's native footer too, and
-has no dependency on this compositor. Select it with `status:context-usage`.
+`extensions/context-usage/index.ts` owns an independent native Pi widget named
+`context-usage`, placed **above the editor** with `ctx.ui.setWidget()`. It remains
+visible whether the modular or native footer is active. It does not publish a
+footer status and is not selected or positioned by `statusline.json`.
 
 Its presentation follows the old footer: a ten-cell `━/─` bar, rounded
 percentage, and compact used/capacity tokens. Colors are `success` normally,
 `warning` above 40%, and `error` above 70%. Unknown values display `?`
 instead of claiming zero utilization. It refreshes on session/response/turn,
-compaction, tree, and model events; there is no timer or widget registration.
-Shutdown clears only its own status. Both footer and context producer are TUI-only.
+compaction, tree, and model events; there is no timer. Shutdown removes only its
+own widget. Both the footer and context widget are TUI-only. Centralized widget
+layout remains deferred; this widget uses Pi's native placement directly.
 
 ### Configure placement
 
@@ -182,7 +184,7 @@ Create either file yourself; the extension never writes configuration:
       "right": ["status:prompt-suggestions"]
     },
     {
-      "left": ["tokens", "status:agent-stats", "cost", "status:context-usage"],
+      "left": ["tokens", "status:agent-stats", "cost"],
       "right": ["model", "thinking", "status:openai-fast"],
       "separator": " · ",
       "rightSeparator": " • "
@@ -316,7 +318,7 @@ npm run check
 and reload, alias commands, stash restoration/swap/lifecycle behavior, supported
 thinking levels, direct shortcut registration, thinking-indicator lifecycle, and
 Markdown styling, selectable old-style footer segments, configurable status placement,
-independent context usage,
+independent context-widget rendering and cleanup,
 and footer lifecycle/cleanup. Loader tests use temporary agent directories,
 not personal settings, and make no model requests. Test files use JavaScript so
 Node can run them without a transpilation tool or custom test runner. Extension

@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-const STATUS_KEY = "context-usage";
+const WIDGET_KEY = "context-usage";
 const BAR_WIDTH = 10;
 
 function formatTokens(count: number): string {
@@ -22,7 +22,9 @@ export default function contextUsage(pi: ExtensionAPI): void {
     const label = percent == null ? "?" : `${percent.toFixed(0)}%`;
     const used = usage?.tokens == null ? "?" : formatTokens(usage.tokens);
     const capacity = window > 0 ? formatTokens(window) : "?";
-    ctx.ui.setStatus(STATUS_KEY, `${bar} ${ctx.ui.theme.fg(color, label)}${ctx.ui.theme.fg("dim", ` ${used}/${capacity}`)}`);
+    ctx.ui.setWidget(WIDGET_KEY, [`${bar} ${ctx.ui.theme.fg(color, label)}${ctx.ui.theme.fg("dim", ` ${used}/${capacity}`)}`], {
+      placement: "aboveEditor",
+    });
   }
 
   pi.on("session_start", publish);
@@ -33,6 +35,6 @@ export default function contextUsage(pi: ExtensionAPI): void {
   pi.on("session_compact", publish);
   pi.on("model_select", publish);
   pi.on("session_shutdown", (_event, ctx) => {
-    if (ctx.mode === "tui") ctx.ui.setStatus(STATUS_KEY, undefined);
+    if (ctx.mode === "tui") ctx.ui.setWidget(WIDGET_KEY, undefined);
   });
 }

@@ -116,14 +116,14 @@ async function setup(t, options = {}) {
 
 test("default composition follows the old location, usage, model, and optional status style", async (t) => {
 	const h = await setup(t);
-	h.statuses.set("context-usage", "CONTEXT BAR");
+	h.statuses.set("agent-stats", "ACTIVITY");
 	h.statuses.set("ssh", "remote");
 	h.statuses.set("openai-fast", "fast");
 	h.statuses.set("a", "other");
 	await h.fire("session_start");
 	const lines = h.footer.render(240);
 	assert.equal(lines[0], `${h.ctx.cwd} on ⎇ main remote • session`);
-	assert.match(lines[1], /^↑1\.0k ↓200 R3\.0k · \$0\.010 · CONTEXT BAR +test\/model • high • fast$/);
+	assert.match(lines[1], /^↑1\.0k ↓200 R3\.0k · ACTIVITY · \$0\.010 +test\/model • high • fast$/);
 	assert.equal(lines[2], "other");
 	assert.ok(h.colors.includes("accent"));
 	assert.ok(h.colors.includes("success"));
@@ -347,26 +347,38 @@ test("ANSI and wide-character statuses remain bounded even at zero width", () =>
 	}
 });
 
-test("context extension composes through setStatus without footer coupling or history rescans", async (t) => {
+test("context widget stays independent of footer toggles and is never duplicated into a status", async (t) => {
 	const theme = coloredTheme();
 	const h = await setup(t, { theme });
+	const widgets = new Map();
+	h.ctx.ui.setWidget = (key, content, options) => {
+		if (content === undefined) widgets.delete(key);
+		else widgets.set(key, { content, options });
+	};
 	h.ctx.getContextUsage = () => ({ percent: 45, tokens: 90000, contextWindow: 200000 });
 	const producer = registerExtension(contextUsage);
 	await h.fire("session_start");
 	await producer.fire("session_start", {}, h.ctx);
-	let line = h.footer.render(240)[1];
-	assert.match(stripTerminalSequences(line), /━━━━━───── 45% 90k\/200k/);
-	assert.ok(line.includes(theme.fg("warning", "45%")));
+	const footer = h.footer.render(240);
+	let widget = widgets.get("context-usage");
+	assert.equal(widget.options.placement, "aboveEditor");
+	assert.match(stripTerminalSequences(widget.content[0]), /━━━━━───── 45% 90k\/200k/);
+	assert.ok(widget.content[0].includes(theme.fg("warning", "45%")));
+	assert.doesNotMatch(stripTerminalSequences(footer.join("\n")), /45%|━|─/);
+	assert.ok(!h.statuses.has("context-usage"));
 	assert.equal(h.reads, 1);
 	h.ctx.getContextUsage = () => ({ percent: 80, tokens: 160000, contextWindow: 200000 });
 	await producer.fire("message_end", {}, h.ctx);
-	line = h.footer.render(240)[1];
-	assert.ok(line.includes(theme.fg("error", "80%")));
-	assert.equal(h.reads, 1, "producer status update does not rescan assistant history");
+	widget = widgets.get("context-usage");
+	assert.ok(widget.content[0].includes(theme.fg("error", "80%")));
+	h.footer.render(240);
+	assert.equal(h.reads, 1, "widget updates do not rescan footer history");
 	await h.command();
-	assert.ok(h.statuses.has("context-usage"), "disabling the compositor does not remove another extension's status");
+	assert.ok(widgets.has("context-usage"), "disabling the footer leaves the independent widget alone");
+	await h.command();
+	assert.ok(widgets.has("context-usage"));
 	await producer.fire("session_shutdown", {}, h.ctx);
-	assert.ok(!h.statuses.has("context-usage"));
+	assert.ok(!widgets.has("context-usage"));
 	await h.fire("session_shutdown");
 });
 

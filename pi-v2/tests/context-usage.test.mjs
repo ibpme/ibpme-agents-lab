@@ -4,7 +4,7 @@ import contextUsage from "../extensions/context-usage/index.ts";
 import { registerExtension } from "./extension-fixture.mjs";
 
 function setup(mode = "tui") {
-	const statuses = new Map([["other-extension", "unchanged"]]);
+	const widgets = new Map([["other-extension", "unchanged"]]);
 	const paints = [];
 	const calls = [];
 	const ctx = {
@@ -13,10 +13,10 @@ function setup(mode = "tui") {
 		getContextUsage: () => ({ percent: 45, tokens: 90000, contextWindow: 200000 }),
 		ui: new Proxy({
 			theme: { fg: (color, text) => { paints.push({ color, text }); return text; } },
-			setStatus(key, value) {
-				calls.push({ key, value });
-				if (value === undefined) statuses.delete(key);
-				else statuses.set(key, value);
+			setWidget(key, value, options) {
+				calls.push({ key, value, options });
+				if (value === undefined) widgets.delete(key);
+				else widgets.set(key, value);
 			},
 		}, {
 			get(target, key) {
@@ -27,15 +27,16 @@ function setup(mode = "tui") {
 		}),
 	};
 	const host = registerExtension(contextUsage);
-	return { ctx, statuses, paints, calls, fire: (event) => host.fire(event, {}, ctx) };
+	return { ctx, widgets, paints, calls, fire: (event) => host.fire(event, {}, ctx) };
 }
 
-test("independent context producer publishes the old ten-cell bar and percentage as a status", async () => {
+test("independent context producer publishes the old ten-cell bar and percentage as an above-editor widget", async () => {
 	const h = setup();
 	await h.fire("session_start");
-	assert.equal(h.statuses.get("context-usage"), "━━━━━───── 45% 90k/200k");
+	assert.equal(h.widgets.get("context-usage")?.[0], "━━━━━───── 45% 90k/200k");
 	assert.ok(h.paints.some(({ color, text }) => color === "warning" && text === "45%"));
 	assert.deepEqual(h.calls.map(({ key }) => key), ["context-usage"]);
+	assert.deepEqual(h.calls[0].options, { placement: "aboveEditor" });
 });
 
 test("context colors preserve the old 40% and 70% thresholds", async () => {
@@ -51,13 +52,13 @@ test("unknown utilization is not presented as zero and model capacity remains av
 	const h = setup();
 	h.ctx.getContextUsage = () => undefined;
 	await h.fire("session_start");
-	assert.equal(h.statuses.get("context-usage"), "────────── ? ?/200k");
+	assert.equal(h.widgets.get("context-usage")?.[0], "────────── ? ?/200k");
 	h.ctx.model = undefined;
 	await h.fire("model_select");
-	assert.equal(h.statuses.get("context-usage"), "────────── ? ?/?");
+	assert.equal(h.widgets.get("context-usage")?.[0], "────────── ? ?/?");
 	h.ctx.getContextUsage = () => ({ percent: 0, tokens: 0, contextWindow: 1000 });
 	await h.fire("session_compact");
-	assert.equal(h.statuses.get("context-usage"), "────────── 0% 0/1.0k");
+	assert.equal(h.widgets.get("context-usage")?.[0], "────────── 0% 0/1.0k");
 });
 
 test("context bar clamps its fill to ten cells", async () => {
@@ -65,30 +66,30 @@ test("context bar clamps its fill to ten cells", async () => {
 	for (const [percent, bar] of [[-10, "──────────"], [150, "━━━━━━━━━━"]]) {
 		h.ctx.getContextUsage = () => ({ percent, tokens: 0, contextWindow: 1000 });
 		await h.fire("message_end");
-		assert.ok(h.statuses.get("context-usage").startsWith(bar));
+		assert.ok(h.widgets.get("context-usage")?.[0].startsWith(bar));
 	}
 });
 
 for (const event of ["message_end", "turn_end", "agent_settled", "session_tree", "session_compact", "model_select"]) {
-	test(`${event} refreshes the published context status`, async () => {
+	test(`${event} refreshes the context widget`, async () => {
 		const h = setup();
 		await h.fire("session_start");
 		h.ctx.getContextUsage = () => ({ percent: 80, tokens: 160000, contextWindow: 200000 });
 		await h.fire(event);
-		assert.equal(h.statuses.get("context-usage"), "━━━━━━━━── 80% 160k/200k");
+		assert.equal(h.widgets.get("context-usage")?.[0], "━━━━━━━━── 80% 160k/200k");
 	});
 }
 
-test("shutdown clears only its own status and is idempotent", async () => {
+test("shutdown clears only its own widget and is idempotent", async () => {
 	const h = setup();
 	await h.fire("session_start");
 	await h.fire("session_shutdown");
 	await h.fire("session_shutdown");
-	assert.deepEqual([...h.statuses], [["other-extension", "unchanged"]]);
+	assert.deepEqual([...h.widgets], [["other-extension", "unchanged"]]);
 });
 
 for (const mode of ["rpc", "json", "print"]) {
-	test(`${mode} performs no UI access or status publication`, async () => {
+	test(`${mode} performs no UI access or widget registration`, async () => {
 		const h = setup(mode);
 		for (const event of ["session_start", "message_end", "turn_end", "session_shutdown"]) await h.fire(event);
 		assert.deepEqual(h.calls, []);
