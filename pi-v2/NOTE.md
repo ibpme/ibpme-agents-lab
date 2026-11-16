@@ -92,9 +92,13 @@ The v2 compositor now has selectable `default-segments/` and published
 segment module owns its formatting and theme colors. Current usage segments
 preserve the old footer's latest-assistant tokens and selected-branch assistant
 cost semantics; these must not be mistaken for full-session or tool-call totals.
-The independent `context-usage` extension now owns a native above-editor widget
-through `setWidget()`, rather than publishing a footer status. Footer toggles and
-`statusline.json` do not control that widget.
+The independent `context-usage` extension's above-editor widget version is
+checkpointed in `c3abc24`. The current preview instead subclasses `CustomEditor`
+to place context usage in the top-right editor border. It inherits native input
+handling and uses the protected top-border hook, with embedded native working
+status on the left. It skips installation when another custom editor already owns
+the editor. Footer toggles and `statusline.json` do not control this presentation.
+Tests for this preview are intentionally deferred pending visual approval.
 
 Rich-widget layout/registration is deferred. `statusline.json` currently controls
 footer rows only; do not introduce a custom widget registry for single-line

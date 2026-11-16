@@ -154,18 +154,30 @@ colors remain intact, and disabling the footer does not clear producer statuses.
 
 ### Context usage
 
-`extensions/context-usage/index.ts` owns an independent native Pi widget named
-`context-usage`, placed **above the editor** with `ctx.ui.setWidget()`. It remains
-visible whether the modular or native footer is active. It does not publish a
-footer status and is not selected or positioned by `statusline.json`.
+`extensions/context-usage/index.ts` currently previews context usage in the
+**top-right editor border**. It extends Pi's `CustomEditor` through
+`ctx.ui.setEditorComponent()` and the protected `renderTopBorder()` hook, rather
+than patching private UI fields. Native working status stays embedded on the left;
+Pi's input handling, shortcuts, autocomplete, and scrolling remain inherited.
+It does not publish a footer status or widget and is not controlled by
+`statusline.json`.
 
 Its presentation follows the old footer: a ten-cell `━/─` bar, rounded
 percentage, and compact used/capacity tokens. Colors are `success` normally,
 `warning` above 40%, and `error` above 70%. Unknown values display `?`
 instead of claiming zero utilization. It refreshes on session/response/turn,
-compaction, tree, and model events; there is no timer. Shutdown removes only its
-own widget. Both the footer and context widget are TUI-only. Centralized widget
-layout remains deferred; this widget uses Pi's native placement directly.
+compaction, tree, and model events; there is no timer. The border styles raw cached
+usage with the current theme during rendering. At narrow widths, it drops the bar,
+then token counts, then the entire context label to leave room for native status
+and the hidden-line cue. Shutdown restores the default editor only if this
+extension still owns the editor factory. If another custom editor is already
+installed, the preview warns and skips installation. This is TUI-only and remains
+independent of footer toggling. Centralized widget layout is still deferred.
+
+The above-editor widget version is checkpointed in commit `c3abc24`. This border
+preview is intentionally not accompanied by test changes yet; existing widget
+tests still describe that checkpoint. Only typechecking is validated for the
+preview until its appearance is approved.
 
 ### Configure placement
 
