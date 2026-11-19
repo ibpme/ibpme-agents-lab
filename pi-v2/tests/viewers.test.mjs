@@ -40,7 +40,7 @@ test("Pi reload switches all three commands between their own viewers and the op
   const assistant = { role: "assistant", timestamp: 1, api: "openai-completions", provider: "openai",
     model: "test", stopReason: "stop", usage };
   sessionManager.appendMessage({ ...assistant, content: [
-    { type: "text", text: Array.from({ length: 30 }, (_, index) => `Paragraph ${index + 1}.`).join("\n\n") },
+    { type: "text", text: Array.from({ length: 30 }, (_, index) => `Paragraph ${index + 1}. 文字`).join("\n\n") },
     { type: "thinking", thinking: "Hidden reasoning" },
   ] });
   sessionManager.appendMessage({ ...assistant, timestamp: 2, content: [{ type: "thinking", thinking: "Later reasoning" }] });
@@ -70,10 +70,11 @@ test("Pi reload switches all three commands between their own viewers and the op
         component.handleInput("g");
         component.handleInput("g");
         const afterGg = render(100);
-        terminal.rows = 3;
         const narrow = render(3);
+        terminal.rows = 3;
+        const short = render(100);
         terminal.rows = 18;
-        views.push({ initial, end, afterGg, narrow });
+        views.push({ initial, end, afterGg, narrow, short });
         component.handleInput("\x1b");
       } catch (error) {
         reject(error);
@@ -97,9 +98,20 @@ test("Pi reload switches all three commands between their own viewers and the op
     assert.match(system.initial.join("\n"), /Example addendum text\./);
     assert.match(skills.initial.join("\n"), /example: ~2 tokens/);
     for (const view of [readmd, system, skills]) {
-      assert.equal(view.initial.at(-1).startsWith("Lines "), shared);
-      assert.ok(view.narrow.length <= 3);
+      if (shared) {
+        assert.equal(view.initial[0], `┌${"─".repeat(98)}┐`);
+        assert.equal(view.initial.at(-1), `└${"─".repeat(98)}┘`);
+        assert.match(view.initial.at(-2), /^│ Lines /);
+        assert.ok(view.initial.slice(1, -1).every((line) => line.startsWith("│ ") && line.endsWith(" │")));
+        assert.ok(view.initial.every((line) => visibleWidth(line) === 100));
+      } else {
+        assert.ok(!view.initial[0].startsWith("┌"));
+        assert.ok(!view.initial.at(-1).startsWith("Lines "));
+      }
+      assert.ok(!view.narrow[0].startsWith("┌"));
       assert.ok(view.narrow.every((line) => visibleWidth(line) <= 3));
+      assert.ok(!view.short[0].startsWith("┌"));
+      assert.ok(view.short.length <= 3);
     }
   }
 

@@ -14,7 +14,7 @@ const openPager: OpenDocument = async (ctx, document) => {
       return [position, document.detail, "↑↓ / jk scroll · PgUp/PgDn · gg/G · Esc/q close"]
         .filter(Boolean)
         .join(" · ");
-    }, true);
+    }, { vimKeys: true, frame: true });
   });
 };
 

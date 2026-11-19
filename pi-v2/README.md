@@ -54,7 +54,7 @@ messages or trying to transform slash commands through the `input` event.
 | `/loaded-skills` | Lists skill files observed on the active branch and estimates their current file token counts. The `loaded-skills` status lists their names. |
 
 The package loads `pager` by default. It supplies these three viewers with a
-line counter and `j`/`k`, `gg`, and `G` navigation. Each command has its own
+border, a line counter, and `j`/`k`, `gg`, and `G` navigation. Each command has its own
 scrollable viewer when `pager` is disabled. Disable `extensions/pager/index.ts`
 with `pi config` and reload, or add `"-extensions/pager/index.ts"` to the
 installed package's `extensions` filter. The next command invocation uses the

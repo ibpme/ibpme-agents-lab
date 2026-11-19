@@ -8,7 +8,7 @@ export function documentViewport(
   body: Component,
   title: string,
   footer: (first: number, last: number, total: number) => string,
-  vimKeys = false,
+  { vimKeys = false, frame = false }: { vimKeys?: boolean; frame?: boolean } = {},
 ): Component {
   let offset = 0;
   let pageSize = 1;
@@ -19,16 +19,26 @@ export function documentViewport(
     capturesViewportInput: true,
     render(width) {
       if (width < 1) return [];
-      const lines = body.render(width);
       const rows = tui.terminal.rows;
-      pageSize = Math.max(1, rows - 8);
+      const framed = frame && width >= 5 && rows >= 5;
+      const contentWidth = framed ? width - 4 : width;
+      const lines = body.render(contentWidth);
+      pageSize = Math.max(1, rows - 8 - (framed ? 2 : 0));
       maxOffset = Math.max(0, lines.length - pageSize);
       offset = Math.min(offset, maxOffset);
 
       const visible = lines.slice(offset, offset + pageSize);
       if (rows > 1) visible.unshift(theme.fg("accent", theme.bold(title)));
       if (rows > 2) visible.push(theme.fg("dim", footer(offset + 1, offset + pageSize, lines.length)));
-      return visible.map((line) => truncateToWidth(line, width, ""));
+      if (!framed) return visible.map((line) => truncateToWidth(line, width, ""));
+
+      const rule = "─".repeat(width - 2);
+      const side = theme.fg("border", "│");
+      return [
+        theme.fg("border", `┌${rule}┐`),
+        ...visible.map((line) => `${side} ${truncateToWidth(line, contentWidth, "", true)} ${side}`),
+        theme.fg("border", `└${rule}┘`),
+      ];
     },
     invalidate() { body.invalidate(); },
     handleInput(data) {
