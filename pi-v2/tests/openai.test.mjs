@@ -77,6 +77,43 @@ test("account switching keeps the model and only offers logged-in OpenAI account
   assert.match(notices.at(-1), /not available/);
 });
 
+test("alias requests replay reasoning only from the selected account", async () => {
+  const alias = accountProvider("work");
+  const model = alias.getModels()[0];
+  const accounts = ["openai", "openai:personal", alias.id];
+  const messages = accounts.map((provider, index) => ({
+    role: "assistant", provider, api: model.api, model: model.id, timestamp: index,
+    stopReason: "stop",
+    content: [
+      { type: "thinking", thinking: "", thinkingSignature: JSON.stringify({ type: "reasoning", id: `rs_${index}`, summary: [] }) },
+      { type: "text", text: `Reply ${index}` },
+    ],
+    usage: {
+      input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+  }));
+  const context = normalizeContext({ messages });
+
+  for (const method of ["stream", "streamSimple"]) {
+    let input;
+    const result = await alias[method](model, context, {
+      apiKey: "fake-subscription-token",
+      onPayload(payload) {
+        input = payload.input;
+        throw new Error("Stop before network");
+      },
+    }).result();
+    assert.equal(result.provider, alias.id);
+    assert.match(result.errorMessage, /Stop before network/);
+    assert.deepEqual(input.filter(({ type }) => type === "reasoning").map(({ id }) => id), ["rs_2"]);
+    assert.deepEqual(input.filter(({ type }) => type === "message").map(({ content }) => content[0].text), [
+      "Reply 0", "Reply 1", "Reply 2",
+    ]);
+    assert.deepEqual(context.messages.map(({ provider }) => provider), accounts);
+  }
+});
+
 function setupFast(activeModel = model) {
   const events = new Map();
   const entries = [];
