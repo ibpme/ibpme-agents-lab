@@ -25,6 +25,7 @@ Migrate the useful behavior from `../pi/` in small, independently loadable exten
 | Implemented for review | `readmd`, `system-prompt`, `loaded-skills`, `pager` | The three commands each provide a local TUI viewer. When enabled, `pager` offers a replacement through Pi's event bus at command invocation. RPC uses the native text dialog. `readmd` renders Mermaid blocks as code, and `system-prompt` shows Pi's effective prompt with a separate `append` view. |
 | Done | `copy-command` | Selects shell blocks from the active branch with per-reply selection memory and numbered selection. Uses Pi's Markdown tokenizer and native clipboard in TUI, and shows the selected block in the RPC client. |
 | Done | `openai-accounts`, `fast`, `usage` | Keeps separate labeled OAuth logins, the session-wide priority toggle, and cancellable quota reports in the v2 pager. Native OpenAI reports link to the dashboard. Codex quotas use their own login. |
+| Implemented for review | `prompt-suggestions` | Shows an optional follow-up below the editor and inserts it through native Tab completion. Keeps provider configuration and shortcut remapping. Bounds requests to recent conversation text and cancels stale work. |
 
 ### Checkpoints
 
@@ -51,7 +52,8 @@ Suggested order, not a requirement to port every extension unchanged:
    - [x] Migrate `copy-command` with whitespace-preserving extraction, TUI navigation, and RPC selection and delivery.
 3. **Provider features and interactive input.**
    - [x] Migrate `fast`, `openai-accounts`, and `usage` using Pi's model registry and provider hooks.
-   - [ ] Review `question` and `prompt-suggestions`. Use supported dialogs and editor primitives; do not port the private tree renderer patch.
+   - [x] Migrate `prompt-suggestions` using the native widget and autocomplete hooks.
+   - [ ] Review `question` using supported dialogs. Do not port the private tree renderer patch.
 4. **Execution and policy.**
    - [ ] Review `tool-set` and `ssh` together so tool availability and routing ownership are explicit. Keep `tool-styling` independent and avoid restoring the process-global operations override.
    - [ ] Address SSH path quoting and local-versus-remote search before porting. Remote tools must not silently run locally; historical output should retain the destination used at execution time.
@@ -65,4 +67,5 @@ Suggested order, not a requirement to port every extension unchanged:
 - Provider migration tests cover OAuth isolation, priority requests, quota credential checks, and viewer cancellation. A Pi RPC smoke check discovered the three commands and reported a labeled account from a synthetic login.
 - All seven tool renderers were smoke-checked through Pi's tool-row component. Package discovery and reload checks passed. Renderer-specific tests were deferred.
 - The viewer tests cover all three pager-backed commands across pager enable, disable, and session reload. A Pi terminal smoke check verified opening, scrolling, and closing the system prompt pager and opening the loaded-skills report.
+- Prompt suggestion tests cover draft and branch changes, timeout, output validation, and configuration. A Pi terminal smoke check with a synthetic Ollama response verified Tab insertion, undo, and reload alongside the context border.
 - Run `cd pi-v2 && npm run check` before marking the baseline green. For a visual check, run `pi -e ./pi-v2` with duplicate legacy extensions disabled, then use `/reload` after changes.

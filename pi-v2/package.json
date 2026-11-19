@@ -39,6 +39,7 @@
       "./extensions/system-prompt/index.ts",
       "./extensions/loaded-skills/index.ts",
       "./extensions/usage/index.ts",
+      "./extensions/prompt-suggestions/index.ts",
       "./extensions/pager/index.ts"
     ]
   }

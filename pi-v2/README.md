@@ -15,8 +15,8 @@ This uses Pi's native package manifest and TypeScript loader. No build step or
 runtime dependency installation is needed for these extensions. Disable the old
 `alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `status-line`,
 `readmd`, `system-prompt`, `loaded-skills`, `copy-command`, `openai-accounts`,
-`fast`, `usage`, and `stylish-tools` extensions before loading their v2
-replacements. `tool-styling` replaces `stylish-tools`. Duplicate commands receive
+`fast`, `usage`, `prompt-suggestions`, and `stylish-tools` extensions before
+loading their v2 replacements. `tool-styling` replaces `stylish-tools`. Duplicate commands receive
 invocation suffixes such as
 `/clear:1` and `/clear:2`; duplicate shortcuts conflict.
 
@@ -99,6 +99,31 @@ manual copying. The picker works independently of `pager`.
   labeled OpenAI accounts show their usage dashboard link. Codex quotas always
   appear under the separate Codex login. The TUI viewer opens while the lookup
   runs and cancels pending requests when closed. RPC receives a text notification.
+
+## Prompt suggestions
+
+Run `/suggestions on` in the TUI to show one follow-up below the editor after a
+completed reply. Press Tab in an empty prompt to insert it as an editable draft.
+Typing or pressing Escape dismisses it. Use `/suggestions off` to disable it, or
+toggle with `/suggestions` or Ctrl+Shift+S. The suggestion uses Pi's autocomplete,
+so it works alongside the context usage border.
+
+Suggestions default to off unless `prompt-suggestions.json` in Pi's agent
+directory contains `"enabled": true`. The file also accepts `provider`, `model`,
+and `ollamaUrl`. The built-in choice is
+`opencode-go/muse-spark-1.3-contributor`, using Pi's configured login.
+For Ollama, set `"provider": "ollama"` and `"model"` to an installed model.
+The local endpoint defaults to `http://127.0.0.1:11434`.
+`PI_SUGGESTIONS_PROVIDER`, `PI_SUGGESTIONS_MODEL`, and
+`PI_SUGGESTIONS_OLLAMA_URL` override the corresponding file values.
+The `extensions.suggestions.toggle` key in `keybindings.json` accepts a shortcut
+or an array of shortcuts. Run `/reload` after editing either file.
+
+Each lookup sends a bounded excerpt of recent user and assistant text from
+the active branch to the configured model. The request omits tool arguments,
+tool results, reasoning blocks, summaries, and images. Add
+`status:prompt-suggestions` to `statusline.json` to show the toggle or request
+state in the footer.
 
 ## Shortcuts
 
