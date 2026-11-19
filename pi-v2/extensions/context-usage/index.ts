@@ -15,7 +15,8 @@ interface ContextSnapshot {
   capacity: number;
 }
 
-const BAR_WIDTH = 10;
+const BAR_WIDTH = 4;
+const PARTIAL_BLOCKS = " ▏▎▍▌▋▊▉";
 
 function formatTokens(count: number): string {
   if (count < 1000) return `${count}`;
@@ -49,8 +50,12 @@ class ContextUsageEditor extends CustomEditor {
     const { percent, tokens, capacity } = this.readSnapshot();
     const theme = this.readTheme();
     const color = percent != null && percent > 70 ? "error" : percent != null && percent > 40 ? "warning" : "success";
-    const filled = Math.round(Math.max(0, Math.min(100, percent ?? 0)) / 100 * BAR_WIDTH);
-    const bar = theme.fg(color, "━".repeat(filled)) + theme.fg("dim", "─".repeat(BAR_WIDTH - filled));
+    const stepsPerCell = PARTIAL_BLOCKS.length;
+    const fill = Math.round(Math.max(0, Math.min(100, percent ?? 0)) / 100 * BAR_WIDTH * stepsPerCell);
+    const fullCells = Math.floor(fill / stepsPerCell);
+    const partialCell = PARTIAL_BLOCKS.charAt(fill % stepsPerCell).trimEnd();
+    const blocks = ("█".repeat(fullCells) + partialCell).padEnd(BAR_WIDTH);
+    const bar = theme.fg("dim", "[") + theme.fg(color, blocks) + theme.fg("dim", "]");
     const percentage = theme.fg(color, percent == null ? "?" : `${percent.toFixed(0)}%`);
     const used = tokens == null ? "?" : formatTokens(tokens);
     const tokenCounts = theme.fg("dim", `${used}/${capacity > 0 ? formatTokens(capacity) : "?"}`);

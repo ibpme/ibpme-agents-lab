@@ -162,8 +162,9 @@ Pi's input handling, shortcuts, autocomplete, and scrolling remain inherited.
 It does not publish a footer status or widget and is not controlled by
 `statusline.json`.
 
-Its presentation follows the old footer: a ten-cell `━/─` bar, rounded
-percentage, and compact used/capacity tokens. Colors are `success` normally,
+The label uses a four-cell bracketed bar with partial blocks, a rounded
+percentage, and compact used/capacity tokens. For example, `[    ] 0% 0/272k`
+becomes `[█▊  ] 45% 122k/272k`. Colors are `success` normally,
 `warning` above 40%, and `error` above 70%. Unknown values display `?`
 instead of claiming zero utilization. It refreshes on session/response/turn,
 compaction, tree, and model events; there is no timer. The border styles raw cached
@@ -173,11 +174,6 @@ and the hidden-line cue. Shutdown restores the default editor only if this
 extension still owns the editor factory. If another custom editor is already
 installed, the preview warns and skips installation. This is TUI-only and remains
 independent of footer toggling. Centralized widget layout is still deferred.
-
-The above-editor widget version is checkpointed in commit `c3abc24`. This border
-preview is intentionally not accompanied by test changes yet; existing widget
-tests still describe that checkpoint. Only typechecking is validated for the
-preview until its appearance is approved.
 
 ### Configure placement
 

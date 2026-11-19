@@ -98,7 +98,6 @@ to place context usage in the top-right editor border. It inherits native input
 handling and uses the protected top-border hook, with embedded native working
 status on the left. It skips installation when another custom editor already owns
 the editor. Footer toggles and `statusline.json` do not control this presentation.
-Tests for this preview are intentionally deferred pending visual approval.
 
 Rich-widget layout/registration is deferred. `statusline.json` currently controls
 footer rows only; do not introduce a custom widget registry for single-line
