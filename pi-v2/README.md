@@ -208,20 +208,24 @@ colors remain intact, and disabling the footer does not clear producer statuses.
 
 ### Context usage
 
-`extensions/context-usage/index.ts` owns an independent native Pi widget named
-`context-usage`, **right-aligned above the editor** with `ctx.ui.setWidget()`.
-It uses display-width-aware padding and clips to fit narrow terminals, refreshing
-colors from the active theme during rendering. It remains visible whether the
-modular or native footer is active. It does not publish a
-footer status and is not selected or positioned by `statusline.json`.
+`extensions/context-usage/index.ts` displays context usage in the **top-right
+editor border**. It extends Pi's `CustomEditor` through
+`ctx.ui.setEditorComponent()` and the protected `renderTopBorder()` hook.
+The left side displays Pi's native working status. The extension inherits Pi's
+input handling, shortcuts, autocomplete, and scrolling. The border works with
+either the modular or native footer.
 
-Its presentation follows the old footer: a ten-cell `━/─` bar, rounded
-percentage, and compact used/capacity tokens. Colors are `success` normally,
+The label uses a four-cell bracketed bar with partial blocks, a rounded
+percentage, and compact used/capacity tokens. For example, `[    ] 0% 0/272k`
+becomes `[█▊  ] 45% 122k/272k`. Colors are `success` normally,
 `warning` above 40%, and `error` above 70%. Unknown values display `?`
 instead of claiming zero utilization. It refreshes on session/response/turn,
-compaction, tree, and model events; there is no timer. Shutdown removes only its
-own widget. Both the footer and context widget are TUI-only. Centralized widget
-layout remains deferred; this widget uses Pi's native placement directly.
+compaction, tree, and model events; there is no timer. The border styles raw cached
+usage with the current theme during rendering. At narrow widths, it drops the bar,
+then token counts, then the entire context label to leave room for native status
+and the hidden-line cue. Shutdown restores the default editor only if this
+extension still owns the editor factory. If another custom editor is already
+installed, the extension warns and skips installation. The display is TUI-only.
 
 ### Configure placement
 

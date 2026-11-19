@@ -20,7 +20,7 @@ Migrate the useful behavior from `../pi/` in small, independently loadable exten
 | Done | `thinking-cycle-backward` | Literal `shift+left` cycles the current model's supported thinking levels backward and reports the effective level. Neither shortcut reads legacy remapping settings. |
 | Done | `thinking-style` | Pi animates the colored thinking pulse. The extension restores native working state at lifecycle boundaries, uses the fixed collapsed label `Thought`, and styles only expanded assistant-thinking Markdown. No inferred per-block durations. |
 | Done | `status-line` | Replaced fixed rows with JSON composition and selectable old-style `default-segments/`. Supports left/right layout, explicit statuses, an opt-in `status:*` wildcard, and empty layouts. `/statusline` toggles the footer; `/statusline reload` reloads config. Latest-response tokens and selected-branch cost remain distinct. |
-| Done; test updates pending | `context-usage` | Moved the ten-cell context bar from a footer status to an independent above-editor widget, then right-aligned it with terminal-width-aware clipping. It remains separate from the editor border and footer config. |
+| Done | `context-usage` | Shows a four-cell bracketed bar with partial blocks, percentage, and token counts in the top-right editor border. It works independently of footer configuration. |
 | Done; renderer coverage pending | `stylish-tools` → `tool-styling` | Uses native `registerToolRenderer()` for `read`, `write`, `edit`, `bash`, `grep`, `find`, and `ls`. Keeps compact previews, expanded output, edit diffs, warnings, and native result durations. Drops execution wrappers, routing overrides, SSH coupling, and timers. Expanded text no longer stops at forty lines. |
 | Implemented for review | `readmd`, `system-prompt`, `loaded-skills`, `pager` | The three commands each provide a local TUI viewer. When enabled, `pager` offers a replacement through Pi's event bus at command invocation. RPC uses the native text dialog. `readmd` renders Mermaid blocks as code, and `system-prompt` shows Pi's effective prompt with a separate `append` view. |
 
@@ -30,10 +30,10 @@ Migrate the useful behavior from `../pi/` in small, independently loadable exten
 - `c3abc24` — context usage moved to a native above-editor widget; all 75 tests passed at this checkpoint.
 - `44cf21d` — right-aligned the context widget using a width-aware renderer factory.
 - `ad8e26d` — added native tool-styling renderers. Latest pushed migration checkpoint on `origin/feat/pi-v2-extensions`.
+- `9048382` — added the bracketed editor-border bar and updated context usage tests.
 
 ### Parked or deferred
 
-- **Editor-border preview:** `feat/context-border-preview` at `a03855f`, unmerged and not pushed. Uses `CustomEditor` to place context usage in the top-right border, which requires exclusive editor ownership. The migration branch uses the right-aligned widget instead.
 - **`protected-paths`:** out of scope for v2; do not reimplement it. The original extension remains untouched.
 - **Centralized widget layout:** deferred until there is a concrete multiline or interactive need. `statusline.json` controls footer rows only.
 - **Historical thinking duration:** deferred until Pi supports per-block rendering and there is persisted per-block timing. The current global label and transcript timestamp gaps cannot give an accurate duration.
@@ -43,7 +43,7 @@ Migrate the useful behavior from `../pi/` in small, independently loadable exten
 Suggested order, not a requirement to port every extension unchanged:
 
 1. **Restore a green v2 baseline.**
-   - [ ] Update existing context-widget tests to render the factory at a given width. Cover right alignment, clipping, and independence from footer toggles.
+   - [x] Update context usage tests to render the editor border and cover the bar fill, width fallbacks, and editor ownership.
    - [ ] Add focused `tool-styling` coverage for renderer selection/delegation, collapsed and expanded output, diffs, errors, and native duration handling.
 2. **Session inspection and viewers.**
    - [x] Migrate `system-prompt`, `readmd`, and `loaded-skills` with independent viewers and optional pager presentation.

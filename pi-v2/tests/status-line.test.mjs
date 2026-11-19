@@ -347,38 +347,41 @@ test("ANSI and wide-character statuses remain bounded even at zero width", () =>
 	}
 });
 
-test("context widget stays independent of footer toggles and is never duplicated into a status", async (t) => {
+test("context border stays independent of footer toggles and does not publish a status", async (t) => {
 	const theme = coloredTheme();
 	const h = await setup(t, { theme });
-	const widgets = new Map();
-	h.ctx.ui.setWidget = (key, content, options) => {
-		if (content === undefined) widgets.delete(key);
-		else widgets.set(key, { content, options });
+	let editorFactory;
+	let editor;
+	const tui = { terminal: { rows: 24 }, requestRender() {} };
+	const editorTheme = { borderColor: (text) => text };
+	h.ctx.ui.getEditorComponent = () => editorFactory;
+	h.ctx.ui.setEditorComponent = (factory) => {
+		editorFactory = factory;
+		editor = factory?.(tui, editorTheme, {});
 	};
 	h.ctx.getContextUsage = () => ({ percent: 45, tokens: 90000, contextWindow: 200000 });
 	const producer = registerExtension(contextUsage);
 	await h.fire("session_start");
 	await producer.fire("session_start", {}, h.ctx);
 	const footer = h.footer.render(240);
-	let widget = widgets.get("context-usage");
-	assert.equal(widget.options.placement, "aboveEditor");
-	assert.match(stripTerminalSequences(widget.content[0]), /━━━━━───── 45% 90k\/200k/);
-	assert.ok(widget.content[0].includes(theme.fg("warning", "45%")));
-	assert.doesNotMatch(stripTerminalSequences(footer.join("\n")), /45%|━|─/);
+	const [border] = editor.render(80);
+	assert.ok(stripTerminalSequences(border).endsWith(" [█▊  ] 45% 90k/200k ──"));
+	assert.ok(border.includes(theme.fg("warning", "45%")));
+	assert.doesNotMatch(stripTerminalSequences(footer.join("\n")), /45%|█/);
 	assert.ok(!h.statuses.has("context-usage"));
 	assert.equal(h.reads, 1);
 	h.ctx.getContextUsage = () => ({ percent: 80, tokens: 160000, contextWindow: 200000 });
 	await producer.fire("message_end", {}, h.ctx);
-	widget = widgets.get("context-usage");
-	assert.ok(widget.content[0].includes(theme.fg("error", "80%")));
+	const [updatedBorder] = editor.render(80);
+	assert.ok(updatedBorder.includes(theme.fg("error", "80%")));
 	h.footer.render(240);
-	assert.equal(h.reads, 1, "widget updates do not rescan footer history");
+	assert.equal(h.reads, 1, "context updates do not rescan footer history");
 	await h.command();
-	assert.ok(widgets.has("context-usage"), "disabling the footer leaves the independent widget alone");
+	assert.equal(editor.render(80)[0], updatedBorder);
 	await h.command();
-	assert.ok(widgets.has("context-usage"));
+	assert.equal(editor.render(80)[0], updatedBorder);
 	await producer.fire("session_shutdown", {}, h.ctx);
-	assert.ok(!widgets.has("context-usage"));
+	assert.equal(editorFactory, undefined);
 	await h.fire("session_shutdown");
 });
 
