@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import questionExtension from "../extensions/question/index.ts";
+import { registerExtension } from "./extension-fixture.mjs";
 
 const scope = {
   id: "scope", label: "Scope", prompt: "What should change?",
@@ -14,7 +15,11 @@ const note = { id: "note", prompt: "Any other detail?", options: [] };
 
 function registerQuestionTool() {
   let tool;
-  questionExtension({ registerTool: (definition) => { tool = definition; } });
+  registerExtension(questionExtension, {
+    registerTool: (definition) => { tool = definition; },
+    registerCommand() {},
+    registerMessageRenderer() {},
+  });
   assert.equal(tool.name, "question");
   assert.equal(tool.executionMode, "sequential");
   return tool;
@@ -146,12 +151,6 @@ test("the TUI moves back and forward by Tab while preserving written drafts", as
         form = factory({ terminal: { rows: 20 }, requestRender() {} }, theme, {}, resolve);
       });
     },
-    async select(title, options) {
-      assert.equal(title, "Review your answers");
-      assert.match(options[0], /Application$/);
-      assert.match(options[1], /draft$/);
-      return options.at(-1);
-    },
   });
   const result = run([scope, note]);
   form.handleInput("\r");
@@ -170,7 +169,86 @@ test("the TUI moves back and forward by Tab while preserving written drafts", as
   await new Promise(setImmediate);
   assert.match(stripTerminalSequences(form.render(80).join("\n")), /draft/);
   form.handleInput("\t");
+  await new Promise(setImmediate);
+  const review = form.render(80).join("\n");
+  assert.match(review, /1\. What should change\? — Application/);
+  assert.match(review, /2\. Any other detail\? — draft/);
+  assert.match(review, /draft\n\n  Submit answers/);
+  form.handleInput("2");
+  await new Promise(setImmediate);
+  assert.match(form.render(80).join("\n"), /Esc back to review/);
+  form.handleInput("\x1b");
+  await new Promise(setImmediate);
+  form.handleInput("\t");
   assert.equal((await result).details.answers[1].values[0].value, "draft");
+});
+
+test("the TUI opens a multiline written answer in the checklist and saves, discards, or removes it in place", async () => {
+  let form;
+  let panels = 0;
+  const run = setup("tui", {
+    custom(factory) {
+      panels++;
+      return new Promise((resolve) => {
+        form = factory({ terminal: { rows: 24 }, requestRender() {} }, { fg: (_color, text) => text, bold: (text) => text }, {}, resolve);
+      });
+    },
+  });
+  const result = run([{ ...scope, multiSelect: true }]);
+  const view = (width = 80) => stripTerminalSequences(form.render(width).join("\n"));
+  const press = (...keys) => keys.forEach((key) => form.handleInput(key));
+
+  press("2", "w");
+  assert.match(view(), /2\. \[x\] Tests/);
+  assert.match(view(), /Enter save · Shift\+Enter new line · Esc discard edit/);
+  press("\r");
+  assert.match(view(), /Enter a non-blank answer/);
+  press("Check 1", "\n", "Check 2", "\r");
+  assert.match(view(), /\[x\] Written answer — Check 1 Check 2/);
+  assert.match(view(), /Check 1 Check 2\n\n  Continue/);
+  assert.match(view(), /Delete remove/);
+  press("w");
+  assert.match(view(), /Check 1[^\n]*\n[^\n]*Check 2/);
+  press(" saved", "\r");
+  assert.match(view(), /Written answer — Check 1 Check 2 saved/);
+  press("w");
+  press(" discarded", "\x1b");
+  assert.match(view(), /Written answer — Check 1 Check 2 saved/);
+  assert.doesNotMatch(view(), /discarded/);
+  press("\x1b[3~");
+  assert.match(view(), /Write an answer/);
+  assert.match(view(), /2\. \[x\] Tests/);
+  assert.doesNotMatch(view(), /Check 1|\[x\] Written answer/);
+  press("2", "\t");
+  assert.match(view(), /Continue · select or write an answer/);
+  press("w", "Final 1", "\n", "Final 2", "\r", "\t");
+  const { details } = await result;
+  assert.equal(panels, 1);
+  assert.deepEqual(details.answers[0].values.map(({ value, wasCustom }) => [value, wasCustom]), [
+    ["Final 1\nFinal 2", true],
+  ]);
+});
+
+test("number shortcuts reach choices past nine and an invalid number cannot select an answer", async () => {
+  let form;
+  const run = setup("tui", {
+    custom(factory) {
+      return new Promise((resolve) => {
+        form = factory({ terminal: { rows: 16 }, requestRender() {} }, { fg: (_color, text) => text, bold: (text) => text }, {}, resolve);
+      });
+    },
+  });
+  const options = Array.from({ length: 12 }, (_, index) => ({ label: `Option ${index + 1}`, value: String(index + 1) }));
+  const result = run([{ ...scope, options }]);
+  assert.match(form.render(80).join("\n"), /Number then Enter/);
+  for (const key of ["1", "3"]) form.handleInput(key);
+  assert.match(form.render(80).join("\n"), /No item 13/);
+  form.handleInput("\r");
+  assert.match(form.render(80).join("\n"), /Choose one/);
+  for (const key of ["1", "0"]) form.handleInput(key);
+  assert.match(form.render(80).join("\n"), /→ 10\. ○ Option 10/);
+  form.handleInput("\r");
+  assert.equal((await result).details.answers[0].values[0].value, "10");
 });
 
 test("going back before review preserves prior answers and checklist selections", async () => {
@@ -181,7 +259,7 @@ test("going back before review preserves prior answers and checklist selections"
     [/What should be verified/, /Done$/],
     [/What should be verified/, /\[ \] Application/],
     [/What should be verified/, /Previous question$/],
-    [/What should change/, /^3\. Tests$/],
+    [/What should change/, /^2\. Tests$/],
     [/What should be verified/, /Done$/],
     [/Review your answers/, /Submit answers$/],
   ];
@@ -191,7 +269,7 @@ test("going back before review preserves prior answers and checklist selections"
       const [expectedTitle, expectedOption] = steps.shift();
       assert.match(title, expectedTitle);
       if (title.includes("What should change") && options.length === 4) {
-        assert.match(options[0], /Keep current answer — Application$/);
+        assert.match(options[3], /Keep current answer — Application$/);
       }
       if (title === "Review your answers") {
         assert.match(options[0], /What should change\? — Tests$/);
@@ -199,7 +277,8 @@ test("going back before review preserves prior answers and checklist selections"
       }
       const choice = options.find((option) => expectedOption.test(option));
       assert.ok(choice, options.join("\n"));
-      return choice;
+      if (/Done$|Submit answers$/.test(choice)) assert.ok(choice.startsWith("\n"), choice);
+      return choice.trimStart();
     },
     async input(title) {
       assert.match(title, /return to the previous question/);

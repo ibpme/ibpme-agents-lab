@@ -26,7 +26,8 @@ Migrate the useful behavior from `../pi/` in small, independently loadable exten
 | Done | `copy-command` | Selects shell blocks from the active branch with per-reply selection memory and numbered selection. Uses Pi's Markdown tokenizer and native clipboard in TUI, and shows the selected block in the RPC client. |
 | Done | `openai-accounts`, `fast`, `usage` | Keeps separate labeled OAuth logins, the session-wide priority toggle, and cancellable quota reports in the v2 pager. Native OpenAI reports link to the dashboard. Codex quotas use their own login. |
 | Implemented for review | `prompt-suggestions` | Shows an optional follow-up below the editor and inserts it through native Tab completion. Keeps provider configuration and shortcut remapping. Bounds requests to recent conversation text and cancels stale work. |
-| Implemented for review | `question` | Uses a TUI picker with circles for single choices, checkboxes for multiple choices, and a separate description for the focused option. Preserves answers when stepping back and supports review before submission in TUI and RPC. |
+| Implemented for review | `question` | Uses numbered radio choices and checkboxes in the terminal, with descriptions below the focused option. Multi-select answers can include multiline text edited inside the checklist. Preserves answers when stepping back and supports review before submission in TUI and RPC. |
+| Implemented for review | `/reanswer` | Shows numbered questionnaires newest first and accepts a number directly. Reuses the review with the latest branch-local answers and branches after the full original tool batch. |
 
 ### Checkpoints
 
@@ -55,7 +56,7 @@ Suggested order, not a requirement to port every extension unchanged:
    - [x] Migrate `fast`, `openai-accounts`, and `usage` using Pi's model registry and provider hooks.
    - [x] Migrate `prompt-suggestions` using the native widget and autocomplete hooks.
    - [x] Migrate `question` using supported dialogs and a cancellable TUI checklist.
-   - [ ] Migrate `/reanswer` with branch-local revisions and complete tool batches. Do not port the private tree renderer patch.
+   - [x] Migrate `/reanswer` with branch-local revisions, complete tool batches, and native tree navigation.
 4. **Execution and policy.**
    - [ ] Review `tool-set` and `ssh` together so tool availability and routing ownership are explicit. Keep `tool-styling` independent and avoid restoring the process-global operations override.
    - [ ] Address SSH path quoting and local-versus-remote search before porting. Remote tools must not silently run locally; historical output should retain the destination used at execution time.
@@ -71,4 +72,5 @@ Suggested order, not a requirement to port every extension unchanged:
 - The viewer tests cover all three pager-backed commands across pager enable, disable, and session reload. A Pi terminal smoke check verified opening, scrolling, and closing the system prompt pager and opening the loaded-skills report.
 - Prompt suggestion tests cover draft and branch changes, timeout, output validation, and configuration. A Pi terminal smoke check with a synthetic Ollama response verified Tab insertion, undo, and reload alongside the context border.
 - Question tool tests cover native dialogs, checklist interaction, review, and cancellation. Pi terminal and RPC smoke checks used a synthetic provider to submit a questionnaire.
+- Reanswer tests cover numbered selection, repeated and legacy revisions, unchanged and cancelled edits, and compaction. Pi terminal and RPC smoke checks exercised numbered revisions and written checklist answers alongside sibling tool results.
 - Run `cd pi-v2 && npm run check` before marking the baseline green. For a visual check, run `pi -e ./pi-v2` with duplicate legacy extensions disabled, then use `/reload` after changes.

@@ -1,5 +1,6 @@
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
+import { Check } from "typebox/value";
 
 const OptionSchema = Type.Object({
   value: Type.String({ description: "Value returned for this choice" }),
@@ -22,14 +23,22 @@ export const QuestionnaireParams = Type.Object({
 type QuestionInput = Static<typeof QuestionSchema>;
 export type Question = QuestionInput & { label: string; multiSelect: boolean };
 
-export type AnswerValue = {
-  value: string;
-  label: string;
-  wasCustom: boolean;
-  index?: number;
-};
+const AnswerValueSchema = Type.Object({
+  value: Type.String(),
+  label: Type.String(),
+  wasCustom: Type.Boolean(),
+  index: Type.Optional(Type.Number()),
+});
+const AnswersSchema = Type.Array(Type.Object({ id: Type.String(), values: Type.Array(AnswerValueSchema, { minItems: 1 }) }));
+const StoredResultSchema = Type.Object({
+  questions: Type.Optional(QuestionnaireParams.properties.questions),
+  answers: AnswersSchema,
+  cancelled: Type.Boolean(),
+  reason: Type.Optional(Type.Union([Type.Literal("dismissed"), Type.Literal("aborted"), Type.Literal("unavailable")])),
+});
 
-export type Answer = { id: string; values: AnswerValue[] };
+export type AnswerValue = Static<typeof AnswerValueSchema>;
+export type Answer = Static<typeof AnswersSchema>[number];
 
 export type QuestionnaireResult = {
   questions: Question[];
@@ -68,6 +77,37 @@ export function normalizeQuestions(input: QuestionInput[]): Question[] {
       label: question.label?.trim() || `Q${index + 1}`,
       multiSelect: question.multiSelect === true,
     };
+  });
+}
+
+export function readQuestionnaire(details: unknown, args?: unknown): QuestionnaireResult | undefined {
+  if (!Check(StoredResultSchema, details)) return undefined;
+  const input = details.questions ?? (Check(QuestionnaireParams, args) ? args.questions : undefined);
+  if (!input) return undefined;
+
+  let questions: Question[];
+  try {
+    questions = normalizeQuestions(input);
+  } catch {
+    return undefined;
+  }
+  if (details.cancelled) return { ...details, questions, answers: [] };
+
+  const byId = new Map(details.answers.map((answer) => [answer.id, answer]));
+  const answers = questions.flatMap(({ id }) => {
+    const answer = byId.get(id);
+    return answer ? [answer] : [];
+  });
+  if (answers.length !== questions.length || answers.length !== details.answers.length) return undefined;
+  return { ...details, questions, answers };
+}
+
+export function sameAnswers(before: Answer[], after: Answer[]): boolean {
+  return before.length === after.length && before.every(({ id, values }, index) => {
+    const revised = after[index];
+    return id === revised.id && values.length === revised.values.length
+      && values.every((value) => revised.values.some((other) =>
+        value.wasCustom === other.wasCustom && value.value === other.value));
   });
 }
 

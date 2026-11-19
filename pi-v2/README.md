@@ -131,16 +131,36 @@ state in the footer.
 The `question` tool lets the assistant ask for a choice or a written answer in
 the terminal and in RPC clients that support Pi's dialogs. In the terminal,
 single-choice options use circles and multi-select options use checkboxes.
-The highlighted option's description appears below the choices. Use **Space**
-to toggle multiple choices. In a questionnaire, **Shift+Tab** goes back and
-**Tab** continues when the current question has an answer. Choice lists also
-offer **Previous question**, and **Esc** goes back from a text-only question.
-The review screen lets you edit any answer before choosing **Submit answers**.
-Cancelling the questionnaire discards unsubmitted answers.
+The highlighted option's description appears below the choices. Press a number
+to select a choice or toggle a checkbox. For lists with ten or more numbered
+rows, type the number and press **Enter**. You can also use the arrow keys and
+**Enter**, or **Space** to toggle a checkbox.
+
+In a multi-select, choose **Write an answer** or press **w** to open an editor
+inside the checklist. **Enter** saves the text, **Shift+Enter** adds a line, and
+**Esc** discards edits to the text. Focus a saved written answer and press
+**Delete** to remove it. The checklist keeps your other selections.
+
+During a questionnaire, **Shift+Tab** goes back and **Tab** continues once the
+current question has an answer. On the review screen, press a question number
+to edit it or **Tab** to submit. Cancelling the questionnaire discards
+unsubmitted answers.
 
 The transcript shows the question topics and a short answer preview. Expand
 the tool row to see full prompts, each selected label, and written answers
 with their original line breaks.
+
+Run `/reanswer` to reopen a questionnaire from the active branch in the terminal
+or an RPC client with dialog support. Questionnaires are numbered newest first.
+Press a number in the terminal picker or run `/reanswer 2` to open the second
+newest directly. The review starts with your latest answers. Select a question
+to edit it, then choose **Continue with revised answers** or press **Tab** from
+the terminal review. Cancelling or submitting identical answers keeps you on the
+current branch.
+
+Pi resumes from the end of the original tool-call batch with the revised
+answers and any sibling tool results. The original path remains available in
+the terminal through `/tree`. Workspace files stay as they are.
 
 ## Shortcuts
 

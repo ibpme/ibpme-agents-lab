@@ -56,10 +56,11 @@ interface InputOptions {
   next?: boolean;
   initial?: string;
   signal?: AbortSignal;
+  cancelHint?: string;
 }
 
 export function inputQuestion(
-  ui: QuestionUI, heading: QuestionHeading, { previous, next, initial, signal }: InputOptions,
+  ui: QuestionUI, heading: QuestionHeading, { previous, next, initial, signal, cancelHint = "Esc cancel" }: InputOptions,
 ): Promise<{ text: string; back?: true } | undefined> {
   return showQuestionPanel(ui, heading, signal, (tui, theme, finish) => {
     const input = new Input({ placeholder: "Type your answer", placeholderStyle: (text) => theme.fg("dim", text) });
@@ -80,7 +81,7 @@ export function inputQuestion(
           ...(invalid ? [theme.fg("warning", truncateToWidth("Enter a non-blank answer", width))] : []),
         ], [
           next ? "Enter / Tab continue" : "Enter confirm",
-          previous ? "Shift+Tab / Esc previous" : "Esc cancel",
+          previous ? "Shift+Tab / Esc previous" : cancelHint,
         ]);
       },
       handleInput(data) {

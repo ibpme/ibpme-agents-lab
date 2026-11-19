@@ -1,12 +1,11 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { SelectItem } from "@earendil-works/pi-tui";
+import { pickChoice, selectQuestionRow, type PickerRow } from "./choice-picker.ts";
 import { displayLine, displayText, type Answer, type AnswerValue, type Question } from "./model.ts";
-import { pickChoice } from "./choice-picker.ts";
 import { inputQuestion, type QuestionHeading } from "./tui-panel.ts";
 
 type QuestionContext = Pick<ExtensionContext, "mode" | "ui">;
 type StepResult = { values: AnswerValue[]; back?: true };
-type Navigation = { previous: boolean; next: boolean };
+type Navigation = { previous?: boolean; next?: boolean; review?: boolean };
 
 const PREVIOUS_QUESTION = "Previous question";
 
@@ -19,29 +18,18 @@ function selectedOption(question: Question, index: number): AnswerValue {
   return { label: option.label, value: option.value, wasCustom: false, index: index + 1 };
 }
 
-async function selectRow(
-  ui: QuestionContext["ui"], title: string, rows: SelectItem[], signal?: AbortSignal,
-): Promise<number | undefined> {
-  if (signal?.aborted) return undefined;
-  const labels = rows.map(({ label, description }, index) =>
-    `${index + 1}. ${label}${description ? ` — ${displayLine(description)}` : ""}`);
-  const choice = await ui.select(title, labels, { signal });
-  const index = choice === undefined ? -1 : labels.indexOf(choice);
-  return index < 0 || signal?.aborted ? undefined : index;
-}
-
 async function writeAnswer(
-  ctx: QuestionContext, heading: QuestionHeading, signal?: AbortSignal,
+  ctx: QuestionContext, heading: QuestionHeading, signal?: AbortSignal, initial?: string,
 ): Promise<AnswerValue | undefined> {
   if (ctx.mode === "tui") {
-    const answer = await inputQuestion(ctx.ui, heading, { signal });
+    const answer = await inputQuestion(ctx.ui, heading, { signal, initial, cancelHint: "Esc back to choices" });
     return answer ? writtenValue(answer.text) : undefined;
   }
 
-  const title = dialogTitle(heading);
+  const title = initial ? `${dialogTitle(heading)}\nCurrent written answer: ${displayLine(initial)}` : dialogTitle(heading);
   let prompt = title;
   while (!signal?.aborted) {
-    const answer = await ctx.ui.input(prompt, "Type your answer", { signal });
+    const answer = await ctx.ui.input(prompt, initial ? "Type your replacement answer" : "Type your answer", { signal });
     if (answer === undefined || signal?.aborted) return undefined;
     const value = writtenValue(answer);
     if (value) return value;
@@ -56,9 +44,8 @@ function writtenValue(answer: string): AnswerValue | undefined {
   return { value: text, label: text, wasCustom: true };
 }
 
-function optionRows(question: Question): SelectItem[] {
-  return question.options.map(({ label, description }, index) => ({
-    value: String(index),
+function optionRows(question: Question): PickerRow[] {
+  return question.options.map(({ label, description }) => ({
     label: displayLine(label),
     description: description && displayText(description),
   }));
@@ -68,22 +55,16 @@ async function askSingle(
   ctx: QuestionContext, question: Question, heading: QuestionHeading, previous: AnswerValue[], navigation: Navigation,
   signal?: AbortSignal,
 ): Promise<StepResult | undefined> {
+  const current = previous[0];
   if (ctx.mode === "tui" && !question.options.length) {
-    const answer = await inputQuestion(ctx.ui, heading, { ...navigation, initial: previous[0]?.value, signal });
+    const answer = await inputQuestion(ctx.ui, heading, {
+      ...navigation, initial: current?.value, signal, cancelHint: navigation.review ? "Esc back to review" : undefined,
+    });
     if (!answer) return undefined;
     const value = writtenValue(answer.text);
     return { values: value ? [value] : [], back: answer.back };
   }
-
-  const rows = optionRows(question);
-  const write = rows.length;
-  rows.push({ value: String(write), label: "Write an answer" });
-  if (previous.length) rows.unshift({
-    value: "keep", label: "Keep current answer", description: displayLine(previous[0].label),
-  });
-  if (navigation.previous) rows.push({ value: "back", label: PREVIOUS_QUESTION });
-
-  if (!question.options.length && !previous.length) {
+  if (!question.options.length && !current) {
     const prompt = navigation.previous
       ? `${heading.prompt}\nCancel this input to return to the previous question.` : heading.prompt;
     const answer = await writeAnswer(ctx, { ...heading, prompt }, signal);
@@ -92,26 +73,35 @@ async function askSingle(
     return undefined;
   }
 
+  const rows = optionRows(question);
+  const write = rows.length;
+  const currentIndex = current?.wasCustom ? write
+    : question.options.findIndex(({ value }) => value === current?.value);
+  if (ctx.mode === "tui") {
+    rows.forEach((row, index) => { row.label = `${currentIndex === index ? "◉" : "○"} ${row.label}`; });
+  }
+  rows.push({
+    label: current?.wasCustom ? (ctx.mode === "tui" ? "◉ Edit written answer" : "Edit written answer") : "Write an answer",
+    description: ctx.mode === "tui" && current?.wasCustom ? displayLine(current.label) : undefined,
+  });
+  const keep = current && (ctx.mode === "rpc" || current.wasCustom || currentIndex === -1)
+    ? rows.push({ label: "Keep current answer", description: displayLine(current.label) }) - 1 : undefined;
+  const back = navigation.previous ? rows.push({ label: PREVIOUS_QUESTION }) - 1 : undefined;
+
   while (!signal?.aborted) {
     const index = ctx.mode === "tui"
-      ? await pickChoice(ctx.ui, heading, () => rows.map((row) => {
-        const option = question.options[Number(row.value)];
-        if (!option) return row;
-        const wasSelected = previous.some((choice) => !choice.wasCustom && choice.value === option.value);
-        return { ...row, label: `${wasSelected ? "◉" : "○"} ${row.label}` };
-      }), {
-        signal,
-        previous: navigation.previous ? rows.length - 1 : undefined,
-        next: navigation.next && previous.length ? () => 0 : undefined,
+      ? await pickChoice(ctx.ui, heading, () => rows, {
+        signal, numbered: write, instruction: "Choose one", initial: Math.max(0, currentIndex), previous: back,
+        cancelHint: navigation.review ? "Esc back to review" : undefined,
+        next: current && navigation.next ? { label: "Tab continue", index: () => keep ?? currentIndex } : undefined,
       })
-      : await selectRow(ctx.ui, dialogTitle(heading), rows, signal);
+      : await selectQuestionRow(ctx.ui, dialogTitle(heading), rows, signal);
     if (index === undefined) return undefined;
-    const { value } = rows[index];
-    if (value === "keep") return { values: previous };
-    if (value === "back") return { back: true, values: previous };
-    if (Number(value) !== write) return { values: [selectedOption(question, Number(value))] };
+    if (index === back) return { back: true, values: previous };
+    if (index === keep) return { values: previous };
+    if (index < write) return { values: [selectedOption(question, index)] };
 
-    const answer = await writeAnswer(ctx, heading, signal);
+    const answer = await writeAnswer(ctx, heading, signal, current?.wasCustom ? current.value : undefined);
     if (answer) return { values: [answer] };
   }
   return undefined;
@@ -124,24 +114,32 @@ async function askMultiple(
   const options = optionRows(question);
   const selected = new Set(previous.filter((choice) => !choice.wasCustom).map((choice) => choice.value));
   let custom = previous.find((choice) => choice.wasCustom);
+  const isTui = ctx.mode === "tui";
 
   const write = options.length;
+  const firstChecked = question.options.findIndex(({ value }) => selected.has(value));
+  const initial = firstChecked >= 0 ? firstChecked : custom ? write : 0;
   const done = write + 1;
-  const back = done + 1;
-  function rows(): SelectItem[] {
-    const items = options.map((row, index) => ({
+  const back = navigation.previous ? done + 1 : undefined;
+  const remove = (back ?? done) + 1;
+  function hasAnswer(): boolean {
+    return selected.size > 0 || !!custom;
+  }
+  function rows(): PickerRow[] {
+    const items: PickerRow[] = options.map((row, index) => ({
       ...row,
       label: `[${selected.has(question.options[index].value) ? "x" : " "}] ${row.label}`,
     }));
+    const continueLabel = !isTui ? "Done" : navigation.review ? "Save and return to review" : "Continue";
     items.push({
-      value: String(write),
-      label: custom ? "Written answer" : "Write an answer",
-      description: custom && displayLine(custom.label),
+      label: custom && isTui ? `[x] Written answer — ${displayLine(custom.label)}` : custom ? "Edit written answer" : "Write an answer",
+      description: custom && !isTui ? displayLine(custom.label) : undefined,
     }, {
-      value: String(done),
-      label: selected.size || custom ? "Done" : "Done · select at least one answer",
+      label: hasAnswer() ? continueLabel : `${continueLabel} · select or write an answer`,
+      gapBefore: true,
     });
-    if (navigation.previous) items.push({ value: String(back), label: PREVIOUS_QUESTION });
+    if (back !== undefined) items.push({ label: PREVIOUS_QUESTION });
+    if (custom && !isTui) items.push({ label: "Remove written answer" });
     return items;
   }
 
@@ -152,21 +150,25 @@ async function askMultiple(
       else selected.add(value);
       return false;
     }
-    return index !== done || !!(selected.size || custom);
+    return index !== done || hasAnswer();
   }
 
   while (!signal?.aborted) {
     let index: number | undefined;
-    if (ctx.mode === "tui") {
+    if (isTui) {
       index = await pickChoice(ctx.ui, heading, rows, {
-        signal,
-        previous: navigation.previous ? back : undefined,
-        next: navigation.next ? () => (selected.size || custom ? done : undefined) : undefined,
-        checklist: { activate, optionCount: write },
+        signal, numbered: write, instruction: "Choose one or more", initial, previous: back, activate,
+        cancelHint: navigation.review ? "Esc back to review" : undefined,
+        next: { label: navigation.review ? "Tab save" : "Tab continue", index: () => hasAnswer() ? done : undefined },
+        written: {
+          index: write,
+          value: () => custom?.value,
+          change: (text) => { custom = text === undefined ? undefined : writtenValue(text); },
+        },
       });
     } else {
       do {
-        index = await selectRow(ctx.ui, `${dialogTitle(heading)}\nSelect one or more answers.`, rows(), signal);
+        index = await selectQuestionRow(ctx.ui, `${dialogTitle(heading)}\nSelect one or more answers.`, rows(), signal);
       } while (index !== undefined && !activate(index));
     }
     if (index === undefined || signal?.aborted) return undefined;
@@ -176,26 +178,23 @@ async function askMultiple(
       if (custom) values.push(custom);
       return index === back ? { back: true, values } : { values };
     }
-
-    if (custom) {
-      const action = await selectRow(ctx.ui, `${dialogTitle(heading)}\nCurrent written answer: ${displayLine(custom.label)}`, [
-        { value: "replace", label: "Replace written answer" },
-        { value: "remove", label: "Remove written answer" },
-        { value: "keep", label: "Keep written answer" },
-      ], signal);
-      if (action === 1) custom = undefined;
-      if (action !== 0) continue;
+    if (index === remove) {
+      custom = undefined;
+      continue;
     }
-    const answer = await writeAnswer(ctx, heading, signal);
+    const answer = await writeAnswer(ctx, heading, signal, custom?.value);
     if (answer) custom = answer;
   }
   return undefined;
 }
 
 export async function runQuestionnaire(
-  ctx: QuestionContext, questions: Question[], signal?: AbortSignal,
+  ctx: QuestionContext, questions: Question[],
+  { signal, initialAnswers }: { signal?: AbortSignal; initialAnswers?: Answer[] } = {},
 ): Promise<Answer[] | undefined> {
-  const answers: Answer[] = [];
+  const answers = initialAnswers?.slice() ?? [];
+  const isRevision = initialAnswers !== undefined;
+
   async function ask(index: number, navigation: Navigation): Promise<StepResult | undefined> {
     const question = questions[index];
     const heading = {
@@ -209,24 +208,37 @@ export async function runQuestionnaire(
     return step;
   }
 
-  for (let index = 0; index < questions.length;) {
-    const step = await ask(index, { previous: index > 0, next: questions.length > 1 });
-    if (!step) return undefined;
-    index += step.back ? -1 : 1;
+  if (!answers.length) {
+    for (let index = 0; index < questions.length;) {
+      const step = await ask(index, { previous: index > 0, next: questions.length > 1 });
+      if (!step) return undefined;
+      index += step.back ? -1 : 1;
+    }
   }
-  if (questions.length === 1) return answers;
+  if (questions.length === 1 && !isRevision) return answers;
 
+  let focusedQuestion = 0;
+  const title = isRevision ? "Review and edit previous answers" : "Review your answers";
   while (!signal?.aborted) {
-    const rows: SelectItem[] = questions.map((question, index) => ({
-      value: String(index),
+    const rows: PickerRow[] = questions.map((question, index) => ({
       label: displayLine(question.prompt),
       description: answers[index].values.map(({ label }) => displayLine(label)).join(", "),
     }));
-    rows.push({ value: "submit", label: "Submit answers" });
-    const edit = await selectRow(ctx.ui, "Review your answers", rows, signal);
+    rows.push({
+      label: isRevision ? "Continue with revised answers" : "Submit answers",
+      description: isRevision ? "Branches the conversation. Workspace files stay as they are." : undefined,
+      gapBefore: true,
+    });
+    const edit = ctx.mode === "tui"
+      ? await pickChoice(ctx.ui, { prompt: title }, () => rows, {
+        signal, numbered: questions.length, instruction: "Select a question to edit", inlineDetails: true,
+        initial: focusedQuestion, next: { label: isRevision ? "Tab apply revision" : "Tab submit", index: () => questions.length },
+      })
+      : await selectQuestionRow(ctx.ui, title, rows, signal);
     if (edit === undefined) return undefined;
     if (edit === questions.length) return answers;
-    await ask(edit, { previous: false, next: false });
+    focusedQuestion = edit;
+    await ask(edit, { review: true });
   }
   return undefined;
 }

@@ -1,6 +1,7 @@
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runQuestionnaire } from "./form.ts";
 import { formatAnswers, normalizeQuestions, QuestionnaireParams, type QuestionnaireResult } from "./model.ts";
+import { registerReanswer } from "./reanswer.ts";
 import { renderQuestionCall, renderQuestionResult } from "./rendering.ts";
 
 const questionTool = defineTool<typeof QuestionnaireParams, QuestionnaireResult>({
@@ -18,7 +19,7 @@ const questionTool = defineTool<typeof QuestionnaireParams, QuestionnaireResult>
   async execute(_toolCallId, params, signal, _onUpdate, ctx) {
     const questions = normalizeQuestions(params.questions);
     const interactive = ctx.mode === "tui" || ctx.mode === "rpc";
-    const answers = interactive && !signal?.aborted ? await runQuestionnaire(ctx, questions, signal) : undefined;
+    const answers = interactive && !signal?.aborted ? await runQuestionnaire(ctx, questions, { signal }) : undefined;
     const reason = signal?.aborted ? "aborted" : !interactive ? "unavailable" : answers ? undefined : "dismissed";
     const details: QuestionnaireResult = { questions, answers: reason ? [] : answers ?? [], cancelled: !!reason };
     if (reason) details.reason = reason;
@@ -36,4 +37,5 @@ const questionTool = defineTool<typeof QuestionnaireParams, QuestionnaireResult>
 
 export default function questionExtension(pi: ExtensionAPI): void {
   pi.registerTool(questionTool);
+  registerReanswer(pi);
 }

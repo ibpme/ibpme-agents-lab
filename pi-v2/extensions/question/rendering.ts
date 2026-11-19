@@ -1,4 +1,4 @@
-import type { Theme, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { KeybindingHints, MessageRenderOptions, Theme, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Text, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
 import { displayLine, displayText, type QuestionnaireParams, type QuestionnaireResult } from "./model.ts";
 
@@ -63,9 +63,26 @@ const renderResultBody: NonNullable<QuestionTool["renderResult"]> = (result, opt
     const message = options.expanded ? displayText(content) : displayLine(content);
     return new Text(message ? `${status}\n${theme.fg("text", message)}` : status, 0, 0);
   }
+  return renderAnswers(details, options.expanded, theme, context);
+};
 
+export function renderRevisedAnswers(
+  results: QuestionnaireResult[], options: MessageRenderOptions, theme: Theme,
+): Component {
+  const title = theme.fg("toolTitle", theme.bold("Revised questionnaire answers"));
+  const sections = results.map((result) => renderAnswers(result, options.expanded, theme, options));
+  return withQuestionBackground({
+    render: (width) => [
+      truncateToWidth(title, width),
+      ...sections.flatMap((section) => options.expanded ? ["", ...section.render(width)] : section.render(width)),
+    ],
+    invalidate: () => sections.forEach((section) => section.invalidate()),
+  }, theme, options.outputPad, { top: true, bottom: true });
+}
+
+function renderAnswers(details: QuestionnaireResult, expanded: boolean, theme: Theme, context: KeybindingHints): Component {
   const questions = new Map(details.questions.map((question) => [question.id, question]));
-  if (!options.expanded) {
+  if (!expanded) {
     const rows = details.answers.slice(0, PREVIEW_LIMIT).map(({ id, values }, index) => {
       const question = questions.get(id);
       const topic = displayLine(question?.label ?? id) || displayLine(id);
@@ -117,4 +134,4 @@ const renderResultBody: NonNullable<QuestionTool["renderResult"]> = (result, opt
     },
     invalidate() {},
   };
-};
+}
