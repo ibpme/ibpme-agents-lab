@@ -31,7 +31,11 @@
       "./extensions/thinking-style/index.ts",
       "./extensions/status-line/index.ts",
       "./extensions/context-usage/index.ts",
-      "./extensions/tool-styling/index.ts"
+      "./extensions/tool-styling/index.ts",
+      "./extensions/readmd/index.ts",
+      "./extensions/system-prompt/index.ts",
+      "./extensions/loaded-skills/index.ts",
+      "./extensions/pager/index.ts"
     ]
   }
 }

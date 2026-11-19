@@ -13,8 +13,9 @@ pi -e ./pi-v2
 
 This uses Pi's native package manifest and TypeScript loader. No build step or
 runtime dependency installation is needed for these extensions. Disable the old
-`alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `status-line`, and
-`stylish-tools` extensions before loading their v2 replacements (`tool-styling`
+`alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `status-line`,
+`readmd`, `system-prompt`, `loaded-skills`, and `stylish-tools` extensions before
+loading their v2 replacements (`tool-styling`
 replaces `stylish-tools`). Duplicate commands receive invocation suffixes such as
 `/clear:1` and `/clear:2`; duplicate shortcuts conflict.
 
@@ -43,6 +44,23 @@ policy is added here. Shutdown timing and headless behavior are owned by Pi.
 These are convenience commands, not a general-purpose command-alias engine.
 They call documented primitives instead of sending `/new` or `/quit` as user
 messages or trying to transform slash commands through the `input` event.
+
+## Session viewers
+
+| Command | Content |
+| --- | --- |
+| `/readmd` | Renders the latest assistant response with text on the active branch as Markdown. Mermaid blocks appear as fenced code. |
+| `/system-prompt` | Shows the effective system prompt and an approximate token count. Use `/system-prompt append` for the configured append prompt alone. |
+| `/loaded-skills` | Lists skill files observed on the active branch and estimates their current file token counts. The `loaded-skills` status lists their names. |
+
+The package loads `pager` by default. It supplies these three viewers with a
+line counter and `j`/`k`, `gg`, and `G` navigation. Each command has its own
+scrollable viewer when `pager` is disabled. Disable `extensions/pager/index.ts`
+with `pi config` and reload, or add `"-extensions/pager/index.ts"` to the
+installed package's `extensions` filter. The next command invocation uses the
+viewer selected after reload. In RPC, the commands use Pi's text editor dialog
+to present the content and discard edits. In print and JSON modes they return
+without opening a viewer.
 
 ## Shortcuts
 
@@ -281,8 +299,13 @@ pi-v2/
 ├── extensions/
 │   ├── alias/index.ts
 │   ├── context-usage/index.ts
+│   ├── loaded-skills/
+│   ├── pager/index.ts
+│   ├── readmd/index.ts
+│   ├── shared/                    # Pager lookup and document viewport
 │   ├── stash/index.ts
 │   ├── status-line/               # Layout/config, default-segments/, lifecycle
+│   ├── system-prompt/index.ts
 │   ├── thinking-cycle-backward/index.ts
 │   ├── thinking-style/index.ts
 │   └── tool-styling/              # Renderer registration, per-tool views, formatting
@@ -293,6 +316,7 @@ pi-v2/
     ├── status-line.test.mjs
     ├── thinking-cycle-backward.test.mjs
     ├── thinking-style.test.mjs
+    ├── viewers.test.mjs          # Viewer selection across a real Pi session reload
     └── extension-fixture.mjs     # Shortcut/event registration recorder
 ```
 
@@ -322,28 +346,10 @@ pi-v2/
   shortcuts, and lifecycle handlers with minimal contexts. They do not simulate
   Pi's session persistence or shutdown internals; those remain host responsibilities.
 
-### Discuss before the next migrations
+## Migration plan
 
-Keep these as review groups, not extra directory layers or a fixed migration plan:
-
-1. **Small independent customizations:** alias, backward thinking cycling, editor
-   stash, and thinking style are migrated. Check current Pi features before carrying
-   more code forward.
-2. **Session inspection:** system prompt, loaded skills, tool statistics, usage.
-   Try native UI primitives before building a shared pager abstraction.
-3. **Model/provider behavior:** fast tier, account selection, prompt suggestions.
-   Use the current model registry, provider hooks, and scoped models where relevant.
-4. **Tool policy and execution:** protected paths, execution modes, SSH. Rendering
-   is now independently migrated as `tool-styling`; keep execution and policy out
-   of it. Review the remaining cooperation together: the original package has
-   cross-extension services here, and a one-file-at-a-time port could preserve
-   the wrong design.
-5. **Presentation:** modular status-line placement is migrated. Future producers
-   should publish independent statuses instead of owning footer placement or
-   competing for working-message text.
-
-For each migration, first agree on behavior to retain, behavior Pi now supplies,
-and behavior to remove. Then choose the smallest module and tests that support it.
+See [plan.md](plan.md) for completed migrations, behavior changes, commit and
+branch checkpoints, deferred work, and the remaining checklist.
 
 ## Development
 
