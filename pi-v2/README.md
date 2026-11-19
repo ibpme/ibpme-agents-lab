@@ -15,8 +15,9 @@ This uses Pi's native package manifest and TypeScript loader. No build step or
 runtime dependency installation is needed for these extensions. Disable the old
 `alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `status-line`,
 `readmd`, `system-prompt`, `loaded-skills`, `copy-command`, `openai-accounts`,
-`fast`, `usage`, `prompt-suggestions`, and `stylish-tools` extensions before
-loading their v2 replacements. `tool-styling` replaces `stylish-tools`. Duplicate commands receive
+`fast`, `usage`, `prompt-suggestions`, `question`, and `stylish-tools` extensions
+before loading their v2 replacements. `tool-styling` replaces `stylish-tools`.
+Duplicate commands receive
 invocation suffixes such as
 `/clear:1` and `/clear:2`; duplicate shortcuts conflict.
 
@@ -124,6 +125,22 @@ the active branch to the configured model. The request omits tool arguments,
 tool results, reasoning blocks, summaries, and images. Add
 `status:prompt-suggestions` to `statusline.json` to show the toggle or request
 state in the footer.
+
+## Questions
+
+The `question` tool lets the assistant ask for a choice or a written answer in
+the terminal and in RPC clients that support Pi's dialogs. In the terminal,
+single-choice options use circles and multi-select options use checkboxes.
+The highlighted option's description appears below the choices. Use **Space**
+to toggle multiple choices. In a questionnaire, **Shift+Tab** goes back and
+**Tab** continues when the current question has an answer. Choice lists also
+offer **Previous question**, and **Esc** goes back from a text-only question.
+The review screen lets you edit any answer before choosing **Submit answers**.
+Cancelling the questionnaire discards unsubmitted answers.
+
+The transcript shows the question topics and a short answer preview. Expand
+the tool row to see full prompts, each selected label, and written answers
+with their original line breaks.
 
 ## Shortcuts
 
