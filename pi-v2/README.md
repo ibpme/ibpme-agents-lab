@@ -14,9 +14,10 @@ pi -e ./pi-v2
 This uses Pi's native package manifest and TypeScript loader. No build step or
 runtime dependency installation is needed for these extensions. Disable the old
 `alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `status-line`,
-`readmd`, `system-prompt`, `loaded-skills`, `copy-command`, and `stylish-tools`
-extensions before loading their v2 replacements. `tool-styling` replaces
-`stylish-tools`. Duplicate commands receive invocation suffixes such as
+`readmd`, `system-prompt`, `loaded-skills`, `copy-command`, `openai-accounts`,
+`fast`, `usage`, and `stylish-tools` extensions before loading their v2
+replacements. `tool-styling` replaces `stylish-tools`. Duplicate commands receive
+invocation suffixes such as
 `/clear:1` and `/clear:2`; duplicate shortcuts conflict.
 
 For persistent use, after disabling the original versions of these extensions:
@@ -79,6 +80,25 @@ In the terminal, Pi writes to the clipboard, including terminal clipboard
 forwarding where supported. In RPC, **Older reply** and **Newer reply** are
 selection entries, and the chosen block opens in the client's text dialog for
 manual copying. The picker works independently of `pager`.
+
+## Provider commands
+
+- `/login openai:work` adds a separate ChatGPT login. Pi stores and refreshes
+  each login under its provider ID. Set the `labels` array in
+  `openai-accounts.json` in Pi's agent directory and run `/reload` to change
+  the labels. A missing file defaults to `["work"]`; an empty array disables
+  the aliases. `/account` toggles between two configured accounts or opens a
+  picker when there are more. It preserves the selected model when available.
+- `/fast`, `/fast on`, and `/fast off` control the session's OpenAI Responses
+  priority request, including labeled accounts and OpenAI Codex. The footer's
+  `fast` badge indicates a requested tier. Availability and cost depend on the
+  model and account. The preference survives `/reload` and session resume.
+- `/usage` and `/usage all` show reports for configured supported providers.
+  Select one with `/usage opencode-go`, `/usage openai`, `/usage openai:<label>`,
+  or `/usage openai-codex`. OpenCode Go and Codex show quota windows. Native and
+  labeled OpenAI accounts show their usage dashboard link. Codex quotas always
+  appear under the separate Codex login. The TUI viewer opens while the lookup
+  runs and cancels pending requests when closed. RPC receives a text notification.
 
 ## Shortcuts
 
@@ -322,7 +342,9 @@ pi-v2/
 │   ├── alias/index.ts
 │   ├── context-usage/index.ts
 │   ├── copy-command/
+│   ├── fast/index.ts
 │   ├── loaded-skills/
+│   ├── openai-accounts/
 │   ├── pager/index.ts
 │   ├── readmd/index.ts
 │   ├── shared/                    # Pager lookup and document viewport
@@ -331,15 +353,18 @@ pi-v2/
 │   ├── system-prompt/index.ts
 │   ├── thinking-cycle-backward/index.ts
 │   ├── thinking-style/index.ts
-│   └── tool-styling/              # Renderer registration, per-tool views, formatting
+│   ├── tool-styling/              # Renderer registration, per-tool views, formatting
+│   └── usage/
 └── tests/
     ├── alias.test.mjs            # Real package discovery/reload + alias commands
     ├── context-usage.test.mjs
     ├── copy-command.test.mjs
+    ├── openai.test.mjs
     ├── stash.test.mjs
     ├── status-line.test.mjs
     ├── thinking-cycle-backward.test.mjs
     ├── thinking-style.test.mjs
+    ├── usage.test.mjs
     ├── viewers.test.mjs          # Viewer selection across a real Pi session reload
     └── extension-fixture.mjs     # Shortcut/event registration recorder
 ```

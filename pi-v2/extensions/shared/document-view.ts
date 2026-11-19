@@ -1,4 +1,5 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
+import type { Component, TUI } from "@earendil-works/pi-tui";
 
 export const PAGER_LOOKUP = "ibpme:pager:resolve:v1";
 
@@ -7,6 +8,7 @@ export interface ViewerDocument {
   content: string;
   format: "markdown" | "text";
   detail?: string;
+  createBody?: (tui: TUI, theme: Theme) => Component;
 }
 
 export type OpenDocument = (ctx: ExtensionCommandContext, document: ViewerDocument) => Promise<void>;

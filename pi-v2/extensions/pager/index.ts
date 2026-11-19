@@ -5,9 +5,9 @@ import { documentViewport } from "../shared/document-viewport.ts";
 
 const openPager: OpenDocument = async (ctx, document) => {
   await ctx.ui.custom<void>((tui, theme, _keys, done) => {
-    const body = document.format === "markdown"
+    const body = document.createBody?.(tui, theme) ?? (document.format === "markdown"
       ? new Markdown(document.content, 0, 0, getMarkdownTheme())
-      : new Text(document.content, 0, 0);
+      : new Text(document.content, 0, 0));
 
     return documentViewport(tui, theme, done, body, document.title, (first, last, total) => {
       const position = `Lines ${total === 0 ? "0" : `${first}–${Math.min(last, total)}`} of ${total}`;
