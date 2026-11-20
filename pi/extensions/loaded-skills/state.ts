@@ -1,47 +1,51 @@
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { SessionEntry, SessionMessageEntry } from "@earendil-works/pi-coding-agent";
+import { contentText } from "@earendil-works/pi-ai";
 
-export function skillFromRead(tool: string, args: Record<string, unknown>): string | undefined {
-  if (tool !== "read") return undefined;
-  if (typeof args.path !== "string") return undefined;
-  const path = args.path.replace(/\\/g, "/");
-  return /(?:^|\/)([^/]+)\/SKILL\.md$/i.exec(path)?.[1]
-    ?? /(?:^|\/)skills\/([^/]+)\.md$/i.exec(path)?.[1];
+type Message = SessionMessageEntry["message"];
+
+export function skillInvocation(message: Message): { name: string; path: string } | undefined {
+  if (message.role !== "user") return undefined;
+  const match = /^<skill name="([^"\r\n]+)" location="([^"\r\n]+)">\n/.exec(contentText(message.content));
+  if (match) return { name: match[1], path: match[2] };
 }
 
-/** Replay only the active branch, including nested reads made through codemode. */
-export function loadedSkillPaths(entries: readonly SessionEntry[]): Map<string, string> {
+export function loadedSkillPaths(entries: readonly SessionEntry[], pending?: Message): Map<string, string> {
   const skills = new Map<string, string>();
-  const calls = new Map<string, { name: string; arguments: Record<string, unknown> }>();
-  const add = (tool: string, args: Record<string, unknown>) => {
-    const name = skillFromRead(tool, args);
-    if (name) skills.set(name, args.path as string);
-  };
-  for (const entry of entries) {
-    if (entry.type !== "message") continue;
-    const message = entry.message;
+  const readPaths = new Map<string, string>();
+
+  function addRead(path: string) {
+    const normalized = path.replace(/\\/g, "/");
+    const name = /(?:^|\/)([^/]+)\/SKILL\.md$/i.exec(normalized)?.[1]
+      ?? /(?:^|\/)skills\/([^/]+)\.md$/i.exec(normalized)?.[1];
+    if (name) skills.set(name, path);
+  }
+
+  function observe(message: Message) {
     if (message.role === "assistant") {
       for (const block of message.content) {
-        if (block.type === "toolCall") calls.set(block.id, block);
+        if (block.type === "toolCall" && block.name === "read" && typeof block.arguments.path === "string") {
+          readPaths.set(block.id, block.arguments.path);
+        }
       }
     } else if (message.role === "toolResult") {
-      if (!message.isError) {
-        const call = calls.get(message.toolCallId);
-        if (call) add(call.name, call.arguments);
-      }
+      const path = readPaths.get(message.toolCallId);
+      if (!message.isError && path) addRead(path);
+      readPaths.delete(message.toolCallId);
+
       for (const call of message.nestedCalls?.calls ?? []) {
-        if (call.status === "ok" && call.arguments) add(call.name, call.arguments);
+        if (call.status === "ok" && call.name === "read" && typeof call.arguments?.path === "string") {
+          addRead(call.arguments.path);
+        }
       }
-    } else if (message.role === "user") {
-      const text = typeof message.content === "string" ? message.content
-        : message.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
-      // /skill:name expands to this wrapper rather than calling the read tool.
-      const match = /^<skill name="([^"]+)" location="([^"]+)">\n/.exec(text);
-      if (match) skills.set(match[1], match[2]);
+    } else {
+      const invocation = skillInvocation(message);
+      if (invocation) skills.set(invocation.name, invocation.path);
     }
   }
-  return skills;
-}
 
-export function loadedSkills(entries: readonly SessionEntry[]): Set<string> {
-  return new Set(loadedSkillPaths(entries).keys());
+  for (const entry of entries) {
+    if (entry.type === "message") observe(entry.message);
+  }
+  if (pending) observe(pending);
+  return skills;
 }

@@ -1,0 +1,584 @@
+# Pi extensions, v2
+
+Incremental reimplementation of `../pi`, targeting Pi 1.5.2 for development.
+The original package remains unchanged. Only migrated extensions belong in this package.
+
+## Try it without installing
+
+From the repository root:
+
+```bash
+pi -e ./pi-v2
+```
+
+This uses Pi's native package manifest and TypeScript loader. Run
+`npm install --prefix pi-v2` to enable the interactive SSH authentication modal.
+Disable the old
+`alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `reasoning-tokens`, `status-line`,
+`readmd`, `system-prompt`, `loaded-skills`, `copy-command`, `openai-accounts`,
+`fast`, `usage`, `prompt-suggestions`, `question`, `stylish-tools`, `tool-set`, and `ssh`
+extensions before loading their v2 replacements. `tool-styling` replaces
+`stylish-tools`, `tool-control` replaces `tool-set`, and `agent-stats` replaces
+`reasoning-tokens`.
+Duplicate commands receive
+invocation suffixes such as
+`/clear:1` and `/clear:2`; duplicate shortcuts conflict.
+
+For persistent use, after disabling the original versions of these extensions:
+
+```bash
+pi install /absolute/path/to/ibpme-agents-lab/pi-v2
+```
+
+Use `/reload` after source changes. This package does not install symlinks,
+modify keybindings, or change existing settings automatically.
+
+## Current commands
+
+| Command | Behavior | Pi primitive |
+| --- | --- | --- |
+| `/exit` | Request graceful shutdown; Pi owns timing and cleanup | `ctx.shutdown()` |
+| `/clear` | Start a new session, preserving the previous saved session | `ctx.newSession()` |
+
+Both commands ignore arguments, matching the original extension. `/clear`
+awaits the session operation, respects cancellation, and performs no work on the
+old context after replacement. It is not a transcript-deletion command.
+Errors are left to Pi's command handling; no extra confirmation or notification
+policy is added here. Shutdown timing and headless behavior are owned by Pi.
+
+These are convenience commands, not a general-purpose command-alias engine.
+They call documented primitives instead of sending `/new` or `/quit` as user
+messages or trying to transform slash commands through the `input` event.
+
+## Session viewers
+
+| Command | Content |
+| --- | --- |
+| `/readmd` | Renders the latest assistant response with text on the active branch as Markdown. Mermaid blocks appear as fenced code. |
+| `/system-prompt` | Shows the effective system prompt and an approximate token count. Use `/system-prompt append` for the configured append prompt alone. |
+| `/loaded-skills` | Lists skill files observed on the active branch and estimates their current file token counts. The `loaded-skills` status lists their names. |
+
+The package loads `pager` by default. It supplies these three viewers with a
+border, a line counter, and `j`/`k`, `gg`, and `G` navigation. Each command has its own
+scrollable viewer when `pager` is disabled. Disable `extensions/pager/index.ts`
+with `pi config` and reload, or add `"-extensions/pager/index.ts"` to the
+installed package's `extensions` filter. The next command invocation uses the
+viewer selected after reload. In RPC, the commands use Pi's text editor dialog
+to present the content and discard edits. In print and JSON modes they return
+without opening a viewer.
+
+## Copy shell blocks
+
+`/copy-command` starts at the newest assistant reply with a shell block on the
+active session branch. Use `↑`/`↓` to select a block, `h`/`←` and `l`/`→` to
+browse replies, and `Enter` to copy. `Esc` or `Ctrl+C` cancels. The picker
+remembers your selection in each reply. Use `/copy-command 2` to select the
+second block in the newest reply with commands directly.
+
+Each closed `bash`, `sh`, `shell`, `zsh`, or `console` fence is one block. The
+picker previews the first non-blank line and copies the full Markdown code body,
+including indentation, blank lines, and trailing spaces inside the fence.
+`console` blocks include any prompts and output from the original block.
+
+In the terminal, Pi writes to the clipboard, including terminal clipboard
+forwarding where supported. In RPC, **Older reply** and **Newer reply** are
+selection entries, and the chosen block opens in the client's text dialog for
+manual copying. The picker works independently of `pager`.
+
+## Provider commands
+
+- `/login openai:work` adds a separate ChatGPT login. Pi stores and refreshes
+  each login under its provider ID. Set the `labels` array in
+  `openai-accounts.json` in Pi's agent directory and run `/reload` to change
+  the labels. A missing file defaults to `["work"]`; an empty array disables
+  the aliases. `/account` toggles between two configured accounts or opens a
+  picker when there are more. It preserves the selected model when available.
+- `/fast`, `/fast on`, and `/fast off` control the session's OpenAI Responses
+  priority request, including labeled accounts and OpenAI Codex. The footer's
+  `fast` badge indicates a requested tier. Availability and cost depend on the
+  model and account. The preference survives `/reload` and session resume.
+- `/usage` and `/usage all` show reports for configured supported providers.
+  Select one with `/usage opencode-go`, `/usage openai`, `/usage openai:<label>`,
+  or `/usage openai-codex`. OpenCode Go and Codex show quota windows. Native and
+  labeled OpenAI accounts show their usage dashboard link. Codex quotas always
+  appear under the separate Codex login. The TUI viewer opens while the lookup
+  runs and cancels pending requests when closed. RPC receives a text notification.
+
+## Prompt suggestions
+
+Run `/suggestions on` in the TUI to show one follow-up below the editor after a
+completed reply. Press Tab in an empty prompt to insert it as an editable draft.
+Typing or pressing Escape dismisses it. Use `/suggestions off` to disable it, or
+toggle with `/suggestions` or Ctrl+Shift+S. The suggestion uses Pi's autocomplete,
+so it works alongside the context usage border.
+
+Suggestions default to off unless `prompt-suggestions.json` in Pi's agent
+directory contains `"enabled": true`. The file also accepts `provider`, `model`,
+and `ollamaUrl`. The built-in choice is
+`opencode-go/muse-spark-1.3-contributor`, using Pi's configured login.
+For Ollama, set `"provider": "ollama"` and `"model"` to an installed model.
+The local endpoint defaults to `http://127.0.0.1:11434`.
+`PI_SUGGESTIONS_PROVIDER`, `PI_SUGGESTIONS_MODEL`, and
+`PI_SUGGESTIONS_OLLAMA_URL` override the corresponding file values.
+The `extensions.suggestions.toggle` key in `keybindings.json` accepts a shortcut
+or an array of shortcuts. Run `/reload` after editing either file.
+
+Each lookup sends a bounded excerpt of recent user and assistant text from
+the active branch to the configured model. The request omits tool arguments,
+tool results, reasoning blocks, summaries, and images. Add
+`status:prompt-suggestions` to `statusline.json` to show the toggle or request
+state in the footer.
+
+## Questions
+
+The `question` tool lets the assistant ask for a choice or a written answer in
+the terminal and in RPC clients that support Pi's dialogs. In the terminal,
+single-choice options use circles and multi-select options use checkboxes.
+The highlighted option's description appears below the choices. Press a number
+to select a choice or toggle a checkbox. For lists with ten or more numbered
+rows, type the number and press **Enter**. You can also use the arrow keys and
+**Enter**, or **Space** to toggle a checkbox.
+
+In a multi-select, choose **Write an answer** or press **w** to open an editor
+inside the checklist. **Enter** saves the text, **Shift+Enter** adds a line, and
+**Esc** discards edits to the text. Focus a saved written answer and press
+**Delete** to remove it. The checklist keeps your other selections.
+
+During a questionnaire, **Shift+Tab** goes back and **Tab** continues once the
+current question has an answer. On the review screen, press a question number
+to edit it or **Tab** to submit. Cancelling the questionnaire discards
+unsubmitted answers.
+
+The transcript shows the question topics and a short answer preview. Expand
+the tool row to see full prompts, each selected label, and written answers
+with their original line breaks.
+
+Run `/reanswer` to reopen a questionnaire from the active branch in the terminal
+or an RPC client with dialog support. Questionnaires are numbered newest first.
+Press a number in the terminal picker or run `/reanswer 2` to open the second
+newest directly. The review starts with your latest answers. Select a question
+to edit it, then choose **Continue with revised answers** or press **Tab** from
+the terminal review. Cancelling or submitting identical answers keeps you on the
+current branch.
+
+Pi resumes from the end of the original tool-call batch with the revised
+answers and any sibling tool results. The original path remains available in
+the terminal through `/tree`. Workspace files stay as they are.
+
+## Shortcuts
+
+| Extension | Shortcut | Behavior |
+| --- | --- | --- |
+| `stash` | `ctrl+s` | Stash, restore, or swap the editor draft |
+| `thinking-cycle-backward` | `shift+left` | Select the previous supported thinking level, wrapping to the highest |
+
+### Stash
+
+Stash preserves exact editor text, including whitespace, Unicode, and multiple
+lines. If a draft is already stashed, the shortcut restores it and stashes any
+current nonempty draft in its place. An empty editor with no saved draft is a no-op.
+
+After submitting an intervening interactive prompt, stash automatically restores
+when `agent_settled` fires, but only if the editor is still empty. If you started
+another draft, that draft is never overwritten and the saved draft remains
+available through the shortcut. RPC and extension-injected input do not arm
+automatic restoration. Slash commands that bypass Pi's `input` event do not arm
+it either. Stash is TUI-only and in-memory: session replacement and `/reload`
+clear it. It adds no footer indicator, session metadata, or model messages.
+
+### Backward thinking cycle
+
+The extension asks Pi's `getSupportedThinkingLevels()` for the current model's
+levels on every invocation; no provider-specific level list is maintained here.
+It uses `pi.setThinkingLevel()` and reports the effective level returned by Pi,
+so Pi remains responsible for clamping, persistence, and thinking-level events.
+A missing or non-reasoning model leaves the level unchanged. Forward cycling
+remains Pi's built-in `app.thinking.cycle` action; this package does not remap it.
+
+### Shortcut registration
+
+Both extensions register literal keys directly with `pi.registerShortcut()`.
+They do not read or write `keybindings.json`. The old extension-owned settings
+`extensions.stash.toggle` and `extensions.thinking.cycleBackward` are no longer
+supported; they cannot remap or disable these shortcuts. Disable the extension
+through Pi's package resource selection if needed.
+
+Pi handles shortcut conflicts. The retained `ctrl+s` shortcut overlaps Pi's
+picker-specific save/sort bindings. This package does not change those bindings
+or register a separate named action for remapping.
+
+## Thinking style
+
+`thinking-style` customizes Pi's native working indicator while retaining the
+original thinking-block Markdown styling:
+
+- Thinking streams use `["·", "•", "●", "•"]` frames at 120 ms through
+  `ctx.ui.setWorkingIndicator()`, colored with the theme's thinking-level border
+  color. The text `Thinking` is passed unstyled to `ctx.ui.setWorkingMessage()`
+  so Pi retains control of message coloring. Repeated thinking deltas do not restart it.
+- Thinking completion, text generation, and tool-call generation restore Pi's
+  default indicator and working message by calling both setters without arguments.
+- Assistant completion, turn boundaries, agent settlement (including abort),
+  and session teardown also restore the default if the thinking pulse is active.
+- Pi owns animation, rendering, and working-row visibility. There are no custom
+  timers, widgets, or editor replacements.
+- On session start, collapsed thinking blocks are globally labeled `Thought` via
+  `ctx.ui.setHiddenThinkingLabel("Thought")`. The fixed label has no timing or animation.
+- `registerMarkdownTransformer()` is explicitly scoped to `assistant-thinking`.
+  Each line is prefixed as a Markdown blockquote, including blank lines; normal
+  assistant responses and user messages are unaffected. This is display-only.
+
+Indicator customization is TUI-only; RPC, JSON, and print modes do not access UI
+methods. Another extension that changes working-indicator frames or working-message
+text (such as the original agent statistics extension) would compete for the same
+Pi-owned surface; disable one of the conflicting extensions.
+
+## Agent stats
+
+`/agent-stats` shows usage, response times, turn elapsed times, and tool call
+outcomes for the selected branch. The footer shows the latest response's output
+tokens per second and the branch's top-level call count. The output rate divides
+output tokens, including reasoning tokens, by Pi's whole-response duration.
+The report's aggregate rate uses total output tokens and total time from the
+same timed responses.
+
+The report groups calls by tool name and shows per-response and branch usage,
+including cache reads and writes. It reads saved response duration, top-level
+execution time, and nested-call elapsed time directly from Pi.
+
+Turn elapsed time, time to first streamed output (TTFT), generation-only rate,
+provider request counts, and tool wall time are measured from live events and
+held in memory until reload or session change. Turn elapsed includes tool work
+and waits during the turn. Tool wall time merges overlapping top-level tool
+event intervals. The extension adds no session entries.
+
+`agent-stats` shows the sum of Pi's assistant reasoning-token counts on the
+selected branch. It uses `usage.reasoning`, which is part of the output token
+count. The footer includes stream usage as soon as Pi exposes it. Many providers
+supply it only when the reply finishes.
+
+Replies with absent counts are skipped, so mixed-provider totals can be partial.
+The indicator stays hidden until a count is available, and an explicit zero
+displays as `0`. Some Pi adapters supply zero when the upstream response omits
+the reasoning breakdown. Switching branches refreshes the total. Compaction
+retains the reasoning counts on the branch, and summary generation is excluded.
+
+The default footer includes `status:reasoning-stats`. In custom `statusline.json`
+files, change `status:reasoning-tokens` to `status:reasoning-stats` and use
+`reasoning-stats` in `hidden` if you hide the indicator by key.
+
+## Tool styling
+
+`extensions/tool-styling/` replaces the old `stylish-tools` presentation without
+replacing any tool implementation. It uses Pi 1.5.2's `registerToolRenderer()` for
+exactly `read`, `write`, `edit`, `bash`, `grep`, `find`, and `ls`; other tool names
+continue through Pi's renderer chain. These seven names deliberately use this
+extension's renderers instead of their stock rendering.
+
+- Compact call labels, paths, skill-read labels, and relevant arguments.
+- Collapsed previews: read 3 lines, write 10, grep 15, find/ls 20; bash shows its
+  last 5 lines. Hidden-line counts include the user's native expand-key hint.
+- Expanded output uses the old colored dot/gutter style and shows all returned
+  text, wrapping to the available width. Completed edit diffs remain visible
+  without expanding, with added/removed line counts.
+- Streaming results show `running`; final results show `done` or `failed`.
+  Durations come only from native `context.durationMs`. Missing durations are
+  omitted, not estimated or shown as zero. No timers or shared working-message
+  ownership are introduced.
+- Errors, native truncation/limit warnings, and saved full-output paths remain
+  visible. Read images remain Pi-owned; styling adds an image summary rather
+  than decoding or replacing image data. Self-shell rendering respects `outputPad`.
+
+The extension does not register tools, activate deferred tools, change schemas,
+rewrite results, execute commands, read files for previews, or route operations.
+Native execution retains shell settings, cancellation, streaming, and truncation.
+The same renderers style the seven `_remote` tool names. They display the
+destination saved with the result and work independently of the SSH connection.
+
+No new tool-styling tests are included in this visual pass. The existing package
+loader/reload tests and TypeScript checking validate registration and loading;
+renderer-specific coverage remains follow-up work.
+
+## Tool control
+
+Use `/safe` to enable SAFE execution policy, or `/yolo` (`/auto`) to lift its
+restrictions. Shift+Tab toggles the policy when Pi's `app.thinking.cycle` action
+is bound to another key. New sessions start in YOLO. The last saved mode applies
+to the whole session across `/tree`, `/reload`, and resume, including modes saved
+by the original `tool-set` extension.
+
+SAFE blocks built-in writes, edits, and shells, tools marked with
+`readOnlyHint: false`, and MCP tools lacking `readOnlyHint: true`. The same
+check runs on direct and nested calls, including codemode. The model-only
+`change_mode` tool requests confirmation from the user before enabling YOLO.
+SAFE controls tool calls through Pi. User-initiated shell commands and the
+underlying operating system permissions are outside this policy.
+
+Pi manages the active tool list and restores loaded tools. `ls`, `grep`, and
+`find` are registered as deferred and can be loaded with `tool_search` or called
+from codemode. Startup adds the available discovery and approval entry points
+to the restored list. Pi's explicit tool exclusions still apply.
+
+In the terminal, `/tools` shows exposure and permission together, for example
+`deferred · blocked (SAFE)`. Use the up and down arrows to select a tool and
+the left and right arrows to collapse or expand its details. The footer can
+include `status:mode`, `status:codemode`, `status:tools`, and `status:mcp-tools`.
+The default layout puts the codemode indicator beside SAFE/YOLO. It appears
+orange when Pi has `codemode` active and dim otherwise. The tool list shows a
+blue magnifier when `tool_search` is active. The plug beside the MCP tool counts
+is green when the `/mcp` extension command is available and dim otherwise.
+The MCP counts follow tool registration, including servers that connect after
+the session starts.
+
+Permission changes take effect immediately. Tool control adds a model-visible
+notice only when the effective policy changes in the projected conversation,
+before the next run or at the end of the current turn. Idle toggles that end in
+the previously announced mode add no notice.
+
+## SSH
+
+Use `/ssh user@host[:/path]` to connect the seven deferred `_remote` tools and
+`/ssh off` to disconnect. Use `tool_search` or codemode to reach the remote
+tools. Start Pi with `--ssh user@host[:/path]` to connect them automatically,
+as if you ran `/ssh` at startup. Unqualified tools and user-entered `!` and
+`!!` commands run locally.
+
+The extension uses a private OpenSSH connection and checks the destination
+directory before switching. Relative tool paths use that directory. Search
+requires `rg` for grep and `fd` or `fdfind` for find on the remote host.
+When the connection drops, remote calls fail. Use `/ssh` to reconnect, switch
+hosts, or disconnect a startup connection. Connections close on reload and
+session replacement. The footer can show `status:ssh`, while earlier tool results
+retain their original destination. With `tool-control` enabled, SAFE permits
+the read-only remote tools and blocks writes, edits, and model shell calls.
+
+OpenSSH first tries batch authentication with known hosts. In a TUI session,
+authentication or host-key approval can fall back to the SSH modal. The modal
+uses the optional native `node-pty` dependency, which may require a compiler and
+Node headers. RPC and headless sessions use batch authentication.
+
+## Modular status footer
+
+`status-line` owns only the footer. It renders the rows selected in
+`statusline.json`; there are no forced Pi-default rows and no widget placement.
+
+### Default segments
+
+Built-in content is grouped under `extensions/status-line/default-segments/`.
+Each module owns its formatting and theme colors, following the original status
+line rather than rebuilding Pi's native footer:
+
+| Module | Selectors | Behavior |
+| --- | --- | --- |
+| `location.ts` | `cwd`, `git`, `session` | Bold accent cwd with home abbreviation; dim `on ` plus green `⎇ branch`; dim bullet plus muted session name |
+| `usage.ts` | `tokens`, `cost` | Latest assistant's input/output/cache counts; accumulated assistant cost on the selected branch, with the original OAuth subscription marker |
+| `model.ts` | `model`, `thinking` | Bold accent `provider/model` and theme-colored thinking level |
+
+There is no `default-rows.ts` or `default-color.ts`. Change a module to change
+its presentation; change the JSON layout to move, select, or omit its segments.
+
+Usage retains the old footer's semantics: tokens are for the latest assistant
+response, not cumulative; cost covers assistant messages on the selected branch,
+not all session entries or tool/compaction usage. The snapshot is lazy and cached
+between redraws. Omitting `tokens` and `cost` avoids scanning history entirely.
+Session, leaf, and lifecycle changes invalidate the snapshot. Reasoning-token
+counts are published by `agent-stats`.
+
+### Independent status producers
+
+Other extensions publish movable, colored text through Pi's existing primitive:
+
+```ts
+ctx.ui.setStatus("tool-stats", "12 calls · 3.2s");
+ctx.ui.setStatus("ssh", ctx.ui.theme.fg("success", "production"));
+ctx.ui.setStatus("ssh", undefined);
+```
+
+The footer selects `status:<key>` without importing the producer or requiring
+custom registration. Status updates use Pi's native redraw mechanism. Producer
+colors remain intact, and disabling the footer does not clear producer statuses.
+
+### Context usage
+
+`extensions/context-usage/index.ts` displays context usage in the **top-right
+editor border**. It extends Pi's `CustomEditor` through
+`ctx.ui.setEditorComponent()` and the protected `renderTopBorder()` hook.
+The left side displays Pi's native working status. The extension inherits Pi's
+input handling, shortcuts, autocomplete, and scrolling. The border works with
+either the modular or native footer.
+
+The label uses a four-cell bracketed bar with partial blocks, a rounded
+percentage, and compact used/capacity tokens. For example, `[    ] 0% 0/272k`
+becomes `[█▊  ] 45% 122k/272k`. Colors are `success` normally,
+`warning` above 40%, and `error` above 70%. Unknown values display `?`
+instead of claiming zero utilization. It refreshes on session/response/turn,
+compaction, tree, and model events; there is no timer. The border styles raw cached
+usage with the current theme during rendering. At narrow widths, it drops the bar,
+then token counts, then the entire context label to leave room for native status
+and the hidden-line cue. Shutdown restores the default editor only if this
+extension still owns the editor factory. If another custom editor is already
+installed, the extension warns and skips installation. The display is TUI-only.
+
+### Configure placement
+
+Create either file yourself; the extension never writes configuration:
+
+- Global: `<agent-dir>/statusline.json`, normally `~/.pi/agent/statusline.json`.
+  `PI_CODING_AGENT_DIR` is respected.
+- Project: `<cwd>/.pi/statusline.json`, read only for trusted projects. It replaces
+  the whole global layout; there is no partial merge.
+
+```json
+{
+  "footer": [
+    {
+      "left": ["cwd", "git", "status:ssh", "session"],
+      "right": ["status:prompt-suggestions"]
+    },
+    {
+      "left": ["tokens", "status:agent-stats", "cost", "status:reasoning-stats"],
+      "right": ["model", "thinking", "status:openai-fast"],
+      "separator": " · ",
+      "rightSeparator": " • "
+    },
+    { "left": ["status:*"], "separator": " · " }
+  ],
+  "hidden": []
+}
+```
+
+The bundled default composition and `statusline.example.json` additionally
+place optional mode, codemode, reasoning, tools, skills, and MCP statuses.
+Missing producers render nothing. Tool inventory generation and live reasoning
+statistics are not migrated as part of this footer.
+
+- Every row is configurable. `{"footer": []}` produces an empty footer.
+- A status-only layout displays only statuses; built-in rows are not prepended.
+- `status:*` includes remaining unplaced, non-hidden statuses, sorted by key.
+  Explicit selectors take precedence regardless of row order. Only one wildcard
+  is allowed, and it is never inserted implicitly into a custom layout.
+- `hidden` contains exact status keys without the `status:` prefix. It applies
+  to published statuses, not the built-in selectors; omit a built-in to hide it.
+- `left` and `right` order their segments. `separator` defaults to one space;
+  `rightSeparator` optionally overrides it on the right. Missing/empty segments
+  and empty rows disappear without dangling separators.
+- Right-hand content is right-aligned and prioritized during overflow. Rows are
+  clipped, not wrapped, using ANSI-aware and wide-Unicode-aware display widths.
+- Unknown selectors/options, duplicate selectors, and invalid JSON warn and fall
+  back to the bundled old-style composition. Missing config uses that composition.
+- Rich-widget layout is deferred. `aboveEditor` and `belowEditor` no longer
+  support content; empty legacy arrays are accepted and ignored for compatibility.
+
+**Updating from the earlier v2 draft:** remove the editor-region keys and explicitly
+select the built-ins you want. A previous file containing only `status:*` will
+now intentionally show only published statuses. Copy the bundled example to your
+chosen config path to use the old-style composition. Existing files are not
+rewritten automatically.
+
+| Command | Behavior |
+| --- | --- |
+| `/statusline` | Toggle the compositor; disabling restores Pi's native footer |
+| `/statusline reload` | Reload configuration and enable the compositor |
+
+Only one footer owner should be enabled. This extension owns its custom footer and
+Git subscription, but never changes widgets, working messages, indicators,
+producer statuses, or model content. There are no private UI patches, process-wide
+registries, or polling timers.
+
+## Layout
+
+```text
+pi-v2/
+├── package.json                 # Explicit list of extension entry points
+├── package-lock.json            # Reproducible development dependencies
+├── tsconfig.json                # Strict checking; no emitted JavaScript
+├── extensions/
+│   ├── agent-stats/index.ts
+│   ├── alias/index.ts
+│   ├── context-usage/index.ts
+│   ├── copy-command/
+│   ├── fast/index.ts
+│   ├── loaded-skills/
+│   ├── openai-accounts/
+│   ├── pager/index.ts
+│   ├── readmd/index.ts
+│   ├── shared/                    # Pager lookup and document viewport
+│   ├── stash/index.ts
+│   ├── status-line/               # Layout/config, default-segments/, lifecycle
+│   ├── system-prompt/index.ts
+│   ├── thinking-cycle-backward/index.ts
+│   ├── thinking-style/index.ts
+│   ├── tool-styling/              # Renderer registration, per-tool views, formatting
+│   └── usage/
+└── tests/
+    ├── alias.test.mjs            # Real package discovery/reload + alias commands
+    ├── context-usage.test.mjs
+    ├── copy-command.test.mjs
+    ├── openai.test.mjs
+    ├── stash.test.mjs
+    ├── status-line.test.mjs
+    ├── thinking-cycle-backward.test.mjs
+    ├── thinking-style.test.mjs
+    ├── usage.test.mjs
+    ├── viewers.test.mjs          # Viewer selection across a real Pi session reload
+    └── extension-fixture.mjs     # Shortcut/event registration recorder
+```
+
+### Organization principles
+
+- **One directory per capability.** Start with `index.ts`; split implementation
+  files only when there is meaningful complexity to hide. Keep each extension
+  independently loadable where possible.
+- **Pi is the host, not something to wrap.** Use native commands, lifecycle
+  events, session entries, tool operations, and UI primitives directly. Do not
+  introduce an extension base class, custom loader, or parallel lifecycle.
+- **Explicit discovery.** `pi.extensions` names entry points, so tests and future
+  helpers cannot accidentally become extensions. Pi settings can filter which
+  package resources load; disabling an extension need not edit the manifest.
+- **Locality before sharing.** Keep implementation inside its owning extension.
+  Add a shared module only for an actual repeated need; do not copy the old
+  `shared/` or `contracts/` directories wholesale.
+- **No hidden cross-extension state.** Avoid process-global service registries
+  and imports of another extension's entry point. Revisit cooperation explicitly
+  when migrating capabilities that genuinely need it, using Pi primitives where
+  suitable rather than assuming module instances are shared.
+- **Host packages stay host-provided.** Declare Pi imports as peers and pin copies
+  only for development. Add runtime dependencies only when an extension actually
+  needs them. The migrated extensions have none.
+- **Test observable behavior.** Integration tests discover and reload this package
+  through `DefaultResourceLoader`. Behavior tests exercise registered commands,
+  shortcuts, and lifecycle handlers with minimal contexts. They do not simulate
+  Pi's session persistence or shutdown internals; those remain host responsibilities.
+
+## Migration plan
+
+See [plan.md](plan.md) for completed migrations, behavior changes, commit and
+branch checkpoints, deferred work, and the remaining checklist.
+
+## Development
+
+Requires Node.js 22.18+ and npm.
+
+```bash
+cd pi-v2
+npm ci
+npm run check
+```
+
+`check` runs TypeScript checking and native Node tests covering package discovery
+and reload, alias commands, stash restoration/swap/lifecycle behavior, supported
+thinking levels, direct shortcut registration, thinking-indicator lifecycle, and
+Markdown styling, selectable old-style footer segments, configurable status placement,
+context-border rendering and cleanup, shell block selection and RPC delivery,
+and footer lifecycle/cleanup. Loader tests use temporary agent directories,
+not personal settings, and make no model requests. Test files use JavaScript so
+Node can run them without a transpilation tool or custom test runner. Extension
+source uses erasable TypeScript syntax so direct test imports work on Node 22.18+
+and Node 26 without the removed `--experimental-transform-types` flag.
+
+## References
+
+- [Extension documentation](https://docs.pi.dev/latest/extensions)
+- [Package documentation](https://docs.pi.dev/latest/packages)
+- The installed Pi 1.5.2 `docs/extensions.md`, `docs/packages.md`, and
+  `examples/extensions/shutdown-command.ts` were also consulted for the scaffold.

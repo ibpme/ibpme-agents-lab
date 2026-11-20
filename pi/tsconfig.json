@@ -7,12 +7,9 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    // Extensions are loaded from source by jiti, which resolves relative
-    // imports as written -- so they carry a .ts extension, matching pi's own
-    // multi-file extension examples.
     "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
     "types": ["node"]
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": ["extensions/**/*.ts"]
 }

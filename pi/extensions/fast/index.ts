@@ -1,7 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { FAST_STATUS_KEY } from "../contracts/status-keys.ts";
-
-const ENTRY_TYPE = "openai-fast";
+const FAST_KEY = "openai-fast";
 
 export function supportsFast(model: ExtensionContext["model"]): boolean {
   return !!model && (model.provider === "openai" || model.provider === "openai-codex" || model.provider.startsWith("openai:")) &&
@@ -11,7 +9,9 @@ export function supportsFast(model: ExtensionContext["model"]): boolean {
 export default function (pi: ExtensionAPI) {
   let enabled = false;
   const updateStatus = (ctx: ExtensionContext) => {
-    ctx.ui.setStatus(FAST_STATUS_KEY, enabled && supportsFast(ctx.model) ? ctx.ui.theme.fg("warning", "fast") : undefined);
+    if (ctx.mode !== "tui" && ctx.mode !== "rpc") return;
+    const label = enabled && supportsFast(ctx.model) ? "fast" : undefined;
+    ctx.ui.setStatus(FAST_KEY, label && ctx.mode === "tui" ? ctx.ui.theme.fg("warning", label) : label);
   };
 
   pi.registerCommand("fast", {
@@ -28,8 +28,8 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       if (next !== enabled) {
+        pi.appendEntry(FAST_KEY, { enabled: next });
         enabled = next;
-        pi.appendEntry(ENTRY_TYPE, { enabled });
       }
       updateStatus(ctx);
       ctx.ui.notify(enabled
@@ -50,7 +50,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     enabled = false;
     for (const entry of ctx.sessionManager.getEntries()) {
-      if (entry.type === "custom" && entry.customType === ENTRY_TYPE && typeof entry.data === "object" &&
+      if (entry.type === "custom" && entry.customType === FAST_KEY && typeof entry.data === "object" &&
           entry.data !== null && "enabled" in entry.data && typeof entry.data.enabled === "boolean") {
         enabled = entry.data.enabled;
       }
@@ -58,5 +58,7 @@ export default function (pi: ExtensionAPI) {
     updateStatus(ctx);
   });
   pi.on("model_select", (_event, ctx) => updateStatus(ctx));
-  pi.on("session_shutdown", (_event, ctx) => ctx.ui.setStatus(FAST_STATUS_KEY, undefined));
+  pi.on("session_shutdown", (_event, ctx) => {
+    if (ctx.mode === "tui" || ctx.mode === "rpc") ctx.ui.setStatus(FAST_KEY, undefined);
+  });
 }

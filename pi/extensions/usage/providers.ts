@@ -1,4 +1,5 @@
-export type UsageProvider = "opencode-go" | "openai" | "openai-codex";
+export const PROVIDERS = ["opencode-go", "openai", "openai-codex"] as const;
+export type UsageProvider = typeof PROVIDERS[number] | `openai:${string}`;
 
 export interface UsageWindow {
   label: string;
@@ -16,13 +17,17 @@ export interface UsageReport {
   notes: string[];
 }
 
-export const PROVIDERS: readonly UsageProvider[] = ["opencode-go", "openai", "openai-codex"];
-export const TITLES: Record<UsageProvider, string> = {
+const TITLES = {
   "opencode-go": "OpenCode Go",
   openai: "OpenAI · ChatGPT",
   "openai-codex": "OpenAI Codex",
 };
 export const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
+
+export function usageTitle(provider: UsageProvider): string {
+  return provider === "opencode-go" || provider === "openai" || provider === "openai-codex"
+    ? TITLES[provider] : `OpenAI (${provider.slice("openai:".length)}) · ChatGPT`;
+}
 
 export class UsageError extends Error {}
 
@@ -112,15 +117,4 @@ export function parseCodex(payload: unknown): UsageReport {
   return {
     provider: "openai-codex", title: TITLES["openai-codex"], plan: safeText(data?.plan_type), windows, notes,
   };
-}
-
-export function verifyAppRegistration(payload: unknown, clientId: string): void {
-  const data = record(payload);
-  const items = data?.items;
-  // Only a complete, unpaginated app list can establish a unique registration match.
-  if (!data || Object.keys(data).some((key) => key !== "items") || !Array.isArray(items) || items.length > 128 ||
-    items.some((item) => typeof record(item)?.id !== "string" || !(record(item)?.id as string).trim()) ||
-    items.filter((item) => record(item)?.id === clientId).length !== 1) {
-    throw new UsageError("The Codex account does not have a unique matching Pi app registration. Sign in to the same ChatGPT account/workspace for both providers.");
-  }
 }

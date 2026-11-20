@@ -1,54 +1,47 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { LOADED_SKILLS_STATUS_KEY } from "../contracts/status-keys.ts";
-import { openPager, textSource } from "../shared/pager.ts";
-import { skillReport } from "./report.ts";
-import { loadedSkillPaths, loadedSkills, skillFromRead } from "./state.ts";
+import type { ExtensionAPI, ExtensionContext, SessionMessageEntry } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
+import { showDocument, type OpenDocument } from "../shared/document-view.ts";
+import { documentViewport } from "../shared/document-viewport.ts";
+import { skillLabel, skillReport } from "./report.ts";
+import { loadedSkillPaths, skillInvocation } from "./state.ts";
+
+const STATUS_KEY = "loaded-skills";
+
+const openLocal: OpenDocument = async (ctx, document) => {
+  await ctx.ui.custom<void>((tui, theme, _keys, done) => {
+    const body = new Text(document.content, 0, 0);
+    return documentViewport(tui, theme, done, body, document.title, () => "↑↓ scroll · Esc close");
+  });
+};
 
 export default function loadedSkillsExtension(pi: ExtensionAPI) {
-  let skills = new Set<string>();
-
-  function update(ctx: ExtensionContext) {
-    ctx.ui.setStatus(LOADED_SKILLS_STATUS_KEY,
-      ctx.ui.theme.fg("dim", "skills: ") + ctx.ui.theme.fg("muted", [...skills].join(", ") || "none"));
-  }
-
-  function restore(ctx: ExtensionContext) {
-    skills = loadedSkills(ctx.sessionManager.getBranch());
-    update(ctx);
+  function update(ctx: ExtensionContext, pending?: SessionMessageEntry["message"]) {
+    if (ctx.mode !== "tui" && ctx.mode !== "rpc") return;
+    const names = [...loadedSkillPaths(ctx.sessionManager.getBranch(), pending).keys()].map(skillLabel).join(", ") || "none";
+    ctx.ui.setStatus(STATUS_KEY, ctx.mode === "tui"
+      ? ctx.ui.theme.fg("dim", "skills: ") + ctx.ui.theme.fg("muted", names)
+      : `skills: ${names}`);
   }
 
   pi.registerCommand("loaded-skills", {
     description: "Show loaded skills and approximate token counts",
     handler: async (_args, ctx) => {
+      if (!ctx.hasUI && ctx.mode !== "print") return;
       const content = await skillReport(loadedSkillPaths(ctx.sessionManager.getBranch()), ctx.cwd);
-      await openPager(ctx, {
-        title: "Loaded Skills",
-        source: textSource(content),
-        plainText: content,
-      });
+      await showDocument(pi.events, ctx, { title: "Loaded Skills", content, format: "text" }, openLocal);
     },
   });
 
-  pi.on("session_start", (_event, ctx) => restore(ctx));
-  pi.on("session_tree", (_event, ctx) => restore(ctx));
-  pi.on("session_compact", (_event, ctx) => restore(ctx));
-  pi.on("message_end", (event, ctx) => {
-    // message_end runs before Pi appends this message to the session.
-    const observed = loadedSkills([...ctx.sessionManager.getBranch(), {
-      type: "message", id: "pending", parentId: null,
-      timestamp: new Date().toISOString(), message: event.message,
-    }]);
-    for (const name of observed) skills.add(name);
-    update(ctx);
-  });
-  pi.on("tool_result", (event, ctx) => {
-    if (event.isError) return;
-    const name = skillFromRead(event.toolName, event.input);
-    if (!name) return;
-    skills.add(name);
-    update(ctx);
+  pi.on("session_start", (_event, ctx) => update(ctx));
+  pi.on("session_tree", (_event, ctx) => update(ctx));
+  pi.on("session_compact", (_event, ctx) => update(ctx));
+  pi.on("message_end", ({ message }, ctx) => {
+    if (message.role === "toolResult" ? message.toolName === "read" || message.nestedCalls : skillInvocation(message)) {
+      // Pi persists this message after dispatching message_end.
+      update(ctx, message);
+    }
   });
   pi.on("session_shutdown", (_event, ctx) => {
-    ctx.ui.setStatus(LOADED_SKILLS_STATUS_KEY, undefined);
+    if (ctx.mode === "tui" || ctx.mode === "rpc") ctx.ui.setStatus(STATUS_KEY, undefined);
   });
 }
