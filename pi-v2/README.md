@@ -14,11 +14,12 @@ pi -e ./pi-v2
 This uses Pi's native package manifest and TypeScript loader. Run
 `npm install --prefix pi-v2` to enable the interactive SSH authentication modal.
 Disable the old
-`alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `status-line`,
+`alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `reasoning-tokens`, `status-line`,
 `readmd`, `system-prompt`, `loaded-skills`, `copy-command`, `openai-accounts`,
 `fast`, `usage`, `prompt-suggestions`, `question`, `stylish-tools`, `tool-set`, and `ssh`
 extensions before loading their v2 replacements. `tool-styling` replaces
-`stylish-tools`, and `tool-control` replaces `tool-set`.
+`stylish-tools`, `tool-control` replaces `tool-set`, and `agent-stats` replaces
+`reasoning-tokens`.
 Duplicate commands receive
 invocation suffixes such as
 `/clear:1` and `/clear:2`; duplicate shortcuts conflict.
@@ -232,6 +233,23 @@ methods. Another extension that changes working-indicator frames or working-mess
 text (such as the original agent statistics extension) would compete for the same
 Pi-owned surface; disable one of the conflicting extensions.
 
+## Agent stats
+
+`agent-stats` shows the sum of Pi's assistant reasoning-token counts on the
+selected branch. It uses `usage.reasoning`, which is part of the output token
+count. The footer includes stream usage as soon as Pi exposes it. Many providers
+supply it only when the reply finishes.
+
+Replies with absent counts are skipped, so mixed-provider totals can be partial.
+The indicator stays hidden until a count is available, and an explicit zero
+displays as `0`. Some Pi adapters supply zero when the upstream response omits
+the reasoning breakdown. Switching branches refreshes the total. Compaction
+retains the reasoning counts on the branch, and summary generation is excluded.
+
+The default footer includes `status:reasoning-stats`. In custom `statusline.json`
+files, change `status:reasoning-tokens` to `status:reasoning-stats` and use
+`reasoning-stats` in `hidden` if you hide the indicator by key.
+
 ## Tool styling
 
 `extensions/tool-styling/` replaces the old `stylish-tools` presentation without
@@ -346,8 +364,8 @@ Usage retains the old footer's semantics: tokens are for the latest assistant
 response, not cumulative; cost covers assistant messages on the selected branch,
 not all session entries or tool/compaction usage. The snapshot is lazy and cached
 between redraws. Omitting `tokens` and `cost` avoids scanning history entirely.
-Session, leaf, and lifecycle changes invalidate the snapshot. No timing or live
-reasoning tracking is introduced; see `NOTE.md` for future telemetry constraints.
+Session, leaf, and lifecycle changes invalidate the snapshot. Reasoning-token
+counts are published by `agent-stats`.
 
 ### Independent status producers
 
@@ -401,7 +419,7 @@ Create either file yourself; the extension never writes configuration:
       "right": ["status:prompt-suggestions"]
     },
     {
-      "left": ["tokens", "status:agent-stats", "cost"],
+      "left": ["tokens", "status:agent-stats", "cost", "status:reasoning-stats"],
       "right": ["model", "thinking", "status:openai-fast"],
       "separator": " · ",
       "rightSeparator": " • "
@@ -458,6 +476,7 @@ pi-v2/
 ├── package-lock.json            # Reproducible development dependencies
 ├── tsconfig.json                # Strict checking; no emitted JavaScript
 ├── extensions/
+│   ├── agent-stats/index.ts
 │   ├── alias/index.ts
 │   ├── context-usage/index.ts
 │   ├── copy-command/

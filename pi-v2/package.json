@@ -32,6 +32,7 @@
       "./extensions/stash/index.ts",
       "./extensions/thinking-cycle-backward/index.ts",
       "./extensions/thinking-style/index.ts",
+      "./extensions/agent-stats/index.ts",
       "./extensions/status-line/index.ts",
       "./extensions/context-usage/index.ts",
       "./extensions/copy-command/index.ts",

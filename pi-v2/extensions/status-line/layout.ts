@@ -17,7 +17,7 @@ export const defaultLayout: StatusLayout = {
   footer: [
     { left: ["cwd", "git", "status:ssh", "session"], right: ["status:prompt-suggestions"], separator: " " },
     {
-      left: ["status:mode", "status:codemode", "tokens", "status:agent-stats", "cost", "status:reasoning-tokens"],
+      left: ["status:mode", "status:codemode", "tokens", "status:agent-stats", "cost", "status:reasoning-stats"],
       right: ["model", "thinking", "status:openai-fast"], separator: " · ", rightSeparator: " • ",
     },
     { left: ["status:tools", "status:loaded-skills", "status:mcp-tools", "status:*"], right: [], separator: " · " },

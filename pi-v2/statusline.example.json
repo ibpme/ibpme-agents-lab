@@ -11,7 +11,7 @@
         "tokens",
         "status:agent-stats",
         "cost",
-        "status:reasoning-tokens"
+        "status:reasoning-stats"
       ],
       "right": ["model", "thinking", "status:openai-fast"],
       "separator": " · ",

@@ -29,6 +29,7 @@ Migrate the useful behavior from `../pi/` in small, independently loadable exten
 | Implemented for review | `question` | Uses numbered radio choices and checkboxes in the terminal, with descriptions below the focused option. Multi-select answers can include multiline text edited inside the checklist. Preserves answers when stepping back and supports review before submission in TUI and RPC. |
 | Implemented for review | `/reanswer` | Shows numbered questionnaires newest first and accepts a number directly. Reuses the review with the latest branch-local answers and branches after the full original tool batch. |
 | Implemented for review | `tool-set` → `tool-control` | Keeps the read-only `/tools` viewer and session-wide SAFE/YOLO policy with one native guard for direct and nested calls. Reads legacy saved modes and owns its permission notices. Uses registered tool annotations for independently loaded mutating tools. |
+| Implemented for review | `reasoning-tokens` → `agent-stats` | Publishes the selected branch's reported reasoning-token count as `status:reasoning-stats`, with stream updates when available. Preserves zero and refreshes on branch changes. |
 
 ### Checkpoints
 
@@ -62,7 +63,8 @@ Suggested order, not a requirement to port every extension unchanged:
    - [x] Migrate `tool-set` to `tool-control` with its own permission notices. Append turn-end notices to the entries already proposed by earlier handlers.
    - [x] Implement and verify the SSH migration below.
 5. **Telemetry.**
-   - [ ] Review `tool-call-stats` and `reasoning-tokens` once producer ownership is clear. Use native tool durations and IDs; distinguish unknown from zero, nested calls from top-level calls, and summed duration from wall-clock time. Keep telemetry out of the shared working message unless ownership is agreed.
+   - [x] Migrate `reasoning-tokens` into `agent-stats` as a footer producer using Pi's native usage.
+   - [ ] Review `tool-call-stats`. Use native tool durations and IDs and distinguish unknown from zero, nested calls from top-level calls, and summed duration from wall-clock time. Keep telemetry out of the shared working message unless ownership is agreed.
 
 ## SSH migration
 
@@ -96,4 +98,5 @@ Suggested order, not a requirement to port every extension unchanged:
 - Tool control tests cover restored tool exposure, direct and nested SAFE checks, MCP annotations, approval, `/tools` rendering, reload, and composition with earlier turn-end notices. A terminal smoke check exercised `/tools`, the footer, Shift+Tab, and `/reload`.
 - SSH tests use a temporary agent directory and distinct local and remote fixtures behind a fake OpenSSH executable. They cover the seven tools, literal paths, both extension load orders, startup connections, local tools and user shell commands, `/ssh off`, reload, destination metadata, and connection failures.
 - A Pi CLI RPC smoke check verified package discovery and local shell routing with `--ssh` active. A real OpenSSH password test verified that the modal leaves the private master running after the PTY closes.
+- A Pi session with a synthetic stream verified reasoning counts during updates, completion, and abort, and after branch navigation and reload. The test also covers missing counts, explicit zero, and compacted history.
 - Run `cd pi-v2 && npm run check` before marking the baseline green. For a visual check, run `pi -e ./pi-v2` with duplicate legacy extensions disabled, then use `/reload` after changes.
