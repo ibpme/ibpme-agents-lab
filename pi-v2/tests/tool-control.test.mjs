@@ -33,7 +33,7 @@ test("tool-control preserves Pi's loadout and applies SAFE at direct and nested 
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const agentDir = join(cwd, "agent");
   const settingsManager = SettingsManager.inMemory({ packages: [{
-    source: packageRoot, extensions: ["extensions/tool-control/index.ts", "extensions/question/index.ts"],
+    source: packageRoot, extensions: ["extensions/tool-control/index.ts", "extensions/question/index.ts", "extensions/ssh/index.ts"],
   }] });
   let registerLateTool;
   const resourceLoader = new DefaultResourceLoader({
@@ -61,7 +61,10 @@ test("tool-control preserves Pi's loadout and applies SAFE at direct and nested 
   const { session } = await createAgentSession({
     cwd, agentDir, resourceLoader, settingsManager, sessionManager: manager,
     modelRuntime: runtime, model: runtime.getModels("openai")[0], excludeTools: ["find"],
-    customTools: [definition("fixture_mutation", false), definition("mcp__demo__update"), definition("mcp__demo__inspect", true)],
+    customTools: [
+      definition("fixture_mutation", false), definition("custom_remote", true),
+      definition("mcp__demo__update"), definition("mcp__demo__inspect", true),
+    ],
   });
   t.after(() => session.dispose());
   initTheme("dark", false);
@@ -102,6 +105,9 @@ test("tool-control preserves Pi's loadout and applies SAFE at direct and nested 
   assert.ok(statuses.get("tools").startsWith(searchIcon + " "));
   assert.doesNotMatch(stripTerminalSequences(statuses.get("tools")), /tool_search|codemode/);
   assert.match(stripTerminalSequences(statuses.get("tools")), /\bquestion\b/);
+  assert.match(stripTerminalSequences(statuses.get("tools")), /\bcustom_remote\b/);
+  assert.equal(session.getToolDefinition("read_remote").exposure, "deferred");
+  assert.doesNotMatch(stripTerminalSequences(statuses.get("tools")), /\b(?:read|write|edit|bash|grep|find|ls)_remote\b/);
   assert.ok(statuses.get("mcp-tools").startsWith(theme.fg("dim", "󰌘") + " "));
   assert.equal(stripTerminalSequences(statuses.get("mcp-tools")), "󰌘 mcp: demo (2)");
   registerLateTool();

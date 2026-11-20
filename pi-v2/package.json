@@ -9,7 +9,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "postinstall": "node scripts/prepare-pty.mjs"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
@@ -44,7 +45,14 @@
       "./extensions/usage/index.ts",
       "./extensions/prompt-suggestions/index.ts",
       "./extensions/question/index.ts",
-      "./extensions/pager/index.ts"
+      "./extensions/pager/index.ts",
+      "./extensions/ssh/index.ts"
     ]
+  },
+  "dependencies": {
+    "@xterm/headless": "6.0.0"
+  },
+  "optionalDependencies": {
+    "node-pty": "1.1.0"
   }
 }

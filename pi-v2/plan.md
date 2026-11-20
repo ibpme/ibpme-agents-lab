@@ -60,10 +60,30 @@ Suggested order, not a requirement to port every extension unchanged:
    - [x] Migrate `/reanswer` with branch-local revisions, complete tool batches, and native tree navigation.
 4. **Execution and policy.**
    - [x] Migrate `tool-set` to `tool-control` with its own permission notices. Append turn-end notices to the entries already proposed by earlier handlers.
-   - [ ] Migrate `ssh` with its own connection notices and session-scoped routing. Publish read-only annotations on remote tool definitions and keep `tool-styling` independent.
-   - [ ] Address SSH path quoting and local-versus-remote search before porting. Remote tools must not silently run locally; historical output should retain the destination used at execution time.
+   - [x] Implement and verify the SSH migration below.
 5. **Telemetry.**
    - [ ] Review `tool-call-stats` and `reasoning-tokens` once producer ownership is clear. Use native tool durations and IDs; distinguish unknown from zero, nested calls from top-level calls, and summed duration from wall-clock time. Keep telemetry out of the shared working message unless ownership is agreed.
+
+## SSH migration
+
+### 1. Port `/ssh` and the remote tools
+
+- Preserve `/ssh user@host[:/path]`, SSH config host completion, and `/ssh off`. Keep the seven `_remote` tools deferred and discoverable through `tool_search` and codemode in both connection states. With `/ssh`, unqualified tools and user `!`/`!!` commands continue to run locally. Disconnected remote calls return an error asking the user to reconnect.
+- Reuse the private OpenSSH control master and directory verification. Use non-interactive key or agent authentication for this stage. Switch the connection only after the new target is ready, invalidate superseded connection attempts, and close owned resources on disconnect, reload, session replacement, or quit. `/tree` keeps the current connection and session files store no live connection state. A lost master requires an explicit reconnect. Tool invocations must use the owned socket even if it disappears during execution.
+- Resolve relative paths against the verified remote directory and keep absolute remote paths literal. Resolve `~` against the remote home if supported by the tool. Check native factory path handling before reusing it because Pi's `read` factory also probes the local filesystem for filename variants. Use POSIX shell quoting for arguments, pass file contents over stdin, and propagate cancellation and timeouts to SSH subprocesses.
+- Reuse native tool schemas and operations where their behavior fits. Give `grep_remote` a remote `rg` implementation because Pi's native grep always starts `rg` locally. Run `find_remote` on the host as well and bound search output. Start with `rg` and `fd` installed on the remote for native search behavior. Report a missing executable with a tool-specific error. Preserve search limits, line numbers, and the distinction between zero matches and a failed search.
+- Publish `readOnlyHint: true` for `read_remote`, `grep_remote`, `find_remote`, and `ls_remote`, and `false` for `write_remote`, `edit_remote`, and `bash_remote`. `tool-control` applies the same policy to direct calls and codemode and reports reachability and permissions in `/tools`.
+- Publish `status:ssh` from SSH using the existing footer layout. Keep declarations and permissions in `/tools`; the SSH badge shows the connected host and directory. Coalesce connection notices at run and turn boundaries alongside permission notices, including after branching or compaction. Capture the destination when a tool starts and persist it with its result, including errors where the destination is known. Use that metadata in the transcript so switching hosts or resuming can never relabel earlier results. Keep `tool-styling` optional and independent of the active connection.
+
+### 2. Restore `--ssh` routing
+
+- Preserve the startup flag as a separate mode that routes the seven unqualified model tools through SSH. User `!` and `!!` commands always execute locally. Preserve tool exposure, active-tool restoration, and SAFE policy. Report an unavailable remote on startup failure or connection loss and block the scoped calls. A missing connection in this mode must never select local operations. Use a connection notice to tell the model which tools and directory are remote while Pi still has its own local workspace context.
+- Pi 1.5.2 keeps the first extension registration of a given tool name. `tool-control` already registers `ls`, `grep`, and `find`. Give each name a single owner when both extensions are enabled. Start by testing SSH-owned definitions with local and remote execution paths, with `tool-control` supplying deferred local definitions only when no extension owns those names. Verify both load orders, standalone loading, reload, and explicit tool exclusions before shipping the flag.
+
+### 3. Restore interactive authentication and verify end to end
+
+- Port the existing TUI-only authentication modal so OpenSSH can prompt for a password, passphrase, MFA, or host-key approval. Load the PTY and terminal emulator only when needed. Keep host-key verification, cancellation, timeout, echo handling, and cleanup on reload. Document installation for the native dependencies. RPC and headless use OpenSSH batch authentication and known hosts.
+- Run `npm run check` and a real Pi TUI/RPC smoke check with a temporary agent directory. Use different local and remote fixtures to prove which backend handled each call. Cover quoted paths, remote-only matches, direct and nested SAFE enforcement, tool discovery and restored exposure, failed host switches, startup failure, connection loss, and replayed destinations. Use a local disposable SSH server to verify both authentication paths, master cleanup, and the absence of a fresh connection after the owned master is gone.
 
 ## Validation status
 
@@ -75,4 +95,6 @@ Suggested order, not a requirement to port every extension unchanged:
 - Question tool tests cover native dialogs, checklist interaction, review, and cancellation. Pi terminal and RPC smoke checks used a synthetic provider to submit a questionnaire.
 - Reanswer tests cover numbered selection, repeated and legacy revisions, unchanged and cancelled edits, and compaction. Pi terminal and RPC smoke checks exercised numbered revisions and written checklist answers alongside sibling tool results.
 - Tool control tests cover restored tool exposure, direct and nested SAFE checks, MCP annotations, approval, `/tools` rendering, reload, and composition with earlier turn-end notices. A terminal smoke check exercised `/tools`, the footer, Shift+Tab, and `/reload`.
+- SSH tests use a temporary agent directory and distinct local and remote fixtures behind a fake OpenSSH executable. They cover the seven tools, literal paths, both extension load orders, local user shell commands, destination metadata, and startup, switch, and connection failures.
+- A Pi CLI RPC smoke check verified package discovery and local shell routing with `--ssh` active. A real OpenSSH password test verified that the modal leaves the private master running after the PTY closes.
 - Run `cd pi-v2 && npm run check` before marking the baseline green. For a visual check, run `pi -e ./pi-v2` with duplicate legacy extensions disabled, then use `/reload` after changes.

@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ToolRenderers } from "@earendil-works/pi-coding-agent";
+import { withSshDestination } from "../shared/ssh-destination.ts";
 import {
   bashRenderer,
   editRenderer,
@@ -20,5 +21,9 @@ const renderers = new Map<string, ToolRenderers>([
 ]);
 
 export default function toolStyling(pi: ExtensionAPI): void {
-  pi.registerToolRenderer((name, next) => renderers.get(name) ?? next());
+  const styledRenderers = new Map(Array.from(renderers, ([name, renderer]) => {
+    const styled = { ...renderer, renderResult: withSshDestination(renderer.renderResult) };
+    return [name, styled] as const;
+  }));
+  pi.registerToolRenderer((name, next) => styledRenderers.get(name.replace(/_remote$/, "")) ?? next());
 }

@@ -2,9 +2,11 @@ import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, ToolInfo 
 import { matchesKey, rgbColor, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { blockedInSafe, type Mode } from "./policy.ts";
 
-const builtIns = new Set(["read", "write", "edit", "bash", "powershell", "grep", "find", "ls"]);
+const sshToolNames = ["read", "write", "edit", "bash", "grep", "find", "ls"];
+const builtIns = new Set([...sshToolNames, "powershell"]);
 const toolListExclusions = new Set([
   "codemode", "tool_search", "list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource",
+  ...sshToolNames.map((name) => `${name}_remote`),
 ]);
 const codemodeColor = rgbColor(245, 158, 66);
 const codemodeLabel = "  codemode";

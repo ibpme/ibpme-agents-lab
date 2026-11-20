@@ -11,14 +11,14 @@ From the repository root:
 pi -e ./pi-v2
 ```
 
-This uses Pi's native package manifest and TypeScript loader. No build step or
-runtime dependency installation is needed for these extensions. Disable the old
+This uses Pi's native package manifest and TypeScript loader. Run
+`npm install --prefix pi-v2` to enable the interactive SSH authentication modal.
+Disable the old
 `alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `status-line`,
 `readmd`, `system-prompt`, `loaded-skills`, `copy-command`, `openai-accounts`,
-`fast`, `usage`, `prompt-suggestions`, `question`, `stylish-tools`, and `tool-set`
+`fast`, `usage`, `prompt-suggestions`, `question`, `stylish-tools`, `tool-set`, and `ssh`
 extensions before loading their v2 replacements. `tool-styling` replaces
-`stylish-tools`, and `tool-control` replaces `tool-set`. Sessions using the
-original SSH extension still need the legacy `tool-set` and `stylish-tools`.
+`stylish-tools`, and `tool-control` replaces `tool-set`.
 Duplicate commands receive
 invocation suffixes such as
 `/clear:1` and `/clear:2`; duplicate shortcuts conflict.
@@ -257,11 +257,8 @@ extension's renderers instead of their stock rendering.
 The extension does not register tools, activate deferred tools, change schemas,
 rewrite results, execute commands, read files for previews, or route operations.
 Native execution retains shell settings, cancellation, streaming, and truncation.
-There is no operations-override registry or SSH dependency. Remote names such as
-`read_remote` are not styled automatically; SSH execution and policy migration
-remain separate work. If another extension replaces execution under one of the
-seven names, this extension does not undo that replacement—disable the original
-`stylish-tools` before trying this version.
+The same renderers style the seven `_remote` tool names. They display the
+destination saved with the result and work independently of the SSH connection.
 
 No new tool-styling tests are included in this visual pass. The existing package
 loader/reload tests and TypeScript checking validate registration and loading;
@@ -302,6 +299,30 @@ Permission changes take effect immediately. Tool control adds a model-visible
 notice only when the effective policy changes in the projected conversation,
 before the next run or at the end of the current turn. Idle toggles that end in
 the previously announced mode add no notice.
+
+## SSH
+
+Use `/ssh user@host[:/path]` to connect the seven deferred `_remote` tools and
+`/ssh off` to disconnect. Use `tool_search` or codemode to reach the remote
+tools. Unqualified tools run locally in this mode. Start Pi with
+`--ssh user@host[:/path]` to route the seven unqualified tools
+(`read`, `write`, `edit`, `bash`, `grep`, `ls`, and `find`) through SSH.
+**User-entered `!` and `!!` commands always run locally.**
+
+The extension uses a private OpenSSH connection and checks the destination
+directory before switching. Relative tool paths use that directory. Search
+requires `rg` for grep and `fd` or `fdfind` for find on the remote host.
+When the connection drops, remote calls fail. Reconnect with `/ssh` or
+restart Pi with `--ssh` as appropriate. Interactive connections close on
+reload and session replacement. The startup flag reconnects when Pi binds a
+new session. The footer can show `status:ssh`, while earlier tool results
+retain their original destination. With `tool-control` enabled, SAFE permits
+the read-only remote tools and blocks writes, edits, and model shell calls.
+
+OpenSSH first tries batch authentication with known hosts. In a TUI session,
+authentication or host-key approval can fall back to the SSH modal. The modal
+uses the optional native `node-pty` dependency, which may require a compiler and
+Node headers. RPC and headless sessions use batch authentication.
 
 ## Modular status footer
 
