@@ -1,280 +1,125 @@
-import { SSH_STATUS_KEY, SSH_REMOTE_TOOLS_STATUS_KEY } from "../contracts/status-keys.ts";
-import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import {
-  createStylishBashTool,
-  createStylishEditTool,
-  createStylishFindTool,
-  createStylishGrepTool,
-  createStylishLsTool,
-  createStylishReadTool,
-  createStylishWriteTool,
-} from "../stylish-tools/factories.ts";
-import { clearOperationsOverride, setOperationsOverride } from "../stylish-tools/overrides.ts";
-import { registerStateNotice } from "../shared/state-notice.ts";
-import { getRequiredToolSet } from "../tool-set/service.ts";
+import type { ExtensionAPI, ExtensionContext, SessionContext } from "@earendil-works/pi-coding-agent";
 import { terminalAuthentication } from "./auth.ts";
 import { connectSsh, listSshConfigHosts } from "./connection.ts";
-import {
-  createRemoteBashOps,
-  createRemoteEditOps,
-  createRemoteFindOps,
-  createRemoteGrepOps,
-  createRemoteLsOps,
-  createRemoteReadOps,
-  createRemoteWriteOps,
-} from "./operations.ts";
-import { RemoteAbortError, SshConnection } from "./transport.ts";
+import { destination, registerSshTools } from "./tools.ts";
+import { type SshConnection, RemoteAbortError } from "./transport.ts";
 
-const REMOTE_DESCRIPTIONS = {
-  read: "Read a file on the SSH remote host connected via /ssh, not the local machine.",
-  write: "Write a file on the SSH remote host connected via /ssh, not the local machine.",
-  edit: "Edit a file on the SSH remote host connected via /ssh, not the local machine.",
-  bash: "Execute a shell command on the SSH remote host connected via /ssh, not the local machine.",
-  grep: "Search file contents on the SSH remote host connected via /ssh, not the local machine.",
-  ls: "List a directory on the SSH remote host connected via /ssh, not the local machine.",
-  find: "Find files on the SSH remote host connected via /ssh, not the local machine.",
-} as const;
+const noticeType = "ssh-connection-context";
 
-const NOT_CONNECTED_ERROR = "Not connected. Ask the user to run /ssh user@host first.";
+export default function ssh(pi: ExtensionAPI): void {
+  pi.registerFlag("ssh", { description: "Connect the deferred _remote tools to user@host[:/path] at startup", type: "string" });
+  let connection: SshConnection | undefined;
+  let attempt: AbortController | undefined;
+  const pending = new Set<Promise<void>>();
+  const retiring = new Set<SshConnection>();
 
-/** Footer badge for the "ssh" status key; status-line.ts places it on the cwd line. */
-function sshStatusText(theme: Theme, label: string, target: Pick<SshConnection, "remote" | "remoteCwd">): string {
-  return (
-    theme.fg("warning", theme.bold(`⇄ ${label}`)) +
-    theme.fg("dim", " ") +
-    theme.fg("accent", target.remote) +
-    theme.fg("dim", ":") +
-    theme.fg("success", target.remoteCwd)
-  );
-}
-
-export default function (pi: ExtensionAPI) {
-  pi.registerFlag("ssh", { description: "SSH remote: user@host or user@host:/path", type: "string" });
-
-  const localCwd = process.cwd();
-  const timers = new Set<NodeJS.Timeout>();
-  let sessionAbort = new AbortController();
-
-  async function connectForSession(arg: string, ctx: ExtensionContext): Promise<SshConnection> {
-    const signal = sessionAbort.signal;
-    try {
-      const connection = await connectSsh(arg, terminalAuthentication(ctx, signal), signal);
-      if (signal.aborted) {
-        await connection.close();
-        throw new RemoteAbortError();
-      }
-      return connection;
-    } catch (error) {
-      if (signal.aborted) throw new RemoteAbortError();
-      throw error;
-    }
+  async function close(old: SshConnection) {
+    retiring.add(old);
+    await old.close();
+    retiring.delete(old);
   }
 
-  // CLI override mode — resolved once at session_start, redirects the base
-  // read/write/edit/bash tools via stylish-tools/overrides.ts.
-  let cliSsh: SshConnection | null = null;
-
-  // Interactive session mode — mutated by /ssh, drives the _remote tools.
-  let sessionSsh: SshConnection | null = null;
-
-  pi.registerTool(
-    createStylishReadTool(localCwd, timers, {
-      name: "read_remote",
-      exposure: "deferred",
-      extraDescription: REMOTE_DESCRIPTIONS.read,
-      getOperations: () => (sessionSsh ? createRemoteReadOps(sessionSsh, localCwd) : undefined),
-      getTag: () => sessionSsh?.remote,
-      requireOperationsError: NOT_CONNECTED_ERROR,
-    }),
-  );
-  pi.registerTool(
-    createStylishWriteTool(localCwd, timers, {
-      name: "write_remote",
-      exposure: "deferred",
-      extraDescription: REMOTE_DESCRIPTIONS.write,
-      getOperations: () => (sessionSsh ? createRemoteWriteOps(sessionSsh, localCwd) : undefined),
-      getTag: () => sessionSsh?.remote,
-      requireOperationsError: NOT_CONNECTED_ERROR,
-    }),
-  );
-  pi.registerTool(
-    createStylishEditTool(localCwd, timers, {
-      name: "edit_remote",
-      exposure: "deferred",
-      extraDescription: REMOTE_DESCRIPTIONS.edit,
-      getOperations: () => (sessionSsh ? createRemoteEditOps(sessionSsh, localCwd) : undefined),
-      getTag: () => sessionSsh?.remote,
-      requireOperationsError: NOT_CONNECTED_ERROR,
-    }),
-  );
-  pi.registerTool(
-    createStylishBashTool(localCwd, timers, {
-      name: "bash_remote",
-      exposure: "deferred",
-      extraDescription: REMOTE_DESCRIPTIONS.bash,
-      promptSnippet: "Execute bash commands on the SSH remote host connected via /ssh (not the local machine)",
-      getOperations: () => (sessionSsh ? createRemoteBashOps(sessionSsh, localCwd) : undefined),
-      getTag: () => sessionSsh?.remote,
-      requireOperationsError: NOT_CONNECTED_ERROR,
-    }),
-  );
-  pi.registerTool(
-    createStylishGrepTool(localCwd, timers, {
-      name: "grep_remote",
-      exposure: "deferred",
-      extraDescription: REMOTE_DESCRIPTIONS.grep,
-      getOperations: () => (sessionSsh ? createRemoteGrepOps(sessionSsh, localCwd) : undefined),
-      getTag: () => sessionSsh?.remote,
-      requireOperationsError: NOT_CONNECTED_ERROR,
-    }),
-  );
-  pi.registerTool(
-    createStylishLsTool(localCwd, timers, {
-      name: "ls_remote",
-      exposure: "deferred",
-      extraDescription: REMOTE_DESCRIPTIONS.ls,
-      getOperations: () => (sessionSsh ? createRemoteLsOps(sessionSsh, localCwd) : undefined),
-      getTag: () => sessionSsh?.remote,
-      requireOperationsError: NOT_CONNECTED_ERROR,
-    }),
-  );
-  pi.registerTool(
-    createStylishFindTool(localCwd, timers, {
-      name: "find_remote",
-      exposure: "deferred",
-      extraDescription: REMOTE_DESCRIPTIONS.find,
-      getOperations: () => (sessionSsh ? createRemoteFindOps(sessionSsh, localCwd) : undefined),
-      getTag: () => sessionSsh?.remote,
-      requireOperationsError: NOT_CONNECTED_ERROR,
-    }),
-  );
-
-  type StatusUiCtx = { ui: { setStatus(key: string, text: string | undefined): void; theme: Theme } };
-
-  function updateRemoteToolsStatus(ctx: StatusUiCtx) {
-    ctx.ui.setStatus(SSH_STATUS_KEY, sessionSsh ? sshStatusText(ctx.ui.theme, "SSH", sessionSsh) : undefined);
-    ctx.ui.setStatus(SSH_REMOTE_TOOLS_STATUS_KEY, sessionSsh ? ctx.ui.theme.fg("dim", "remote: deferred") : undefined);
-  }
-
-  registerStateNotice(pi, "ssh-connection-context", () => cliSsh
-    ? `SSH override mode is active: unqualified read/write/edit/bash/grep/ls/find tools execute on ${cliSsh.remote}:${cliSsh.remoteCwd}, not locally. The _remote tools require a separate /ssh connection and are unavailable in this mode. Execution permissions are unchanged.`
-    : sessionSsh
-    ? `SSH connected to ${sessionSsh.remote}:${sessionSsh.remoteCwd}. The deferred read_remote/write_remote/edit_remote/bash_remote/grep_remote/ls_remote/find_remote tools target this host; discover them through tool_search or codemode. Unqualified tools still operate locally. Execution permissions are unchanged.`
-    : "SSH disconnected. Remote tools remain discoverable but cannot execute until the user connects through /ssh. Unqualified tools still operate locally.",
-    () => !cliSsh && !sessionSsh);
-
-  pi.on("session_start", async (_event, ctx) => {
-    if (sessionAbort.signal.aborted) sessionAbort = new AbortController();
-    getRequiredToolSet().addBlockedTools(["write_remote", "edit_remote", "bash_remote"]);
-    updateRemoteToolsStatus(ctx);
-
-    const arg = pi.getFlag("ssh") as string | undefined;
-    if (!arg) return;
-
-    cliSsh = await connectForSession(arg, ctx);
-    setOperationsOverride({
-      read: createRemoteReadOps(cliSsh, localCwd),
-      write: createRemoteWriteOps(cliSsh, localCwd),
-      edit: createRemoteEditOps(cliSsh, localCwd),
-      bash: createRemoteBashOps(cliSsh, localCwd),
-      grep: createRemoteGrepOps(cliSsh, localCwd),
-      ls: createRemoteLsOps(cliSsh, localCwd),
-      find: createRemoteFindOps(cliSsh, localCwd),
-      tag: cliSsh.remote,
-    });
-    ctx.ui.setStatus(SSH_STATUS_KEY, sshStatusText(ctx.ui.theme, "SSH", cliSsh));
-    ctx.ui.notify(
-      `SSH override mode: ${cliSsh.remote}:${cliSsh.remoteCwd} (read/write/edit/bash/grep/ls/find run remotely)`,
-      "info",
-    );
+  registerSshTools(pi, () => connection, async (lost, ctx) => {
+    if (connection !== lost) return;
+    connection = undefined;
+    updateStatus(ctx);
+    await close(lost);
   });
 
-  pi.registerCommand("ssh", {
-    description: "user@host[:/path] to connect the _remote tools (read/write/edit/bash/grep/ls/find), or 'off' to disconnect",
-    getArgumentCompletions: (prefix) => {
-      if (cliSsh) return null; // --ssh already covers the whole session; command is a no-op
+  function updateStatus(ctx: ExtensionContext) {
+    if (ctx.mode !== "tui") return;
+    const { theme } = ctx.ui;
+    const label = connection
+      ? theme.fg("warning", theme.bold("⇄ SSH")) + " " + theme.fg("accent", destination(connection))
+      : undefined;
+    ctx.ui.setStatus("ssh", label);
+  }
 
-      const items: { value: string; label: string; description?: string }[] = [];
-      if (sessionSsh) {
-        items.push({
-          value: "off",
-          label: "off",
-          description: `disconnect (currently ${sessionSsh.remote}:${sessionSsh.remoteCwd})`,
-        });
-      }
-      for (const host of listSshConfigHosts()) {
-        items.push({ value: host, label: host, description: "from ~/.ssh/config" });
-      }
-
-      const filtered = items.filter((i) => i.value.startsWith(prefix));
-      return filtered.length > 0 ? filtered : null;
-    },
-    handler: async (args, ctx) => {
-      if (cliSsh) {
-        ctx.ui.notify(
-          `SSH is already active via --ssh (${cliSsh.remote}); the /ssh command has no effect this session.`,
-          "warning",
-        );
-        return;
-      }
-
-      const trimmed = args.trim();
-      if (trimmed === "" || trimmed === "off") {
-        if (!sessionSsh) {
-          ctx.ui.notify("SSH is not active.", "info");
+  function connect(target: string, ctx: ExtensionContext) {
+    attempt?.abort();
+    const current = new AbortController();
+    attempt = current;
+    const work = (async () => {
+      try {
+        const next = await connectSsh(target, close, terminalAuthentication(ctx, current.signal), current.signal);
+        if (current.signal.aborted) {
+          await close(next);
           return;
         }
-        const previous = sessionSsh;
-        sessionSsh = null;
-        updateRemoteToolsStatus(ctx);
-        await previous.close();
-        ctx.ui.notify("SSH disconnected.", "info");
-        return;
+        const previous = connection;
+        connection = next;
+        updateStatus(ctx);
+        ctx.ui.notify("SSH connected: " + destination(next), "info");
+        if (previous) await close(previous);
+      } catch (error) {
+        if (error instanceof RemoteAbortError) return;
+        const message = "SSH: " + (error instanceof Error ? error.message : String(error));
+        ctx.ui.notify(message, "error");
+      } finally {
+        if (attempt === current) attempt = undefined;
       }
+    })();
+    pending.add(work);
+    void work.then(() => pending.delete(work), () => pending.delete(work));
+    return work;
+  }
 
-      let next: SshConnection;
-      try {
-        next = await connectForSession(trimmed, ctx);
-      } catch (e) {
-        if (e instanceof RemoteAbortError) return;
-        ctx.ui.notify(`SSH connection failed: ${e instanceof Error ? e.message : String(e)}`, "error");
-        return;
-      }
-      const previous = sessionSsh;
-      sessionSsh = next;
-      updateRemoteToolsStatus(ctx);
-      await previous?.close();
-      ctx.ui.notify(
-        `SSH connected: ${sessionSsh.remote}:${sessionSsh.remoteCwd} — remote tools are deferred (tool_search or codemode).`,
-        "info",
-      );
+  pi.registerCommand("ssh", {
+    description: "Connect the deferred _remote tools to user@host[:/path], or use off to disconnect",
+    getArgumentCompletions(prefix) {
+      const hosts = listSshConfigHosts().map((host) => ({ value: host, label: host, description: "from ~/.ssh/config" }));
+      if (connection || retiring.size) hosts.unshift({ value: "off", label: "off", description: "disconnect" });
+      return hosts.filter(({ value }) => value.startsWith(prefix));
+    },
+    async handler(args, ctx) {
+      const target = args.trim();
+      if (target && target !== "off") return connect(target, ctx);
+      attempt?.abort();
+      const previous = connection;
+      connection = undefined;
+      updateStatus(ctx);
+      if (previous) retiring.add(previous);
+      const disconnected = retiring.size > 0;
+      await Promise.all([...retiring].map(close));
+      ctx.ui.notify(disconnected ? "SSH disconnected." : "SSH is disconnected.", "info");
     },
   });
 
-  // Handle user ! commands via SSH — only in CLI override mode, since in
-  // session mode local bash remains the default and bash_remote is opt-in.
-  pi.on("user_bash", (_event) => {
-    if (!cliSsh) return;
-    return { operations: createRemoteBashOps(cliSsh, localCwd) };
-  });
+  function notice(messages: SessionContext["messages"], ctx: ExtensionContext) {
+    const content = connection
+      ? "SSH connected to " + destination(connection) + ". The deferred _remote tools run there. Unqualified tools run locally."
+      : "SSH disconnected. The _remote tools remain discoverable and require the user to connect through /ssh. Unqualified tools run locally.";
+    const previous = messages.slice().reverse().find((message) => message.role === "custom" && message.customType === noticeType);
+    if (previous?.role === "custom" && previous.content === content) return;
+    if (!previous && !connection && !ctx.sessionManager.getEntries().some((entry) =>
+      entry.type === "custom_message" && entry.customType === noticeType)) return;
+    return { type: "custom_message", customType: noticeType, content, display: true } as const;
+  }
 
-  // Replace local cwd with remote cwd in system prompt — CLI override mode only.
-  pi.on("before_agent_start", async (event) => {
-    if (!cliSsh) return;
-    const modified = event.systemPrompt.replace(
-      `Current working directory: ${localCwd}`,
-      `Current working directory: ${cliSsh.remoteCwd} (via SSH: ${cliSsh.remote})`,
-    );
-    return { systemPrompt: modified };
+  pi.on("before_agent_start", (_event, ctx) => {
+    const message = notice(ctx.sessionManager.buildSessionProjection().messages, ctx);
+    if (message) return { message };
   });
-
-  pi.on("session_shutdown", async () => {
-    sessionAbort.abort();
-    for (const timer of timers) clearInterval(timer);
-    timers.clear();
-    if (cliSsh) clearOperationsOverride();
-    await Promise.all([cliSsh?.close(), sessionSsh?.close()]);
-    cliSsh = null;
-    sessionSsh = null;
+  pi.on("turn_end", (event, ctx) => {
+    const entry = notice(event.context.contextMessages, ctx);
+    if (entry) return { entries: [...event.entries, entry] };
+  });
+  pi.on("session_start", async (event, ctx) => {
+    updateStatus(ctx);
+    if (event.reason !== "startup") return;
+    const target = pi.getFlag("ssh");
+    if (typeof target === "string") await connect(target, ctx);
+  });
+  pi.on("session_shutdown", async (_event, ctx) => {
+    attempt?.abort();
+    const previous = connection;
+    connection = undefined;
+    if (ctx.mode === "tui") ctx.ui.setStatus("ssh", undefined);
+    if (previous) retiring.add(previous);
+    await Promise.allSettled(pending);
+    const results = await Promise.allSettled([...retiring].map(close));
+    for (const result of results) {
+      if (result.status === "rejected") ctx.ui.notify(String(result.reason), "error");
+    }
   });
 }

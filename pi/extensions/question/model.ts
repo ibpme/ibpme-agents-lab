@@ -1,107 +1,122 @@
-import type { Answer, AnswerValue, Question, QuestionOption } from "./contracts.ts";
+import { stripTerminalSequences } from "@earendil-works/pi-tui";
+import { Type, type Static } from "typebox";
+import { Check } from "typebox/value";
 
-export function parseQuestions(value: unknown): Question[] | undefined {
-  if (!Array.isArray(value) || value.length === 0) return undefined;
+const OptionSchema = Type.Object({
+  value: Type.String({ description: "Value returned for this choice" }),
+  label: Type.String({ minLength: 1, description: "Label shown to the user" }),
+  description: Type.Optional(Type.String({ description: "Optional explanation of the choice" })),
+});
 
-  const questions: Question[] = [];
-  for (let i = 0; i < value.length; i++) {
-    const candidate = value[i];
-    if (!candidate || typeof candidate !== "object") return undefined;
+const QuestionSchema = Type.Object({
+  id: Type.String({ minLength: 1, description: "Unique identifier within this questionnaire" }),
+  label: Type.Optional(Type.String({ description: "Short topic label" })),
+  prompt: Type.String({ minLength: 1, description: "Question shown to the user" }),
+  options: Type.Array(OptionSchema, { description: "Choices, or an empty list for a written answer" }),
+  multiSelect: Type.Optional(Type.Boolean({ description: "Allow more than one choice" })),
+});
 
-    const raw = candidate as Record<string, unknown>;
-    if (
-      typeof raw.id !== "string" ||
-      raw.id.length === 0 ||
-      typeof raw.prompt !== "string" ||
-      !Array.isArray(raw.options)
-    ) {
-      return undefined;
-    }
+export const QuestionnaireParams = Type.Object({
+  questions: Type.Array(QuestionSchema, { minItems: 1 }),
+});
 
-    const options: QuestionOption[] = [];
-    for (const option of raw.options) {
-      if (!option || typeof option !== "object") return undefined;
-      const optionRaw = option as Record<string, unknown>;
-      if (
-        typeof optionRaw.value !== "string" ||
-        typeof optionRaw.label !== "string" ||
-        (optionRaw.description !== undefined &&
-          typeof optionRaw.description !== "string")
-      ) {
-        return undefined;
-      }
-      options.push({
-        value: optionRaw.value,
-        label: optionRaw.label,
-        ...(optionRaw.description === undefined
-          ? {}
-          : { description: optionRaw.description }),
-      });
-    }
+type QuestionInput = Static<typeof QuestionSchema>;
+export type Question = QuestionInput & { label: string; multiSelect: boolean };
 
-    questions.push({
-      id: raw.id,
-      label:
-        typeof raw.label === "string" && raw.label.length > 0
-          ? raw.label
-          : `Q${i + 1}`,
-      prompt: raw.prompt,
-      options,
-      multiSelect: raw.multiSelect === true,
-    });
-  }
+const AnswerValueSchema = Type.Object({
+  value: Type.String(),
+  label: Type.String(),
+  wasCustom: Type.Boolean(),
+  index: Type.Optional(Type.Number()),
+});
+const AnswersSchema = Type.Array(Type.Object({ id: Type.String(), values: Type.Array(AnswerValueSchema, { minItems: 1 }) }));
+const StoredResultSchema = Type.Object({
+  questions: Type.Optional(QuestionnaireParams.properties.questions),
+  answers: AnswersSchema,
+  cancelled: Type.Boolean(),
+  reason: Type.Optional(Type.Union([Type.Literal("dismissed"), Type.Literal("aborted"), Type.Literal("unavailable")])),
+});
 
-  return questions;
+export type AnswerValue = Static<typeof AnswerValueSchema>;
+export type Answer = Static<typeof AnswersSchema>[number];
+
+export type QuestionnaireResult = {
+  questions: Question[];
+  answers: Answer[];
+  cancelled: boolean;
+  reason?: "dismissed" | "aborted" | "unavailable";
+};
+
+export function displayText(text: string): string {
+  return stripTerminalSequences(text)
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/g, "")
+    .trim();
 }
 
-export function parseAnswers(value: unknown): Answer[] {
-  if (!Array.isArray(value)) return [];
+export function displayLine(text: string): string {
+  return displayText(text).replace(/\s+/g, " ");
+}
 
-  const answers: Answer[] = [];
-  for (const candidate of value) {
-    if (!candidate || typeof candidate !== "object") continue;
-    const raw = candidate as Record<string, unknown>;
-    if (typeof raw.id !== "string" || !Array.isArray(raw.values)) continue;
+export function normalizeQuestions(input: QuestionInput[]): Question[] {
+  const ids = new Set<string>();
+  return input.map((question, index) => {
+    if (!question.id.trim() || !displayText(question.prompt)) throw new Error(`Question ${index + 1} needs an ID and a prompt`);
+    if (ids.has(question.id)) throw new Error(`Question ${index + 1} repeats an ID`);
+    ids.add(question.id);
 
-    const values: AnswerValue[] = [];
-    for (const answerValue of raw.values) {
-      if (!answerValue || typeof answerValue !== "object") continue;
-      const answerRaw = answerValue as Record<string, unknown>;
-      if (
-        typeof answerRaw.value !== "string" ||
-        typeof answerRaw.label !== "string" ||
-        typeof answerRaw.wasCustom !== "boolean"
-      ) {
-        continue;
-      }
-      values.push({
-        value: answerRaw.value,
-        label: answerRaw.label,
-        wasCustom: answerRaw.wasCustom,
-        ...(typeof answerRaw.index === "number"
-          ? { index: answerRaw.index }
-          : {}),
-      });
+    const values = new Set<string>();
+    for (const [optionIndex, option] of question.options.entries()) {
+      if (!displayLine(option.label)) throw new Error(`Question ${index + 1}, option ${optionIndex + 1} needs a label`);
+      if (values.has(option.value)) throw new Error(`Question ${index + 1} repeats an option value`);
+      values.add(option.value);
     }
-    if (values.length > 0) answers.push({ id: raw.id, values });
-  }
 
-  return answers;
+    return {
+      ...question,
+      label: question.label?.trim() || `Q${index + 1}`,
+      multiSelect: question.multiSelect === true,
+    };
+  });
+}
+
+export function readQuestionnaire(details: unknown, args?: unknown): QuestionnaireResult | undefined {
+  if (!Check(StoredResultSchema, details)) return undefined;
+  const input = details.questions ?? (Check(QuestionnaireParams, args) ? args.questions : undefined);
+  if (!input) return undefined;
+
+  let questions: Question[];
+  try {
+    questions = normalizeQuestions(input);
+  } catch {
+    return undefined;
+  }
+  if (details.cancelled) return { ...details, questions, answers: [] };
+
+  const byId = new Map(details.answers.map((answer) => [answer.id, answer]));
+  const answers = questions.flatMap(({ id }) => {
+    const answer = byId.get(id);
+    return answer ? [answer] : [];
+  });
+  if (answers.length !== questions.length || answers.length !== details.answers.length) return undefined;
+  return { ...details, questions, answers };
+}
+
+export function sameAnswers(before: Answer[], after: Answer[]): boolean {
+  return before.length === after.length && before.every(({ id, values }, index) => {
+    const revised = after[index];
+    return id === revised.id && values.length === revised.values.length
+      && values.every((value) => revised.values.some((other) =>
+        value.wasCustom === other.wasCustom && value.value === other.value));
+  });
 }
 
 export function formatAnswers(questions: Question[], answers: Answer[]): string {
-  return answers
-    .map((answer) => {
-      const questionLabel =
-        questions.find((question) => question.id === answer.id)?.label ||
-        answer.id;
-      const values = answer.values.map((value) => {
-        if (value.wasCustom) {
-          return `(wrote) ${value.label} [value: ${JSON.stringify(value.value)}]`;
-        }
-        return `${value.index}. ${value.label} [value: ${JSON.stringify(value.value)}]`;
-      });
-      return `${questionLabel}: ${values.join(", ")}`;
-    })
-    .join("\n");
+  return answers.map(({ id, values }) => {
+    const label = questions.find((question) => question.id === id)?.label ?? id;
+    const parts = values.map((choice) => choice.wasCustom
+      ? `(wrote) ${choice.label} [value: ${JSON.stringify(choice.value)}]`
+      : `${choice.index}. ${choice.label} [value: ${JSON.stringify(choice.value)}]`);
+    return `${label}: ${parts.join(", ")}`;
+  }).join("\n");
 }

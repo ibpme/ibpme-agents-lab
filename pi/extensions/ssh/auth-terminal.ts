@@ -1,19 +1,35 @@
+import { createRequire } from "node:module";
 import xterm from "@xterm/headless";
-import * as pty from "node-pty";
-import type { IPty } from "node-pty";
 import {
   CURSOR_MARKER, decodeKittyPrintable, isKeyRelease, matchesKey, parseKey,
   renderFakeCursor, truncateToWidth, visibleWidth, type Component, type Focusable, type TUI,
 } from "@earendil-works/pi-tui";
 
 export type AuthOutcome = "success" | "failed" | "cancelled" | "timeout";
-type PtyProcess = Pick<IPty, "onData" | "onExit" | "write" | "resize" | "kill" | "pause" | "resume">;
+type Subscription = { dispose(): void };
+interface PtyProcess {
+  onData(callback: (data: string) => void): Subscription;
+  onExit(callback: (event: { exitCode: number; signal?: number }) => void): Subscription;
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  kill(signal?: string): void;
+  pause(): void;
+  resume(): void;
+}
 export type SpawnAuthTerminal = (args: string[], cols: number, rows: number) => PtyProcess;
 
-const spawnAuthTerminal: SpawnAuthTerminal = (args, cols, rows) => pty.spawn("ssh", args, {
-  name: "xterm", cols, rows,
-  env: { ...process.env, SSH_ASKPASS_REQUIRE: "never" },
-});
+const require = createRequire(import.meta.url);
+const spawnAuthTerminal: SpawnAuthTerminal = (args, cols, rows) => {
+  try {
+    const pty = require("node-pty");
+    return pty.spawn("ssh", args, {
+      name: "xterm", cols, rows,
+      env: { ...process.env, SSH_ASKPASS_REQUIRE: "never" },
+    });
+  } catch (error) {
+    throw new Error("Unable to start the SSH authentication PTY. Check the node-pty installation and OpenSSH.", { cause: error });
+  }
+};
 
 /** Only translate keys used by line-oriented SSH prompts, never forward outer-terminal protocols. */
 export function authenticationInput(data: string): string {
@@ -59,15 +75,25 @@ export class SshAuthTerminal implements Component, Focusable {
   private readonly subscriptions: { dispose(): void }[] = [];
   private readonly timer: ReturnType<typeof setTimeout>;
   private readonly abort = () => this.finish("cancelled");
+  private readonly tui: Pick<TUI, "terminal" | "requestRender">;
+  private readonly args: string[];
+  private readonly done: (outcome: AuthOutcome) => void;
+  private readonly signal?: AbortSignal;
+  private readonly spawnTerminal: SpawnAuthTerminal;
 
   constructor(
-    private readonly tui: Pick<TUI, "terminal" | "requestRender">,
-    private readonly args: string[],
-    private readonly done: (outcome: AuthOutcome) => void,
+    tui: Pick<TUI, "terminal" | "requestRender">,
+    args: string[],
+    done: (outcome: AuthOutcome) => void,
     timeoutMs: number,
-    private readonly signal?: AbortSignal,
-    private readonly spawnTerminal: SpawnAuthTerminal = spawnAuthTerminal,
+    signal?: AbortSignal,
+    spawnTerminal: SpawnAuthTerminal = spawnAuthTerminal,
   ) {
+    this.tui = tui;
+    this.args = args;
+    this.done = done;
+    this.signal = signal;
+    this.spawnTerminal = spawnTerminal;
     this.timer = setTimeout(() => this.finish("timeout"), timeoutMs);
     this.signal?.addEventListener("abort", this.abort, { once: true });
     if (signal?.aborted) queueMicrotask(this.abort);
@@ -99,9 +125,10 @@ export class SshAuthTerminal implements Component, Focusable {
       this.subscriptions.push(this.screen.onData((data) => {
         if (!this.disposed && !this.exited) this.child?.write(data);
       }));
-    } catch {
+    } catch (error) {
       this.failure = true;
       clearTimeout(this.timer);
+      this.screen.write(error instanceof Error ? error.message : "Unable to start SSH authentication.", () => this.tui.requestRender());
     }
   }
 

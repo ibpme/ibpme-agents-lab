@@ -9,7 +9,11 @@ import { join } from "node:path";
 import type { AuthenticateInteractively } from "./auth.ts";
 
 export class TransportError extends Error {
-  readonly name = "TransportError";
+  override readonly name: string = "TransportError";
+}
+
+export class ConnectionLostError extends TransportError {
+  override readonly name = "ConnectionLostError";
 }
 
 export class RemoteCommandError extends Error {
@@ -42,10 +46,11 @@ export class RemoteAbortError extends Error {
 
 export interface RunOptions {
   stdin?: string | Buffer;
+  maxBufferBytes?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
-  /** When set, stdout and stderr are streamed here and not buffered. */
-  onData?: (chunk: Buffer) => void;
+  /** Streams stdout and stderr. Return false to finish the command early. */
+  onData?: (chunk: Buffer, source: "stdout" | "stderr") => void | boolean;
 }
 
 export interface RunResult {
@@ -87,6 +92,8 @@ export function sshBaseArgs(controlPath?: string): string[] {
     "-o", "ServerAliveCountMax=3",
     "-o", "ControlMaster=no",
     "-o", "ProxyCommand=false",
+    "-o", "PermitLocalCommand=no",
+    "-o", "ClearAllForwardings=yes",
     ...(controlPath ? ["-S", controlPath] : []),
   ];
 }
@@ -104,7 +111,7 @@ export function spawnRemote(
   command: string,
   opts: RunOptions,
   children: Set<ChildProcess>,
-  controlPath?: string,
+  controlPath: string,
 ): Promise<RunResult & { timedOut: boolean; aborted: boolean }> {
   return new Promise((resolve, reject) => {
     if (opts.signal?.aborted) {
@@ -119,11 +126,16 @@ export function spawnRemote(
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let timedOut = false;
+    let bytes = 0;
+    let overflow = false;
     let aborted = false;
+    let stopped = false;
+    let streamError: { error: unknown } | undefined;
     let timer: NodeJS.Timeout | undefined;
     let killTimer: NodeJS.Timeout | undefined;
 
     const kill = () => {
+      if (killTimer) return;
       child.kill("SIGTERM");
       killTimer = setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS);
       killTimer.unref();
@@ -141,13 +153,36 @@ export function spawnRemote(
     };
     opts.signal?.addEventListener("abort", onAbort, { once: true });
 
+    const collect = (destination: Buffer[], data: Buffer) => {
+      bytes += data.length;
+      if (bytes > (opts.maxBufferBytes ?? 32 * 1024 * 1024)) {
+        overflow = true;
+        kill();
+      } else {
+        destination.push(data);
+      }
+    };
+    const stream = (data: Buffer, source: "stdout" | "stderr") => {
+      if (stopped || streamError || aborted || timedOut) return;
+      try {
+        if (opts.onData?.(data, source) === false) {
+          stopped = true;
+          if (timer) clearTimeout(timer);
+          kill();
+        }
+      } catch (error) {
+        streamError = { error };
+        kill();
+      }
+    };
     child.stdout?.on("data", (data: Buffer) => {
-      if (opts.onData) opts.onData(data);
-      else stdout.push(data);
+      if (opts.onData) stream(data, "stdout");
+      else collect(stdout, data);
     });
     child.stderr?.on("data", (data: Buffer) => {
-      if (opts.onData) opts.onData(data);
-      else stderr.push(data);
+      if (stopped) return;
+      collect(stderr, data);
+      stream(data, "stderr");
     });
 
     if (opts.stdin !== undefined) {
@@ -170,8 +205,16 @@ export function spawnRemote(
     });
     child.on("close", (code) => {
       cleanup();
+      if (streamError) {
+        reject(streamError.error);
+        return;
+      }
+      if (overflow) {
+        reject(new TransportError("SSH output exceeded the buffer limit."));
+        return;
+      }
       resolve({
-        code,
+        code: stopped ? 0 : code,
         stdout: Buffer.concat(stdout),
         stderr: Buffer.concat(stderr),
         timedOut,
@@ -181,18 +224,17 @@ export function spawnRemote(
   });
 }
 
-/** Asks a ControlMaster to exit. A no-op (non-zero exit) when none is running. */
-function stopControlMaster(remote: string, controlPath: string): Promise<void> {
+function controlCommand(remote: string, controlPath: string, command: "check" | "exit"): Promise<boolean | undefined> {
   return new Promise((resolve) => {
-    const child = spawn("ssh", ["-O", "exit", ...sshBaseArgs(controlPath), "--", remote], { stdio: "ignore" });
+    const child = spawn("ssh", ["-O", command, ...sshBaseArgs(controlPath), "--", remote], { stdio: "ignore" });
     const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
     child.on("error", () => {
       clearTimeout(timer);
-      resolve();
+      resolve(undefined);
     });
-    child.on("close", () => {
+    child.on("close", (code) => {
       clearTimeout(timer);
-      resolve();
+      resolve(code === null ? undefined : code === 0);
     });
   });
 }
@@ -206,6 +248,7 @@ export class SshConnection {
   remoteCwd: string;
   private readonly children = new Set<ChildProcess>();
   private closed = false;
+  private closing?: Promise<void>;
   private controlDirectory?: string;
   private controlPath?: string;
 
@@ -248,8 +291,7 @@ export class SshConnection {
 
   /**
    * Runs a command. Resolves for any exit code, including non-zero.
-   * Throws RemoteTimeoutError, RemoteAbortError, or TransportError (ssh exit 255,
-   * spawn failure, or connection already closed).
+   * Throws for timeout, cancellation, or transport failure.
    */
   async run(command: string, opts: RunOptions = {}): Promise<RunResult> {
     if (this.closed) throw new TransportError("SSH connection is closed.");
@@ -258,8 +300,8 @@ export class SshConnection {
     if (this.closed) throw new TransportError("SSH connection was closed.");
     if (result.aborted) throw new RemoteAbortError();
     if (result.timedOut) throw new RemoteTimeoutError((opts.timeoutMs ?? 0) / 1000);
-    if (result.code === 255) {
-      throw new TransportError(`SSH transport failed. Run /ssh to reconnect: ${result.stderr.toString().trim()}`);
+    if (result.code === 255 && !(await controlCommand(this.remote, this.controlPath, "check"))) {
+      throw new ConnectionLostError("SSH connection lost. Reconnect to the remote.");
     }
     return result;
   }
@@ -274,13 +316,21 @@ export class SshConnection {
   }
 
   /** Kills in-flight children and drops the ControlMaster socket. Idempotent. */
-  async close(): Promise<void> {
-    if (this.closed) return;
+  close(): Promise<void> {
     this.closed = true;
+    return this.closing ??= this.closeResources().finally(() => { this.closing = undefined; });
+  }
+
+  private async closeResources(): Promise<void> {
     for (const child of this.children) child.kill("SIGTERM");
-    this.children.clear();
-    if (this.controlPath) await stopControlMaster(this.remote, this.controlPath);
+    const exited = this.controlPath && await controlCommand(this.remote, this.controlPath, "exit");
+    for (const child of this.children) child.kill("SIGKILL");
+    if (this.controlPath && !exited && await controlCommand(this.remote, this.controlPath, "check") !== false) {
+      throw new TransportError("Could not stop SSH master for " + this.remote + " (control socket: " + this.controlPath + ").");
+    }
     if (this.controlDirectory) rmSync(this.controlDirectory, { recursive: true, force: true });
+    this.controlPath = undefined;
+    this.controlDirectory = undefined;
   }
 }
 
@@ -298,26 +348,4 @@ export function parseSshTarget(arg: string): ParsedSshTarget {
   const idx = arg.indexOf(":");
   if (idx === -1) return { remote: arg };
   return { remote: arg.slice(0, idx), remoteCwd: arg.slice(idx + 1) };
-}
-
-/** Minimal glob→RegExp: `**` matches across path segments, `*` within one, `?` any single char. */
-export function globToRegExp(pattern: string): RegExp {
-  let re = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i];
-    if (c === "*" && pattern[i + 1] === "*") {
-      re += ".*";
-      i++;
-      if (pattern[i + 1] === "/") i++;
-    } else if (c === "*") {
-      re += "[^/]*";
-    } else if (c === "?") {
-      re += "[^/]";
-    } else if (".+^$()[]{}|\\".includes(c)) {
-      re += `\\${c}`;
-    } else {
-      re += c;
-    }
-  }
-  return new RegExp(`^${re}$`);
 }

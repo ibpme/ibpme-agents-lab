@@ -1,8 +1,6 @@
-import { join } from "node:path";
-import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { loadShortcutKeys } from "../shared/shortcut-config.ts";
+import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export default function (pi: ExtensionAPI) {
+export default function stashExtension(pi: ExtensionAPI): void {
   let stash: string | undefined;
   let submitted = false;
 
@@ -24,20 +22,21 @@ export default function (pi: ExtensionAPI) {
     submitted = false;
   }
 
-  for (const key of loadShortcutKeys(join(getAgentDir(), "keybindings.json"), "extensions.stash.toggle", ["ctrl+s"])) {
-    pi.registerShortcut(key, { description: "Stash or restore the current prompt draft", handler: toggle });
-  }
+  pi.registerShortcut("ctrl+s", {
+    description: "Stash or restore the current prompt draft",
+    handler: toggle,
+  });
 
   pi.on("input", (event, ctx) => {
     if (ctx.mode === "tui" && event.source === "interactive" && stash !== undefined) submitted = true;
   });
   pi.on("agent_settled", (_event, ctx) => {
     if (ctx.mode !== "tui" || !submitted || stash === undefined) return;
+    submitted = false;
     // Never overwrite a draft the user started while the intervening prompt ran.
     if (ctx.ui.getEditorText().length) return;
     ctx.ui.setEditorText(stash);
     stash = undefined;
-    submitted = false;
   });
   function reset(): void {
     stash = undefined;

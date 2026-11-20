@@ -1,74 +1,59 @@
-/**
- * Thinking Block Styling Extension
- *
- * Visually separates thinking blocks with a blockquote-style border when
- * expanded, and animates a spinner into the collapsed-thinking label
- * (Ctrl+T) while the model is actively reasoning.
- *
- * Notes on what this can't do (no extension hook for it):
- * - No animated border. `registerMarkdownTransformer` only controls the
- *   Markdown source; pi renders the resulting blockquote with a static
- *   `mdQuoteBorder` color, redrawn per streaming update.
- * - The agent-stats extension owns the built-in working message so it can
- *   display phase-aware cycle timing without competing updates.
- */
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+export default function thinkingStyle(pi: ExtensionAPI): void {
+  let thinking = false;
 
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const SPINNER_INTERVAL_MS = 100;
-
-export default function (pi: ExtensionAPI) {
-  let spinnerTimer: ReturnType<typeof setInterval> | undefined;
-  let frame = 0;
-
-  function stopSpinner(ctx: ExtensionContext) {
-    if (!spinnerTimer) return;
-    clearInterval(spinnerTimer);
-    spinnerTimer = undefined;
-    ctx.ui.setHiddenThinkingLabel();
+  function startThinking(ctx: ExtensionContext): void {
+    if (ctx.mode !== "tui" || thinking) return;
+    const color = ctx.ui.theme.getThinkingBorderColor(pi.getThinkingLevel());
+    ctx.ui.setWorkingIndicator({ frames: ["·", "•", "●", "•"].map(color), intervalMs: 120 });
+    ctx.ui.setWorkingMessage("Thinking");
+    thinking = true;
   }
 
-  function startSpinner(ctx: ExtensionContext) {
-    if (spinnerTimer) return;
-    frame = 0;
-    spinnerTimer = setInterval(() => {
-      const icon = SPINNER_FRAMES[frame % SPINNER_FRAMES.length];
-      frame++;
-      ctx.ui.setHiddenThinkingLabel(`${icon} Thinking...`);
-    }, SPINNER_INTERVAL_MS);
+  function resetIndicator(ctx: ExtensionContext): void {
+    if (!thinking) return;
+    thinking = false;
+    if (ctx.mode === "tui") {
+      ctx.ui.setWorkingIndicator();
+      ctx.ui.setWorkingMessage();
+    }
   }
 
-  pi.on("message_update", async (event, ctx) => {
-    const evt = event.assistantMessageEvent;
-    if (!evt) return;
-    switch (evt.type) {
+  pi.on("message_update", (event, ctx) => {
+    if (event.message.role !== "assistant") return;
+    switch (event.assistantMessageEvent.type) {
       case "thinking_start":
       case "thinking_delta":
-        startSpinner(ctx);
+        startThinking(ctx);
         break;
       case "thinking_end":
       case "text_start":
+      case "text_delta":
       case "toolcall_start":
+      case "toolcall_delta":
+      case "toolcall_end":
       case "done":
       case "error":
-        stopSpinner(ctx);
+        resetIndicator(ctx);
         break;
     }
   });
 
-  // Safety nets: never leave the spinner running across turns/idle.
-  pi.on("turn_end", async (_event, ctx) => stopSpinner(ctx));
-  pi.on("agent_settled", async (_event, ctx) => stopSpinner(ctx));
-
-  pi.registerMarkdownTransformer((markdown, { messageType }) => {
-    if (messageType !== "assistant-thinking") return markdown;
-    return markdown
-      .split("\n")
-      .map((line) => (line.length ? `> ${line}` : ">"))
-      .join("\n");
+  pi.on("message_end", (event, ctx) => {
+    if (event.message.role === "assistant") resetIndicator(ctx);
   });
+  pi.on("session_start", (_event, ctx) => {
+    resetIndicator(ctx);
+    if (ctx.mode === "tui") ctx.ui.setHiddenThinkingLabel("Thought");
+  });
+  pi.on("turn_start", (_event, ctx) => resetIndicator(ctx));
+  pi.on("turn_end", (_event, ctx) => resetIndicator(ctx));
+  pi.on("agent_settled", (_event, ctx) => resetIndicator(ctx));
+  pi.on("session_shutdown", (_event, ctx) => resetIndicator(ctx));
+
+  pi.registerMarkdownTransformer((markdown) => markdown
+    .split("\n")
+    .map((line) => (line.length ? `> ${line}` : ">"))
+    .join("\n"), { messageTypes: ["assistant-thinking"] });
 }

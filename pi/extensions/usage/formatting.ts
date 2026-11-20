@@ -1,4 +1,5 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { UsageReport, UsageWindow } from "./providers.ts";
 
 export type UsageTheme = Pick<Theme, "fg" | "bold">;
@@ -53,8 +54,6 @@ export function usageBar(usedPercent: number, theme: UsageTheme): string {
   return theme.fg(severity(clamped), filled) + theme.fg("borderMuted", empty);
 }
 
-const visibleLength = (text: string): number => text.replace(/\u001b\[[0-9;]*m/g, "").length;
-
 function windowLine(window: UsageWindow, labelWidth: number, now: number, theme: UsageTheme, width?: number): string {
   const label = theme.fg("text", window.label.padEnd(labelWidth));
   const parts: string[] = [];
@@ -79,25 +78,12 @@ function windowLine(window: UsageWindow, labelWidth: number, now: number, theme:
   });
   const full = `  ↻ ${remaining} · ${when}`;
   // The absolute time is the first thing to go when the viewport is narrow.
-  const reset = width === undefined || visibleLength(line) + full.length <= width
-    ? `  ↻ ${remaining} · ${when}` : `  ↻ ${remaining}`;
+  const reset = width === undefined || visibleWidth(line + full) <= width ? full : `  ↻ ${remaining}`;
   return line + theme.fg("dim", reset);
 }
 
 function wrap(text: string, width: number | undefined): string[] {
-  if (!width || text.length <= width) return [text];
-  const lines: string[] = [];
-  let current = "";
-  for (const word of text.split(/\s+/)) {
-    if (current && current.length + 1 + word.length > width) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = current ? `${current} ${word}` : word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
+  return width === undefined ? [text] : wrapTextWithAnsi(text, Math.max(1, width));
 }
 
 export function renderUsage(reports: readonly UsageReport[], options: RenderOptions = {}): string[] {
@@ -115,7 +101,9 @@ export function renderUsage(reports: readonly UsageReport[], options: RenderOpti
     const plan = report.plan ? "  " + theme.fg("syntaxKeyword", `◆ ${report.plan}`) : "";
     lines.push(theme.bold(theme.fg("accent", report.title)) + plan);
     const labelWidth = Math.max(0, ...report.windows.map((window) => window.label.length)) + 2;
-    for (const window of report.windows) lines.push(windowLine(window, labelWidth, now, theme, width));
+    for (const window of report.windows) {
+      lines.push(...wrap(windowLine(window, labelWidth, now, theme, width), width));
+    }
     for (const note of report.notes) {
       const wrapped = wrap(note, width === undefined ? undefined : width - 4);
       wrapped.forEach((part, partIndex) => {

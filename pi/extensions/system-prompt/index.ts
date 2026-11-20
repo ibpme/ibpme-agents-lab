@@ -1,76 +1,34 @@
-/**
- * System Prompt Viewer Extension
- *
- * Adds a `/system-prompt` command to inspect the current system prompt
- * and any appended system prompt text separately in a scrollable viewer.
- *
- * Usage:
- *   /system-prompt        - Show system prompt and append prompt as separate sections
- *   /system-prompt append - Show only the appended system prompt text
- */
-import type {
-	ExtensionAPI,
-	ExtensionCommandContext,
-} from "@earendil-works/pi-coding-agent";
-import { markdownSource, openPager } from "../shared/pager.ts";
+import { getMarkdownTheme, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Markdown } from "@earendil-works/pi-tui";
+import { showDocument, type OpenDocument } from "../shared/document-view.ts";
+import { documentViewport } from "../shared/document-viewport.ts";
 
-function estimateTokens(text: string): number {
-	return Math.ceil(Array.from(text).length / 4);
-}
-
-async function show(
-	title: string,
-	content: string,
-	ctx: ExtensionCommandContext,
-): Promise<void> {
-	await openPager(ctx, {
-		title,
-		source: markdownSource(content),
-		footerChips: [`~${estimateTokens(content)} tokens`],
-		plainText: content,
-	});
-}
+const openLocal: OpenDocument = async (ctx, document) => {
+  await ctx.ui.custom<void>((tui, theme, _keys, done) => {
+    const body = new Markdown(document.content, 0, 0, getMarkdownTheme());
+    return documentViewport(tui, theme, done, body, document.title, () => `${document.detail} · ↑↓ scroll · Esc close`);
+  });
+};
 
 export default function systemPromptExtension(pi: ExtensionAPI) {
-	pi.registerCommand("system-prompt", {
-		description: "View the current system prompt or append prompt as rendered Markdown",
-		getArgumentCompletions: (prefix) => {
-			const options = ["append"];
-			const filtered = options.filter((o) => o.startsWith(prefix));
-			return filtered.length > 0
-				? filtered.map((o) => ({ value: o, label: o }))
-				: null;
-		},
-		handler: async (args, ctx) => {
-			const mode = args.trim();
+  pi.registerCommand("system-prompt", {
+    description: "View the current system prompt or the configured append prompt",
+    getArgumentCompletions: (prefix) => "append".startsWith(prefix) ? [{ value: "append", label: "append" }] : null,
+    handler: async (args, ctx) => {
+      if (!ctx.hasUI && ctx.mode !== "print") return;
+      const append = args.trim() === "append";
+      const content = append ? ctx.getSystemPromptOptions().appendSystemPrompt : ctx.getSystemPrompt();
+      if (!content) {
+        ctx.ui.notify(append ? "No append system prompt is currently set" : "No system prompt is available", "info");
+        return;
+      }
 
-			if (mode === "append") {
-				const options = ctx.getSystemPromptOptions();
-				const appendPrompt = options.appendSystemPrompt ?? "";
-				if (!appendPrompt) {
-					ctx.ui.notify("No append system prompt is currently set.", "info");
-					return;
-				}
-				await show("Append System Prompt", appendPrompt, ctx);
-				return;
-			}
-
-			// Default: show system prompt and append prompt as separate sections
-			const fullPrompt = ctx.getSystemPrompt();
-			const options = ctx.getSystemPromptOptions();
-			const appendPrompt = options.appendSystemPrompt;
-
-			let basePrompt = fullPrompt;
-			if (appendPrompt && fullPrompt.endsWith(appendPrompt)) {
-				basePrompt = fullPrompt.slice(0, -appendPrompt.length).trimEnd();
-			}
-
-			let display = `--- System Prompt ---\n\n${basePrompt}`;
-			if (appendPrompt) {
-				display += `\n\n--- Append Prompt ---\n\n${appendPrompt}`;
-			}
-
-			await show("System Prompt", display, ctx);
-		},
-	});
+      await showDocument(pi.events, ctx, {
+        title: append ? "Append System Prompt" : "System Prompt",
+        content,
+        format: "markdown",
+        detail: `~${Math.ceil(Array.from(content).length / 4).toLocaleString("en-US")} tokens`,
+      }, openLocal);
+    },
+  });
 }

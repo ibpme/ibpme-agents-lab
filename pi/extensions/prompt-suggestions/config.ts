@@ -1,70 +1,75 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import type { SuggestionConfig } from "./contracts.ts";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, sep } from "node:path";
+import type { KeyId } from "@earendil-works/pi-tui";
 
-const CONFIG_DIR = join(homedir(), ".pi", "agent");
-
-const CONFIG_PATH = join(CONFIG_DIR, "prompt-suggestions.json");
-
-export const DEFAULT_CONFIG: SuggestionConfig = {
-  enabled: true,
-  provider: "opencode-go",
-  model: "muse-spark-1.3-contributor",
-  ollamaUrl: "http://127.0.0.1:11434",
-};
-
-function normalizeUrl(url: string): string {
-  return url.replace(/\/+$/, "");
+function readObject(path: string): Record<string, unknown> {
+  let content: string;
+  try {
+    content = readFileSync(path, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw error;
+  }
+  const value: unknown = JSON.parse(content);
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected a JSON object");
+  return value as Record<string, unknown>;
 }
 
-function nonEmptyString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
 }
 
-function parseConfig(raw: unknown): Partial<SuggestionConfig> {
-  if (!raw || typeof raw !== "object") return {};
-  const value = raw as Record<string, unknown>;
-  const ollamaUrl = nonEmptyString(value.ollamaUrl);
-
+export function readSettings(path: string, env = process.env) {
+  let saved: Record<string, unknown> = {};
+  try {
+    saved = readObject(path);
+  } catch {
+    // An unreadable preference leaves background requests disabled.
+  }
+  const savedOllamaUrl = stringValue(saved.ollamaUrl);
   return {
-    enabled: typeof value.enabled === "boolean" ? value.enabled : undefined,
-    provider: nonEmptyString(value.provider),
-    model: nonEmptyString(value.model),
-    ollamaUrl: ollamaUrl ? normalizeUrl(ollamaUrl) : undefined,
+    enabled: saved.enabled === true,
+    provider: stringValue(env.PI_SUGGESTIONS_PROVIDER) ?? stringValue(saved.provider)
+      ?? (savedOllamaUrl ? "ollama" : "opencode-go"),
+    model: stringValue(env.PI_SUGGESTIONS_MODEL) ?? stringValue(saved.model) ?? "muse-spark-1.3-contributor",
+    ollamaUrl: (stringValue(env.PI_SUGGESTIONS_OLLAMA_URL) ?? savedOllamaUrl ?? "http://127.0.0.1:11434").replace(/\/+$/, ""),
   };
 }
 
-async function readConfigFile(): Promise<Partial<SuggestionConfig>> {
+export function writeEnabled(path: string, enabled: boolean): void {
+  const values = { ...readObject(path), enabled };
+  // Follow dangling links too, so the first write creates the target.
+  while (true) {
+    let target: string;
+    try {
+      target = readlinkSync(path);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EINVAL" && code !== "ENOENT") throw error;
+      break;
+    }
+    path = isAbsolute(target) ? target : realpathSync.native(dirname(path)) + sep + target;
+  }
+  mkdirSync(dirname(path), { recursive: true });
+  const temporary = `${path}.${randomUUID()}.tmp`;
   try {
-    return parseConfig(JSON.parse(await readFile(CONFIG_PATH, "utf8")));
-  } catch {
-    return {};
+    writeFileSync(temporary, `${JSON.stringify(values, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+    renameSync(temporary, path);
+  } finally {
+    rmSync(temporary, { force: true });
   }
 }
 
-export async function loadConfig(): Promise<SuggestionConfig> {
-  const saved = await readConfigFile();
-  return {
-    enabled: saved.enabled ?? DEFAULT_CONFIG.enabled,
-    provider:
-      nonEmptyString(process.env.PI_SUGGESTIONS_PROVIDER) ??
-      saved.provider ??
-      // Old config files only described an Ollama endpoint.
-      (saved.ollamaUrl ? "ollama" : DEFAULT_CONFIG.provider),
-    model:
-      nonEmptyString(process.env.PI_SUGGESTIONS_MODEL) ??
-      saved.model ??
-      DEFAULT_CONFIG.model,
-    ollamaUrl: normalizeUrl(
-      nonEmptyString(process.env.PI_SUGGESTIONS_OLLAMA_URL) ??
-      saved.ollamaUrl ??
-      DEFAULT_CONFIG.ollamaUrl,
-    ),
-  };
-}
-
-export async function saveConfig(config: SuggestionConfig): Promise<void> {
-  await mkdir(CONFIG_DIR, { recursive: true });
-  await writeFile(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+export function toggleKeys(agentDir: string): KeyId[] {
+  try {
+    const value = readObject(join(agentDir, "keybindings.json"))["extensions.suggestions.toggle"];
+    const keys = typeof value === "string" ? [value] : value;
+    if (Array.isArray(keys) && keys.every((key) => typeof key === "string" && key.trim())) {
+      return [...new Set(keys.map((key: string) => key.trim()))] as KeyId[];
+    }
+  } catch {
+    // Invalid keybindings leave the default shortcut available.
+  }
+  return ["ctrl+shift+s"];
 }

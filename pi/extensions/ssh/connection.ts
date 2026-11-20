@@ -1,20 +1,23 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parseSshTarget, shq, SshConnection } from "./transport.ts";
+import { isAbsolute } from "node:path/posix";
+import { parseSshTarget, shq, SshConnection, TransportError } from "./transport.ts";
 import type { AuthenticateInteractively } from "./auth.ts";
 
 /** Opens a connection. Without an explicit path, the remote cwd is the login directory. */
-export async function connectSsh(arg: string, interactive?: AuthenticateInteractively, signal?: AbortSignal): Promise<SshConnection> {
+export async function connectSsh(arg: string, close: (connection: SshConnection) => Promise<void>,
+  interactive?: AuthenticateInteractively, signal?: AbortSignal): Promise<SshConnection> {
   const { remote, remoteCwd } = parseSshTarget(arg);
   const connection = new SshConnection(remote, remoteCwd ?? "");
   try {
     await connection.open(interactive, signal);
     const directory = remoteCwd === undefined ? "pwd" : `cd -- ${shq(remoteCwd)} && pwd`;
-    connection.remoteCwd = (await connection.exec(directory, { timeoutMs: 15_000, signal })).toString().trim();
+    connection.remoteCwd = (await connection.exec(directory, { timeoutMs: 15_000, signal })).toString().replace(/\n$/, "");
+    if (!isAbsolute(connection.remoteCwd)) throw new TransportError("SSH did not report an absolute working directory.");
     return connection;
   } catch (error) {
-    await connection.close();
+    await close(connection);
     throw error;
   }
 }

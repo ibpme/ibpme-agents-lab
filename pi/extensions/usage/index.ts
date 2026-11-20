@@ -1,67 +1,85 @@
+import { addAbortListener } from "node:events";
 import { readStoredCredential, type ExtensionAPI, type ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { openPager, type PagerSource } from "../shared/pager.ts";
-import { formatUsage, plainTheme, renderUsage } from "./formatting.ts";
-import { PROVIDERS, UsageError, type UsageProvider, type UsageReport } from "./providers.ts";
+import { Text } from "@earendil-works/pi-tui";
+import { showDocument, type OpenDocument, type ViewerDocument } from "../shared/document-view.ts";
+import { documentViewport } from "../shared/document-viewport.ts";
+import { formatUsage, renderUsage } from "./formatting.ts";
+import { PROVIDERS, UsageError, type UsageReport } from "./providers.ts";
 import { collectUsage, selectProviders, type UsageDependencies } from "./service.ts";
 
-interface LazyView {
-  reports?: UsageReport[];
-  capturedAt?: number;
-  error?: string;
-  redraw?: () => void;
-}
+const title = "Account Usage";
+const loading = "Loading account usage…";
 
-function lazyLines(view: LazyView, width: number, theme: ExtensionCommandContext["ui"]["theme"]): string[] {
-  if (view.error) return [theme.fg("warning", view.error)];
-  if (!view.reports || view.capturedAt === undefined) return [theme.fg("muted", "Loading account usage…")];
-  return renderUsage(view.reports, { now: view.capturedAt, theme, width });
-}
+const openLocal: OpenDocument = async (ctx, document) => {
+  await ctx.ui.custom<void>((tui, theme, _keys, done) => {
+    const body = document.createBody?.(tui, theme) ?? new Text(document.content, 0, 0);
+    return documentViewport(tui, theme, done, body, document.title, () => "↑↓ scroll · Esc/q close");
+  });
+};
 
-/** Opens the viewer immediately and fills it in when the lookup settles. */
-function showLazyUsage(
+async function showUsage(
+  events: ExtensionAPI["events"],
   ctx: ExtensionCommandContext,
-  providers: readonly UsageProvider[],
-  deps: UsageDependencies,
-  controller: AbortController,
-  release: () => void,
-): void {
-  const view: LazyView = {};
-  const source: PagerSource = {
-    lines: (width) => lazyLines(view, width, ctx.ui.theme),
-    attach: (redraw) => { view.redraw = redraw; },
-    // Closing the viewer cancels the pending requests.
-    detach: () => controller.abort(),
+  lookup: () => Promise<UsageReport[]>,
+  signal: AbortSignal,
+): Promise<void> {
+  if (ctx.mode !== "tui") {
+    const reports = await lookup();
+    if (signal.aborted) return;
+    const report = formatUsage(reports);
+    if (ctx.mode === "rpc") ctx.ui.notify(report, "info");
+    else console.log(`${title}\n\n${report}`);
+    return;
+  }
+
+  let result: { reports: UsageReport[]; capturedAt: number } | undefined;
+  let redraw: (() => void) | undefined;
+  const document: ViewerDocument = {
+    title,
+    content: loading,
+    format: "text",
+    createBody(tui, theme) {
+      redraw = () => tui.requestRender();
+      return {
+        render(width) {
+          return result
+            ? renderUsage(result.reports, { now: result.capturedAt, theme, width })
+            : [theme.fg("muted", loading)];
+        },
+        invalidate() {},
+      };
+    },
   };
 
-  openPager(ctx, { title: "Account Usage", source, plainText: "Loading account usage…" })
-    .catch(() => controller.abort());
-
-  collectUsage(providers, ctx, deps, controller.signal)
-    .then((reports) => {
-      if (controller.signal.aborted) {
-        view.error ??= "Usage lookup was cancelled.";
-        return;
-      }
-      // Countdowns are fixed at lookup time, not when the viewer is opened or resized.
-      view.reports = reports;
-      view.capturedAt = Date.now();
-    })
-    .catch(() => { view.error = "Usage lookup failed."; })
-    .finally(() => {
-      release();
-      view.redraw?.();
-    });
+  const viewer = showDocument(events, ctx, document, openLocal);
+  const loadingReport = lookup().then((reports) => {
+    if (signal.aborted) return;
+    result = { reports, capturedAt: Date.now() };
+    redraw?.();
+  });
+  let cancellation: ReturnType<typeof addAbortListener> | undefined;
+  const cancelled = new Promise<void>((resolve) => {
+    cancellation = addAbortListener(signal, () => resolve());
+  });
+  try {
+    // Pi disposes open dialogs on reload without resolving their custom UI promises.
+    await Promise.race([viewer, cancelled, loadingReport.then(() => viewer)]);
+  } finally {
+    cancellation?.[Symbol.dispose]();
+    redraw = undefined;
+  }
 }
 
-export default function usageExtension(pi: ExtensionAPI) {
+export default function usageExtension(pi: ExtensionAPI): void {
   let active: AbortController | undefined;
-  const cancel = () => {
+
+  function cancel(): void {
     active?.abort();
     active = undefined;
-  };
+  }
+
   pi.on("session_start", cancel);
   pi.on("session_shutdown", cancel);
-
   pi.registerCommand("usage", {
     description: "Show account usage and quota resets for OpenCode Go and OpenAI",
     getArgumentCompletions: (prefix) => ["all", ...PROVIDERS]
@@ -69,45 +87,23 @@ export default function usageExtension(pi: ExtensionAPI) {
       .map((provider) => ({ value: provider, label: provider })),
     handler: async (args, ctx) => {
       if (active) {
-        ctx.ui.notify("A usage lookup is already running.", "info");
+        ctx.ui.notify("A usage lookup is already running", "info");
         return;
       }
       const controller = new AbortController();
       active = controller;
-      let handedOff = false;
       try {
         const providers = selectProviders(args, ctx);
-        const deps: UsageDependencies = {
-          fetch: globalThis.fetch,
-          readCredential: readStoredCredential,
-        };
-        if (ctx.mode === "tui") {
-          // The lookup owns the busy guard from here until it settles.
-          handedOff = true;
-          showLazyUsage(ctx, providers, deps, controller, () => {
-            if (active === controller) active = undefined;
-          });
-          return;
-        }
-        const reports = await collectUsage(providers, ctx, deps, controller.signal);
-        if (controller.signal.aborted) return;
-        // Countdowns are fixed at lookup time, not when the viewer is opened or resized.
-        const capturedAt = Date.now();
-        if (ctx.mode === "rpc") {
-          ctx.ui.notify(formatUsage(reports, capturedAt), "info");
-        } else {
-          await openPager(ctx, {
-            title: "Account Usage",
-            source: {
-              lines: (width) => renderUsage(reports, { now: capturedAt, theme: plainTheme, width }),
-            },
-            plainText: formatUsage(reports, capturedAt),
-          });
-        }
+        const deps: UsageDependencies = { fetch: globalThis.fetch, readCredential: readStoredCredential };
+        const lookup = () => collectUsage(providers, ctx, deps, controller.signal);
+        await showUsage(pi.events, ctx, lookup, controller.signal);
       } catch (error) {
-        ctx.ui.notify(error instanceof UsageError ? error.message : "Usage lookup failed.", "warning");
+        if (!controller.signal.aborted) {
+          ctx.ui.notify(error instanceof UsageError ? error.message : "Usage lookup failed", "warning");
+        }
       } finally {
-        if (!handedOff && active === controller) active = undefined;
+        controller.abort();
+        if (active === controller) active = undefined;
       }
     },
   });
