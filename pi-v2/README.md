@@ -15,8 +15,10 @@ This uses Pi's native package manifest and TypeScript loader. No build step or
 runtime dependency installation is needed for these extensions. Disable the old
 `alias`, `stash`, `thinking-cycle-backward`, `thinking-style`, `status-line`,
 `readmd`, `system-prompt`, `loaded-skills`, `copy-command`, `openai-accounts`,
-`fast`, `usage`, `prompt-suggestions`, `question`, and `stylish-tools` extensions
-before loading their v2 replacements. `tool-styling` replaces `stylish-tools`.
+`fast`, `usage`, `prompt-suggestions`, `question`, `stylish-tools`, and `tool-set`
+extensions before loading their v2 replacements. `tool-styling` replaces
+`stylish-tools`, and `tool-control` replaces `tool-set`. Sessions using the
+original SSH extension still need the legacy `tool-set` and `stylish-tools`.
 Duplicate commands receive
 invocation suffixes such as
 `/clear:1` and `/clear:2`; duplicate shortcuts conflict.
@@ -265,6 +267,42 @@ No new tool-styling tests are included in this visual pass. The existing package
 loader/reload tests and TypeScript checking validate registration and loading;
 renderer-specific coverage remains follow-up work.
 
+## Tool control
+
+Use `/safe` to enable SAFE execution policy, or `/yolo` (`/auto`) to lift its
+restrictions. Shift+Tab toggles the policy when Pi's `app.thinking.cycle` action
+is bound to another key. New sessions start in YOLO. The last saved mode applies
+to the whole session across `/tree`, `/reload`, and resume, including modes saved
+by the original `tool-set` extension.
+
+SAFE blocks built-in writes, edits, and shells, tools marked with
+`readOnlyHint: false`, and MCP tools lacking `readOnlyHint: true`. The same
+check runs on direct and nested calls, including codemode. The model-only
+`change_mode` tool requests confirmation from the user before enabling YOLO.
+SAFE controls tool calls through Pi. User-initiated shell commands and the
+underlying operating system permissions are outside this policy.
+
+Pi manages the active tool list and restores loaded tools. `ls`, `grep`, and
+`find` are registered as deferred and can be loaded with `tool_search` or called
+from codemode. Startup adds the available discovery and approval entry points
+to the restored list. Pi's explicit tool exclusions still apply.
+
+In the terminal, `/tools` shows exposure and permission together, for example
+`deferred · blocked (SAFE)`. Use the up and down arrows to select a tool and
+the left and right arrows to collapse or expand its details. The footer can
+include `status:mode`, `status:codemode`, `status:tools`, and `status:mcp-tools`.
+The default layout puts the codemode indicator beside SAFE/YOLO. It appears
+orange when Pi has `codemode` active and dim otherwise. The tool list shows a
+blue magnifier when `tool_search` is active. The plug beside the MCP tool counts
+is green when the `/mcp` extension command is available and dim otherwise.
+The MCP counts follow tool registration, including servers that connect after
+the session starts.
+
+Permission changes take effect immediately. Tool control adds a model-visible
+notice only when the effective policy changes in the projected conversation,
+before the next run or at the end of the current turn. Idle toggles that end in
+the previously announced mode add no notice.
+
 ## Modular status footer
 
 `status-line` owns only the footer. It renders the rows selected in
@@ -356,9 +394,9 @@ Create either file yourself; the extension never writes configuration:
 ```
 
 The bundled default composition and `statusline.example.json` additionally
-place optional mode, reasoning, tools, skills, and MCP statuses. These are just
-producer keys: missing producers render nothing. Tool inventory generation and
-live reasoning statistics are not migrated as part of this footer.
+place optional mode, codemode, reasoning, tools, skills, and MCP statuses.
+Missing producers render nothing. Tool inventory generation and live reasoning
+statistics are not migrated as part of this footer.
 
 - Every row is configurable. `{"footer": []}` produces an empty footer.
 - A status-only layout displays only statuses; built-in rows are not prepended.

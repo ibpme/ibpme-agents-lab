@@ -37,6 +37,7 @@
       "./extensions/openai-accounts/index.ts",
       "./extensions/fast/index.ts",
       "./extensions/tool-styling/index.ts",
+      "./extensions/tool-control/index.ts",
       "./extensions/readmd/index.ts",
       "./extensions/system-prompt/index.ts",
       "./extensions/loaded-skills/index.ts",

@@ -116,6 +116,8 @@ async function setup(t, options = {}) {
 
 test("default composition follows the old location, usage, model, and optional status style", async (t) => {
 	const h = await setup(t);
+	h.statuses.set("mode", "● SAFE");
+	h.statuses.set("codemode", "  codemode");
 	h.statuses.set("agent-stats", "ACTIVITY");
 	h.statuses.set("ssh", "remote");
 	h.statuses.set("openai-fast", "fast");
@@ -123,7 +125,7 @@ test("default composition follows the old location, usage, model, and optional s
 	await h.fire("session_start");
 	const lines = h.footer.render(240);
 	assert.equal(lines[0], `${h.ctx.cwd} on ⎇ main remote • session`);
-	assert.match(lines[1], /^↑1\.0k ↓200 R3\.0k · ACTIVITY · \$0\.010 +test\/model • high • fast$/);
+	assert.match(lines[1], /^● SAFE ·  codemode · ↑1\.0k ↓200 R3\.0k · ACTIVITY · \$0\.010 +test\/model • high • fast$/);
 	assert.equal(lines[2], "other");
 	assert.ok(h.colors.includes("accent"));
 	assert.ok(h.colors.includes("success"));

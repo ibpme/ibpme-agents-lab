@@ -28,6 +28,7 @@ Migrate the useful behavior from `../pi/` in small, independently loadable exten
 | Implemented for review | `prompt-suggestions` | Shows an optional follow-up below the editor and inserts it through native Tab completion. Keeps provider configuration and shortcut remapping. Bounds requests to recent conversation text and cancels stale work. |
 | Implemented for review | `question` | Uses numbered radio choices and checkboxes in the terminal, with descriptions below the focused option. Multi-select answers can include multiline text edited inside the checklist. Preserves answers when stepping back and supports review before submission in TUI and RPC. |
 | Implemented for review | `/reanswer` | Shows numbered questionnaires newest first and accepts a number directly. Reuses the review with the latest branch-local answers and branches after the full original tool batch. |
+| Implemented for review | `tool-set` → `tool-control` | Keeps the read-only `/tools` viewer and session-wide SAFE/YOLO policy with one native guard for direct and nested calls. Reads legacy saved modes and owns its permission notices. Uses registered tool annotations for independently loaded mutating tools. |
 
 ### Checkpoints
 
@@ -58,9 +59,9 @@ Suggested order, not a requirement to port every extension unchanged:
    - [x] Migrate `question` using supported dialogs and a cancellable TUI checklist.
    - [x] Migrate `/reanswer` with branch-local revisions, complete tool batches, and native tree navigation.
 4. **Execution and policy.**
-   - [ ] Review `tool-set` and `ssh` together so tool availability and routing ownership are explicit. Keep `tool-styling` independent and avoid restoring the process-global operations override.
+   - [x] Migrate `tool-set` to `tool-control` with its own permission notices. Append turn-end notices to the entries already proposed by earlier handlers.
+   - [ ] Migrate `ssh` with its own connection notices and session-scoped routing. Publish read-only annotations on remote tool definitions and keep `tool-styling` independent.
    - [ ] Address SSH path quoting and local-versus-remote search before porting. Remote tools must not silently run locally; historical output should retain the destination used at execution time.
-   - [ ] Preserve preceding entries when migrating code that adds session notices; the legacy notice helper replaces earlier proposals.
 5. **Telemetry.**
    - [ ] Review `tool-call-stats` and `reasoning-tokens` once producer ownership is clear. Use native tool durations and IDs; distinguish unknown from zero, nested calls from top-level calls, and summed duration from wall-clock time. Keep telemetry out of the shared working message unless ownership is agreed.
 
@@ -73,4 +74,5 @@ Suggested order, not a requirement to port every extension unchanged:
 - Prompt suggestion tests cover draft and branch changes, timeout, output validation, and configuration. A Pi terminal smoke check with a synthetic Ollama response verified Tab insertion, undo, and reload alongside the context border.
 - Question tool tests cover native dialogs, checklist interaction, review, and cancellation. Pi terminal and RPC smoke checks used a synthetic provider to submit a questionnaire.
 - Reanswer tests cover numbered selection, repeated and legacy revisions, unchanged and cancelled edits, and compaction. Pi terminal and RPC smoke checks exercised numbered revisions and written checklist answers alongside sibling tool results.
+- Tool control tests cover restored tool exposure, direct and nested SAFE checks, MCP annotations, approval, `/tools` rendering, reload, and composition with earlier turn-end notices. A terminal smoke check exercised `/tools`, the footer, Shift+Tab, and `/reload`.
 - Run `cd pi-v2 && npm run check` before marking the baseline green. For a visual check, run `pi -e ./pi-v2` with duplicate legacy extensions disabled, then use `/reload` after changes.

@@ -117,9 +117,10 @@ clocks nor reconstruct durations during historical replay. Errors use native
 Expanded output is not capped at the old renderer's forty lines, and edit diffs
 remain fully visible. Native model-facing truncation remains untouched.
 
-SSH should later own its execution, cancellation, policy, and persisted destination
-identity. Reuse presentation only at an explicit seam if needed; do not make SSH
-import this extension's entry point or restore the global operations registry.
+SSH should later own its execution, cancellation, connection notices, and persisted
+destination identity. `tool-control` owns execution permissions and reads tool
+annotations from Pi's registry. Share presentation through the native renderer
+interface and keep routing state scoped to the SSH session.
 Before migrating SSH, fix shell quoting with proper shell escaping and `--` where
 supported, and implement remote grep execution explicitly: native `GrepOperations`
 only overrides metadata checks, not the local ripgrep process.
