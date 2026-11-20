@@ -64,7 +64,7 @@ Suggested order, not a requirement to port every extension unchanged:
    - [x] Implement and verify the SSH migration below.
 5. **Telemetry.**
    - [x] Migrate `reasoning-tokens` into `agent-stats` as a footer producer using Pi's native usage.
-   - [ ] Review `tool-call-stats`. Use native tool durations and IDs and distinguish unknown from zero, nested calls from top-level calls, and summed duration from wall-clock time. Keep telemetry out of the shared working message unless ownership is agreed.
+   - [x] Migrate `tool-call-stats` into `agent-stats` with native usage and durations, per-tool summaries, and live timing held in memory.
 
 ## SSH migration
 

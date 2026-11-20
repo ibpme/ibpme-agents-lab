@@ -1,5 +1,9 @@
-import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext, MessageEndEvent, MessageUpdateEvent } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
+import { showDocument, type OpenDocument } from "../shared/document-view.ts";
+import { documentViewport } from "../shared/document-viewport.ts";
+import { formatReport, outputRate, readStats, reportedReasoning } from "./report.ts";
+import { observeTurns, type TurnTiming } from "./timing.ts";
 
 const STATUS_ID = "reasoning-stats";
 
@@ -10,14 +14,17 @@ function formatTokens(count: number): string {
   return `${(count / 1_000_000).toFixed(1)}M`;
 }
 
-function reportedReasoning(message: AssistantMessage): number | undefined {
-  const tokens = message.usage?.reasoning;
-  return tokens !== undefined && Number.isSafeInteger(tokens) && tokens >= 0 ? tokens : undefined;
-}
+const openLocal: OpenDocument = async (ctx, document) => {
+  await ctx.ui.custom<void>((tui, theme, _keys, done) =>
+    documentViewport(tui, theme, done, new Text(document.content, 0, 0), document.title, () => "↑↓ scroll · Esc/q close"));
+};
 
 export default function agentStats(pi: ExtensionAPI): void {
   let branchTotal: number | undefined;
   let displayedTotal: number | undefined;
+  let displayedSummary: string | undefined;
+  const timings = new Map<string, TurnTiming>();
+  observeTurns(pi, (id, timing) => timings.set(id, timing));
 
   function publish(ctx: ExtensionContext, total: number | undefined): void {
     if (total === displayedTotal) return;
@@ -29,13 +36,17 @@ export default function agentStats(pi: ExtensionAPI): void {
 
   function refreshBranch(_event: unknown, ctx: ExtensionContext): void {
     if (ctx.mode !== "tui") return;
-    branchTotal = undefined;
-    for (const entry of ctx.sessionManager.getBranch()) {
-      if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-      const tokens = reportedReasoning(entry.message);
-      if (tokens !== undefined) branchTotal = (branchTotal ?? 0) + tokens;
-    }
+    const { responses, reasoning } = readStats(ctx.sessionManager.getBranch());
+    branchTotal = reasoning;
     publish(ctx, branchTotal);
+    const latest = responses.at(-1)?.message;
+    const count = responses.reduce((total, response) => total + response.tools.size, 0);
+    const rate = latest && outputRate(latest.usage.output, latest.durationMs);
+    const summary = latest ? [rate, `${count} tool calls`].filter(Boolean).join(" · ") : undefined;
+    if (summary !== displayedSummary) {
+      displayedSummary = summary;
+      ctx.ui.setStatus("agent-stats", summary);
+    }
   }
 
   function preview({ message }: MessageUpdateEvent | MessageEndEvent, ctx: ExtensionContext): void {
@@ -44,7 +55,10 @@ export default function agentStats(pi: ExtensionAPI): void {
     publish(ctx, tokens === undefined ? branchTotal : (branchTotal ?? 0) + tokens);
   }
 
-  pi.on("session_start", refreshBranch);
+  pi.on("session_start", (event, ctx) => {
+    timings.clear();
+    refreshBranch(event, ctx);
+  });
   pi.on("session_tree", refreshBranch);
   pi.on("message_update", preview);
   // Pi saves the final message after message_end, then turn_end can read the saved usage.
@@ -52,8 +66,20 @@ export default function agentStats(pi: ExtensionAPI): void {
   pi.on("turn_end", refreshBranch);
   pi.on("agent_settled", refreshBranch);
   pi.on("session_shutdown", (_event, ctx) => {
+    timings.clear();
     if (ctx.mode !== "tui") return;
     branchTotal = undefined;
     publish(ctx, undefined);
+    displayedSummary = undefined;
+    ctx.ui.setStatus("agent-stats", undefined);
+  });
+
+  pi.registerCommand("agent-stats", {
+    description: "Show model and tool timings for the selected branch",
+    handler: async (_args, ctx) => {
+      if (!ctx.hasUI) return;
+      const content = formatReport(readStats(ctx.sessionManager.getBranch(), timings));
+      await showDocument(pi.events, ctx, { title: "Agent Stats", format: "text", content }, openLocal);
+    },
   });
 }

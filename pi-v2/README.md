@@ -235,6 +235,23 @@ Pi-owned surface; disable one of the conflicting extensions.
 
 ## Agent stats
 
+`/agent-stats` shows usage, response times, turn elapsed times, and tool call
+outcomes for the selected branch. The footer shows the latest response's output
+tokens per second and the branch's top-level call count. The output rate divides
+output tokens, including reasoning tokens, by Pi's whole-response duration.
+The report's aggregate rate uses total output tokens and total time from the
+same timed responses.
+
+The report groups calls by tool name and shows per-response and branch usage,
+including cache reads and writes. It reads saved response duration, top-level
+execution time, and nested-call elapsed time directly from Pi.
+
+Turn elapsed time, time to first streamed output (TTFT), generation-only rate,
+provider request counts, and tool wall time are measured from live events and
+held in memory until reload or session change. Turn elapsed includes tool work
+and waits during the turn. Tool wall time merges overlapping top-level tool
+event intervals. The extension adds no session entries.
+
 `agent-stats` shows the sum of Pi's assistant reasoning-token counts on the
 selected branch. It uses `usage.reasoning`, which is part of the output token
 count. The footer includes stream usage as soon as Pi exposes it. Many providers
