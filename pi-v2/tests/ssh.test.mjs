@@ -71,7 +71,9 @@ test("SSH routes tools through their selected destination and keeps user shell c
   function call(session, name, input) {
     const definition = session.getToolDefinition(name);
     assert.ok(definition, name);
-    return definition.execute("fixture", input, undefined, undefined, { cwd: local, mode: "rpc", ui: {} });
+    return definition.execute("fixture", input, undefined, undefined, {
+      cwd: local, mode: "rpc", ui: {}, sessionManager: session.sessionManager,
+    });
   }
 
   const target = "fixture:" + remote;
@@ -107,11 +109,21 @@ test("SSH routes tools through their selected destination and keeps user shell c
     const cli = await start(order, target);
     try {
       assert.equal(cli.getToolDefinition("grep").exposure, "deferred");
-      assert.match((await call(cli, "grep", { pattern: "remote match" })).content[0].text, /only-remote.txt/);
-      assert.equal((await call(cli, "read", { path: filename })).details.sshDestination, target);
+      assert.match((await call(cli, "grep_remote", { pattern: "remote match" })).content[0].text, /only-remote.txt/);
+      assert.equal((await call(cli, "read_remote", { path: filename })).details.sshDestination, target);
+      assert.equal((await call(cli, "read", { path: filename })).content[0].text, "local contents");
+      assert.equal((await call(cli, "bash", { command: "pwd" })).content[0].text.trim(), local);
+      assert.equal(cli.getAllTools().find(({ name }) => name === "read").sourceInfo.source, "builtin");
+      assert.doesNotMatch((await call(cli, "ls", {})).content[0].text, /only-remote\.txt/);
       for (const excludeFromContext of [true, false]) {
         assert.equal((await cli.executeBash("pwd", undefined, { excludeFromContext })).output.trim(), local);
       }
+      await cli.prompt("/ssh off");
+      await assert.rejects(call(cli, "read_remote", { path: filename }), /disconnected/);
+      await cli.prompt("/ssh " + target);
+      assert.equal((await call(cli, "read_remote", { path: filename })).details.sshDestination, target);
+      await cli.reload();
+      await assert.rejects(call(cli, "read_remote", { path: filename }), /disconnected/);
     } finally {
       await cli.dispose();
     }
@@ -119,7 +131,8 @@ test("SSH routes tools through their selected destination and keeps user shell c
 
   const offline = await start([toolControl, ssh], "unreachable");
   try {
-    await assert.rejects(call(offline, "read", { path: filename }), /SSH connection failed/);
+    await assert.rejects(call(offline, "read_remote", { path: filename }), /disconnected/);
+    assert.equal((await call(offline, "read", { path: filename })).content[0].text, "local contents");
     assert.equal((await offline.executeBash("pwd")).output.trim(), local);
   } finally {
     await offline.dispose();
@@ -128,8 +141,9 @@ test("SSH routes tools through their selected destination and keeps user shell c
   const dropped = await start([ssh], target);
   try {
     await writeFile(join(root, "dropped"), "");
-    assert.equal((await call(dropped, "grep", { pattern: "remote match" })).isError, true);
-    await assert.rejects(call(dropped, "read", { path: filename }), /SSH connection lost/);
+    assert.equal((await call(dropped, "grep_remote", { pattern: "remote match" })).isError, true);
+    await assert.rejects(call(dropped, "read_remote", { path: filename }), /disconnected/);
+    assert.equal((await call(dropped, "read", { path: filename })).content[0].text, "local contents");
   } finally {
     await dropped.dispose();
   }

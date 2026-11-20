@@ -55,6 +55,9 @@ export default function toolControl(pi: ExtensionAPI): void {
 
   const cwd = process.cwd();
   const deferred = { exposure: "deferred", annotations: { readOnlyHint: true } } as const;
+  pi.registerTool({ ...createLsToolDefinition(cwd), ...deferred });
+  pi.registerTool({ ...createGrepToolDefinition(cwd), ...deferred });
+  pi.registerTool({ ...createFindToolDefinition(cwd), ...deferred });
 
   pi.registerTool({
     name: changeMode,
@@ -103,13 +106,6 @@ export default function toolControl(pi: ExtensionAPI): void {
   registerViewer(pi, () => mode);
 
   pi.on("session_start", (_event, ctx) => {
-    const overrides = new Set(pi.getAllTools().filter((tool) => tool.sourceInfo.source !== "builtin").map((tool) => tool.name));
-    const ls = createLsToolDefinition(cwd);
-    const grep = createGrepToolDefinition(cwd);
-    const find = createFindToolDefinition(cwd);
-    if (!overrides.has(ls.name)) pi.registerTool({ ...ls, ...deferred });
-    if (!overrides.has(grep.name)) pi.registerTool({ ...grep, ...deferred });
-    if (!overrides.has(find.name)) pi.registerTool({ ...find, ...deferred });
     clearInterval(footerRefresh);
     toolStatuses.clear();
     mode = restoreMode(ctx.sessionManager.getEntries());

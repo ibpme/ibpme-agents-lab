@@ -304,18 +304,16 @@ the previously announced mode add no notice.
 
 Use `/ssh user@host[:/path]` to connect the seven deferred `_remote` tools and
 `/ssh off` to disconnect. Use `tool_search` or codemode to reach the remote
-tools. Unqualified tools run locally in this mode. Start Pi with
-`--ssh user@host[:/path]` to route the seven unqualified tools
-(`read`, `write`, `edit`, `bash`, `grep`, `ls`, and `find`) through SSH.
-**User-entered `!` and `!!` commands always run locally.**
+tools. Start Pi with `--ssh user@host[:/path]` to connect them automatically,
+as if you ran `/ssh` at startup. Unqualified tools and user-entered `!` and
+`!!` commands run locally.
 
 The extension uses a private OpenSSH connection and checks the destination
 directory before switching. Relative tool paths use that directory. Search
 requires `rg` for grep and `fd` or `fdfind` for find on the remote host.
-When the connection drops, remote calls fail. Reconnect with `/ssh` or
-restart Pi with `--ssh` as appropriate. Interactive connections close on
-reload and session replacement. The startup flag reconnects when Pi binds a
-new session. The footer can show `status:ssh`, while earlier tool results
+When the connection drops, remote calls fail. Use `/ssh` to reconnect, switch
+hosts, or disconnect a startup connection. Connections close on reload and
+session replacement. The footer can show `status:ssh`, while earlier tool results
 retain their original destination. With `tool-control` enabled, SAFE permits
 the read-only remote tools and blocks writes, edits, and model shell calls.
 
