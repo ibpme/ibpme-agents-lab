@@ -1,12 +1,13 @@
 import { join } from "node:path";
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { isKeyRelease, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { readSettings, toggleKeys, writeEnabled } from "./config.ts";
-import { buildTranscript, parseSuggestion, requestSuggestion } from "./generation.ts";
+import { buildTranscript, parseSuggestion, requestSuggestion, SuggestionModelUnavailableError } from "./generation.ts";
 
 const ID = "prompt-suggestions";
 const SUGGESTION_ITEM = Symbol(ID);
 const REQUEST_TIMEOUT_MS = 10_000;
+const LOADING_FRAMES = [".", "..", "..."];
 
 export default function promptSuggestions(pi: ExtensionAPI): void {
   const agentDir = getAgentDir();
@@ -15,33 +16,57 @@ export default function promptSuggestions(pi: ExtensionAPI): void {
   let pending: { controller: AbortController; timer: ReturnType<typeof setTimeout> } | undefined;
   let offer: { leaf: string; item: { value: string; label: string; [SUGGESTION_ITEM]: true } } | undefined;
   let attemptedLeaf: string | undefined;
-  let unavailable = false;
-  let unsubscribe: (() => void) | undefined;
 
   function canSuggest(ctx: ExtensionContext, leaf: string): boolean {
-    return config.enabled && ctx.isIdle() && !ctx.ui.getEditorText() && ctx.sessionManager.getLeafId() === leaf;
+    return config.enabled && ctx.isIdle() && ctx.sessionManager.getLeafId() === leaf;
   }
 
   function currentOffer(ctx: ExtensionContext) {
-    return offer && canSuggest(ctx, offer.leaf) ? offer.item : undefined;
+    return offer && canSuggest(ctx, offer.leaf) && !ctx.ui.getEditorText() ? offer.item : undefined;
   }
 
-  function updateStatus(ctx: ExtensionContext): void {
-    const state = !config.enabled ? "off" : pending ? "thinking…" : unavailable ? "unavailable" : "on";
-    ctx.ui.setStatus(ID, ctx.ui.theme.fg("muted", `suggestions: ${state}`));
+  function showLoading(ctx: ExtensionContext): void {
+    ctx.ui.setWidget(ID, (tui, theme) => {
+      let frame = 0;
+      const animation = setInterval(() => {
+        frame = (frame + 1) % LOADING_FRAMES.length;
+        tui.requestRender();
+      }, 180);
+      return {
+        invalidate() {},
+        render: (width) => width > 0 ? [theme.fg("muted", LOADING_FRAMES[frame].slice(0, width))] : [],
+        dispose: () => clearInterval(animation),
+      };
+    }, { placement: "aboveEditor" });
+  }
+
+  function showPreview(ctx: ExtensionContext): void {
+    ctx.ui.setWidget(ID, (_tui, theme) => ({
+      invalidate() {},
+      render(width) {
+        const item = currentOffer(ctx);
+        if (!item || width <= 0) return [];
+
+        const hint = "Tab to accept";
+        const previewWidth = width - visibleWidth(hint) - 2;
+        const preview = `↱ ${item.label}`;
+        return [previewWidth >= 8
+          ? theme.fg("muted", truncateToWidth(preview, previewWidth)) + "  " + theme.fg("dim", hint)
+          : theme.fg("muted", truncateToWidth(preview, width))];
+      },
+    }), { placement: "aboveEditor" });
   }
 
   function clear(ctx: ExtensionContext): void {
-    if (!pending && !offer && !unavailable) return;
+    if (!pending && !offer) return;
     if (pending) {
-      clearTimeout(pending.timer);
-      pending.controller.abort();
+      const { controller, timer } = pending;
       pending = undefined;
+      clearTimeout(timer);
+      controller.abort();
     }
-    if (offer) ctx.ui.setWidget(ID, undefined);
     offer = undefined;
-    unavailable = false;
-    updateStatus(ctx);
+    ctx.ui.setWidget(ID, undefined);
   }
 
   async function generate(ctx: ExtensionContext): Promise<void> {
@@ -55,36 +80,33 @@ export default function promptSuggestions(pi: ExtensionAPI): void {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       if (pending?.controller !== controller) return;
-      pending = undefined;
-      controller.abort();
-      unavailable = canSuggest(ctx, leaf);
-      updateStatus(ctx);
+      clear(ctx);
+      if (canSuggest(ctx, leaf)) ctx.ui.notify("Follow-up suggestion timed out", "warning");
     }, REQUEST_TIMEOUT_MS);
     pending = { controller, timer };
-    updateStatus(ctx);
+    showLoading(ctx);
 
     try {
       const text = parseSuggestion(await requestSuggestion(config, transcript, controller.signal, ctx));
-      if (pending?.controller !== controller || !canSuggest(ctx, leaf) || !text) return;
+      if (pending?.controller !== controller || !canSuggest(ctx, leaf)) return;
+      if (!text) {
+        ctx.ui.notify("No follow-up suggestion available", "info");
+        return;
+      }
       offer = { leaf, item: { value: text, label: text, [SUGGESTION_ITEM]: true } };
-      ctx.ui.setWidget(ID, (_tui, theme) => ({
-        invalidate() {},
-        render(width) {
-          const item = currentOffer(ctx);
-          if (!item || width < 8) return [];
-          const hint = "Tab to accept";
-          if (width < 24) return [theme.fg("muted", truncateToWidth(`↳ ${item.label}`, width))];
-          const preview = truncateToWidth(`↳ ${item.label}`, width - visibleWidth(hint) - 2);
-          return [theme.fg("dim", preview) + "  " + theme.fg("muted", hint)];
-        },
-      }), { placement: "belowEditor" });
-    } catch {
-      if (pending?.controller === controller) unavailable = canSuggest(ctx, leaf);
+      showPreview(ctx);
+    } catch (error) {
+      if (pending?.controller !== controller || !canSuggest(ctx, leaf)) return;
+      if (error instanceof SuggestionModelUnavailableError) {
+        ctx.ui.notify("Follow-up suggestion model unavailable", "warning");
+      } else {
+        ctx.ui.notify("Could not load a follow-up suggestion", "error");
+      }
     } finally {
-      clearTimeout(timer);
       if (pending?.controller === controller) {
+        clearTimeout(timer);
         pending = undefined;
-        updateStatus(ctx);
+        if (!offer) ctx.ui.setWidget(ID, undefined);
       }
     }
   }
@@ -101,7 +123,6 @@ export default function promptSuggestions(pi: ExtensionAPI): void {
     } catch {
       ctx.ui.notify("Could not save the prompt suggestions preference", "error");
     }
-    updateStatus(ctx);
     ctx.ui.notify(`Prompt suggestions ${enabled ? "on" : "off"}`, "info");
     if (changed && enabled) void generate(ctx);
   }
@@ -134,12 +155,6 @@ export default function promptSuggestions(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
     config = readSettings(configPath);
-    updateStatus(ctx);
-    unsubscribe = ctx.ui.onTerminalInput((data) => {
-      if (!data || isKeyRelease(data) || (matchesKey(data, "tab") && currentOffer(ctx))) return;
-      clear(ctx);
-      return undefined;
-    });
     ctx.ui.addAutocompleteProvider((base) => ({
       triggerCharacters: base.triggerCharacters,
       async getSuggestions(lines, row, col, options) {
@@ -154,7 +169,6 @@ export default function promptSuggestions(pi: ExtensionAPI): void {
         if (!(SUGGESTION_ITEM in item)) return base.applyCompletion(lines, row, col, item, prefix);
         // Pi resolves autocomplete asynchronously even when the suggestion is already available.
         if (item !== currentOffer(ctx)) return { lines, cursorLine: row, cursorCol: col };
-        clear(ctx);
         return { lines: [item.value], cursorLine: 0, cursorCol: item.value.length };
       },
     }));
@@ -168,8 +182,6 @@ export default function promptSuggestions(pi: ExtensionAPI): void {
   pi.on("session_tree", (_event, ctx) => clear(ctx));
   pi.on("session_before_compact", (_event, ctx) => { clear(ctx); });
   pi.on("session_shutdown", (_event, ctx) => {
-    unsubscribe?.();
-    unsubscribe = undefined;
     clear(ctx);
     attemptedLeaf = undefined;
   });

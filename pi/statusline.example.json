@@ -1,8 +1,7 @@
 {
   "footer": [
     {
-      "left": ["cwd", "git", "status:ssh", "session"],
-      "right": ["status:prompt-suggestions"]
+      "left": ["cwd", "git", "status:ssh", "session"]
     },
     {
       "left": [

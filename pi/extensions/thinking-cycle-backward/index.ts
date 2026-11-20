@@ -2,7 +2,7 @@ import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function thinkingCycleBackward(pi: ExtensionAPI): void {
-  pi.registerShortcut("shift+left", {
+  pi.registerShortcut("shift+down", {
     description: "Cycle thinking level backward",
     handler: (ctx) => {
       if (!ctx.model?.reasoning) {

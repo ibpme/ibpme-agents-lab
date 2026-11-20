@@ -82,6 +82,8 @@ export function parseSuggestion(raw: string | null): string | undefined {
   return text.replace(/\t/g, " ");
 }
 
+export class SuggestionModelUnavailableError extends Error {}
+
 export async function requestSuggestion(
   config: ReturnType<typeof readSettings>,
   transcript: string,
@@ -108,7 +110,7 @@ export async function requestSuggestion(
   }
 
   const model = ctx.modelRegistry.find(config.provider, config.model);
-  if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) throw new Error("Suggestion model unavailable");
+  if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) throw new SuggestionModelUnavailableError("Suggestion model unavailable");
 
   const sessionId = ctx.sessionManager.getSessionId();
   const response = await ctx.modelRegistry.complete(

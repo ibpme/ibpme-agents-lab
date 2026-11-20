@@ -77,7 +77,7 @@ test("Pi discovers exactly the manifest entry points on load and reload", async 
 		assert.ok(contextUsage.handlers.has("session_shutdown"));
 		const alias = result.extensions.find((entry) => entry.resolvedPath.endsWith("/alias/index.ts"));
 		assert.deepEqual([...alias.commands.keys()].sort(), ["clear", "exit"]);
-		for (const [name, key] of [["stash", "ctrl+s"], ["thinking-cycle-backward", "shift+left"]]) {
+		for (const [name, key] of [["stash", "ctrl+s"], ["thinking-cycle-backward", "shift+down"]]) {
 			const extension = result.extensions.find((entry) => entry.resolvedPath.endsWith(`/${name}/index.ts`));
 			assert.ok(extension, `${name} loaded`);
 			assert.deepEqual([...extension.shortcuts.keys()], [key]);
@@ -128,11 +128,11 @@ test("legacy shortcut settings cannot remap or disable directly registered short
 			[{
 				"extensions.stash.toggle": "ctrl+shift+s",
 				"extensions.thinking.cycleBackward": ["ctrl+shift+left", "ctrl+shift+left"],
-			}, { stash: ["ctrl+s"], "thinking-cycle-backward": ["shift+left"] }],
+			}, { stash: ["ctrl+s"], "thinking-cycle-backward": ["shift+down"] }],
 			[{
 				"extensions.stash.toggle": [],
 				"extensions.thinking.cycleBackward": [],
-			}, { stash: ["ctrl+s"], "thinking-cycle-backward": ["shift+left"] }],
+			}, { stash: ["ctrl+s"], "thinking-cycle-backward": ["shift+down"] }],
 		]) {
 			await writeFile(configPath, JSON.stringify(config));
 			await loader.reload();

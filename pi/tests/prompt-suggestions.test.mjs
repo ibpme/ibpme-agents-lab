@@ -30,7 +30,8 @@ function setup(t, mode = "tui") {
   const path = join(agentDir, "prompt-suggestions.json");
   const commands = new Map();
   const host = registerExtension(promptSuggestions, { registerCommand: (name, command) => commands.set(name, command) });
-  const h = { leaf: "a", draft: "", requests: [], path, mode };
+  const h = { leaf: "a", draft: "", requests: [], notices: [], renders: 0, modelAvailable: true, path, mode };
+  const tui = { requestRender: () => h.renders++ };
   const base = {
     getSuggestions: async () => ({ prefix: "", items: [{ value: "file.txt", label: "file.txt" }] }),
     applyCompletion: () => ({ lines: ["file.txt"], cursorLine: 0, cursorCol: 8 }),
@@ -46,18 +47,18 @@ function setup(t, mode = "tui") {
       buildContextEntries: () => [user("Fix the build."), assistant("The build completed. The integration suite is pending.")],
     },
     modelRegistry: {
-      find: () => ({ provider: "opencode-go" }),
+      find: () => h.modelAvailable ? { provider: "opencode-go" } : undefined,
       hasConfiguredAuth: () => true,
       complete: async (_model, input, options) => new Promise((resolve) => h.requests.push({ input, options, resolve })),
     },
     ui: {
       theme: { fg: (_color, text) => text },
-      notify() {},
+      notify: (message, level) => h.notices.push({ message, level }),
       getEditorText: () => h.draft,
-      setStatus: (_id, status) => { h.status = status; },
       setWidget: (_id, factory, options) => {
-        if (factory) assert.equal(options.placement, "belowEditor");
-        h.widget = factory?.(undefined, ctx.ui.theme);
+        h.widget?.dispose?.();
+        if (factory) assert.equal(options.placement, "aboveEditor");
+        h.widget = factory?.(tui, ctx.ui.theme);
       },
       onTerminalInput: (listener) => { h.input = listener; return () => { h.input = undefined; }; },
       addAutocompleteProvider: (wrap) => { h.provider = wrap(base); },
@@ -65,15 +66,21 @@ function setup(t, mode = "tui") {
   };
   h.fire = (event, payload = {}) => host.fire(event, payload, ctx);
   h.command = (args) => commands.get("suggestions").handler(args, ctx);
-  h.resolve = async (index, text = "Run the integration suite.") => {
-    h.requests[index].resolve({ stopReason: "stop", content: [{ type: "text", text }] });
+  h.toggle = () => host.shortcuts.get("shift+right").handler(ctx);
+  h.type = (text) => {
+    h.input?.(text);
+    h.draft += text;
+  };
+  h.resolve = async (index, text = "Run the integration suite.", stopReason = "stop") => {
+    h.requests[index].resolve({ stopReason, content: [{ type: "text", text }] });
     await new Promise(setImmediate);
   };
   t.after(() => h.fire("session_shutdown"));
   return h;
 }
 
-test("suggestions opt in, fit the terminal, and accept once through native autocomplete", async (t) => {
+test("suggestions animate until ready and can be accepted again after clearing the draft", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
   const h = setup(t);
   await h.fire("session_start");
   await h.fire("agent_settled");
@@ -81,16 +88,29 @@ test("suggestions opt in, fit the terminal, and accept once through native autoc
   await h.command("on");
   assert.equal(JSON.parse(readFileSync(h.path, "utf8")).enabled, true);
   assert.equal(h.requests.length, 1);
+  for (const frame of [".", "..", "...", "."]) {
+    assert.deepEqual(h.widget.render(80), [frame]);
+    assert.deepEqual(h.widget.render(1), ["."]);
+    t.mock.timers.tick(180);
+  }
+  assert.equal(h.renders, 4);
   await h.resolve(0);
-  assert.match(h.widget.render(80)[0], /Run the integration suite\.  Tab to accept/);
+  t.mock.timers.tick(180);
+  assert.equal(h.renders, 4, "the loading animation stops when the preview replaces it");
+  assert.match(h.widget.render(80)[0], /^↱ Run the integration suite\.  Tab to accept$/);
   assert.ok(visibleWidth(h.widget.render(12)[0]) <= 12);
   assert.deepEqual(h.provider.triggerCharacters, ["@"]);
   assert.equal(h.provider.shouldTriggerFileCompletion([""], 0, 0), true);
-  h.input("\t");
   const { items: [suggestion] } = await h.provider.getSuggestions([""], 0, 0, { force: true });
-  assert.deepEqual(h.provider.applyCompletion([""], 0, 0, suggestion, ""), {
-    lines: ["Run the integration suite."], cursorLine: 0, cursorCol: 26,
-  });
+  const accepted = h.provider.applyCompletion([""], 0, 0, suggestion, "");
+  assert.deepEqual(accepted, { lines: ["Run the integration suite."], cursorLine: 0, cursorCol: 26 });
+  h.draft = accepted.lines[0];
+  assert.deepEqual(h.widget.render(80), []);
+  h.draft = "";
+  assert.match(h.widget.render(80)[0], /^↱ Run the integration suite\./);
+  const { items: [restored] } = await h.provider.getSuggestions([""], 0, 0, { force: true });
+  assert.deepEqual(h.provider.applyCompletion([""], 0, 0, restored, ""), accepted);
+  await h.fire("input");
   assert.equal(h.widget, undefined);
   const { items: [file] } = await h.provider.getSuggestions(["@"], 0, 1, { force: true });
   assert.equal(file.value, "file.txt");
@@ -99,22 +119,52 @@ test("suggestions opt in, fit the terminal, and accept once through native autoc
   assert.equal(h.requests.length, 1);
 });
 
-test("typing cancels a pending request and a draft or branch change blocks stale completion", async (t) => {
+test("Shift+Right toggles and persists the suggestions preference", async (t) => {
+  const h = setup(t);
+  await h.fire("session_start");
+  assert.equal(h.widget, undefined);
+  h.toggle();
+  assert.equal(readSettings(h.path).enabled, true);
+  assert.deepEqual(h.widget.render(80), ["."]);
+  h.toggle();
+  assert.equal(readSettings(h.path).enabled, false);
+  assert.equal(h.widget, undefined);
+  assert.equal(h.requests[0].options.signal.aborted, true);
+  await h.resolve(0, "", "error");
+  assert.deepEqual(h.notices.map(({ message }) => message), ["Prompt suggestions on", "Prompt suggestions off"]);
+});
+
+test("a suggestion survives drafting and reappears when the editor is emptied", async (t) => {
   const h = setup(t);
   await h.fire("session_start");
   await h.command("on");
-  h.input("H");
-  assert.equal(h.requests[0].options.signal.aborted, true);
+  h.type("My draft");
+  assert.equal(h.requests[0].options.signal.aborted, false);
   await h.resolve(0);
-  assert.equal(h.widget, undefined);
-
-  h.leaf = "b";
-  h.draft = "My draft";
-  await h.fire("agent_settled");
-  assert.equal(h.requests.length, 1);
+  assert.deepEqual(h.widget.render(80), []);
   h.draft = "";
-  await h.fire("agent_settled");
-  await h.resolve(1);
+  const preview = h.widget.render(80);
+  assert.match(preview[0], /Run the integration suite/);
+  const { items: [suggestion] } = await h.provider.getSuggestions([""], 0, 0, { force: true });
+
+  h.type("@");
+  assert.deepEqual(h.widget.render(80), []);
+  const { items: [file] } = await h.provider.getSuggestions(["@"], 0, 1, { force: true });
+  assert.equal(file.value, "file.txt");
+  assert.deepEqual(h.provider.applyCompletion(["@"], 0, 1, suggestion, "").lines, ["@"]);
+  h.draft = "";
+  assert.deepEqual(h.widget.render(80), preview);
+  assert.equal(h.requests.length, 1);
+});
+
+test("an offer generated while drafting is invalidated by a branch change", async (t) => {
+  const h = setup(t);
+  await h.fire("session_start");
+  h.draft = "My draft";
+  await h.command("on");
+  assert.equal(h.requests.length, 1);
+  await h.resolve(0);
+  h.draft = "";
   const { items: [suggestion] } = await h.provider.getSuggestions([""], 0, 0, { force: true });
   h.leaf = "c";
   assert.deepEqual(h.provider.applyCompletion([""], 0, 0, suggestion, "").lines, [""]);
@@ -133,22 +183,46 @@ test("RPC never starts a background request or changes the preference", async (t
   assert.equal(readSettings(h.path).enabled, false);
 });
 
-test("a timeout releases the UI and shutdown cancels the new request", async (t) => {
+test("a timeout removes the loading dots, notifies once, and shutdown cancels the new request", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const h = setup(t);
   await h.fire("session_start");
   await h.command("on");
-  assert.match(h.status, /thinking/);
+  assert.deepEqual(h.widget.render(80), ["."]);
   t.mock.timers.tick(10_000);
   assert.equal(h.requests[0].options.signal.aborted, true);
-  assert.match(h.status, /unavailable/);
-  await h.resolve(0);
   assert.equal(h.widget, undefined);
+  assert.deepEqual(h.notices.at(-1), { message: "Follow-up suggestion timed out", level: "warning" });
+  await h.resolve(0, "", "error");
+  assert.equal(h.widget, undefined);
+  assert.equal(h.notices.length, 2);
   h.leaf = "b";
   await h.fire("agent_settled");
   await h.fire("session_shutdown");
   assert.equal(h.requests[1].options.signal.aborted, true);
-  assert.equal(h.input, undefined);
+  assert.equal(h.widget, undefined);
+});
+
+test("no suggestion, an unavailable model, and provider errors leave notifications instead of a widget", async (t) => {
+  const h = setup(t);
+  await h.fire("session_start");
+  await h.command("on");
+  await h.resolve(0, "NO_SUGGESTION");
+  assert.deepEqual(h.notices.at(-1), { message: "No follow-up suggestion available", level: "info" });
+  assert.equal(h.widget, undefined);
+
+  h.leaf = "b";
+  h.modelAvailable = false;
+  await h.fire("agent_settled");
+  assert.deepEqual(h.notices.at(-1), { message: "Follow-up suggestion model unavailable", level: "warning" });
+  assert.equal(h.widget, undefined);
+
+  h.leaf = "c";
+  h.modelAvailable = true;
+  await h.fire("agent_settled");
+  await h.resolve(1, "", "error");
+  assert.deepEqual(h.notices.at(-1), { message: "Could not load a follow-up suggestion", level: "error" });
+  assert.equal(h.widget, undefined);
 });
 
 test("configuration preserves legacy Ollama files and never saves environment overrides", (t) => {

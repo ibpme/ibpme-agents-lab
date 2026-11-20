@@ -71,5 +71,5 @@ export function toggleKeys(agentDir: string): KeyId[] {
   } catch {
     // Invalid keybindings leave the default shortcut available.
   }
-  return ["ctrl+shift+s"];
+  return ["shift+right"];
 }

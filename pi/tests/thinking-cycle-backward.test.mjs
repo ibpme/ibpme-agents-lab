@@ -12,7 +12,7 @@ function setup() {
 		getThinkingLevel: () => level,
 		setThinkingLevel: (next) => { level = next; changes.push(next); },
 	});
-	assert.deepEqual([...host.shortcuts.keys()], ["shift+left"]);
+	assert.deepEqual([...host.shortcuts.keys()], ["shift+down"]);
 	const ctx = {
 		model: { reasoning: true, thinkingLevelMap: { minimal: null, xhigh: "xhigh" } },
 		hasUI: true,
@@ -20,7 +20,7 @@ function setup() {
 	};
 	return {
 		ctx, changes, notices,
-		cycle: () => host.shortcuts.get("shift+left").handler(ctx),
+		cycle: () => host.shortcuts.get("shift+down").handler(ctx),
 		get level() { return level; },
 		set level(next) { level = next; },
 	};
@@ -71,7 +71,7 @@ test("reports Pi's effective level after the host clamps a requested level", asy
 		setThinkingLevel: (next) => requests.push(next),
 	});
 	const model = { reasoning: true };
-	await host.shortcuts.get("shift+left").handler({
+	await host.shortcuts.get("shift+down").handler({
 		model, hasUI: true, ui: { notify: (text) => notices.push(text) },
 	});
 	const levels = getSupportedThinkingLevels(model);

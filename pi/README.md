@@ -11,8 +11,9 @@ pi/install.sh --remove   # remove the link
 pi -e ./pi               # try without installing
 ```
 
-Run `/reload` in Pi after source changes. `install.sh` binds `app.thinking.cycle` to `shift+right` (only if unset)
-so `tool-control` can use `shift+tab`.
+Run `/reload` in Pi after source changes. `install.sh` adds `shift+up` to cycle thinking forward
+without overriding existing choices in `keybindings.json`. Moving the forward thinking shortcut off
+`shift+tab` lets `tool-control` use it.
 
 ## Extensions
 
@@ -20,7 +21,7 @@ so `tool-control` can use `shift+tab`.
 | --- | --- |
 | `alias` | `/exit`, `/clear` (new session) |
 | `stash` | `ctrl+s` stash/swap the editor draft |
-| `thinking-cycle-backward` | `shift+left` cycles thinking level backward |
+| `thinking-cycle-backward` | `shift+down` cycles thinking level backward |
 | `thinking-style` | Colored thinking indicator, `Thought` label |
 | `agent-stats` | `/agent-stats` turn/tool timing report; reasoning-token footer status |
 | `status-line` | Configurable footer (`statusline.json`); `/statusline [reload]` |
@@ -33,7 +34,7 @@ so `tool-control` can use `shift+tab`.
 | `tool-control` | `/safe`, `/yolo`, `shift+tab`; `/tools` viewer |
 | `readmd`, `system-prompt`, `loaded-skills` | Inspection viewers |
 | `pager` | Optional full-screen pager for the viewers |
-| `prompt-suggestions` | `/suggestions [on\|off]`, Tab inserts the suggested follow-up |
+| `prompt-suggestions` | `shift+right` or `/suggestions [on\|off]` toggles suggestions; animated dots show loading above the editor; the preview returns when the draft is cleared, and Tab accepts |
 | `question` | `question` tool for choices or written answers; `/reanswer` |
 | `ssh` | `/ssh user@host[:/path]`, `/ssh off`, `--ssh`; seven deferred `*_remote` tools |
 
