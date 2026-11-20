@@ -45,14 +45,15 @@ export function documentViewport(
       const goToStart = vimKeys && data === "g" && pendingG;
       pendingG = vimKeys && data === "g" && !pendingG;
 
-      if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c") || data === "q") {
+      if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c") || data === "q" || data === "Q") {
         done();
         return;
       }
-      if (matchesKey(data, "up") || (vimKeys && data === "k")) offset--;
-      else if (matchesKey(data, "down") || (vimKeys && data === "j")) offset++;
-      else if (matchesKey(data, "pageUp")) offset -= pageSize;
-      else if (matchesKey(data, "pageDown")) offset += pageSize;
+      const halfPage = Math.max(1, Math.floor(pageSize / 2));
+      if (matchesKey(data, "up") || data === "h" || (vimKeys && data === "k")) offset--;
+      else if (matchesKey(data, "down") || data === "l" || (vimKeys && data === "j")) offset++;
+      else if (matchesKey(data, "pageUp") || matchesKey(data, "ctrl+u")) offset -= halfPage;
+      else if (matchesKey(data, "pageDown") || matchesKey(data, "ctrl+d")) offset += halfPage;
       else if (matchesKey(data, "home") || goToStart) offset = 0;
       else if (matchesKey(data, "end") || (vimKeys && data === "G")) offset = maxOffset;
       else return;

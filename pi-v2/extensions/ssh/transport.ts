@@ -49,8 +49,8 @@ export interface RunOptions {
   maxBufferBytes?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
-  /** When set, stdout and stderr are streamed here and not buffered. */
-  onData?: (chunk: Buffer) => void;
+  /** Streams stdout and stderr. Return false to finish the command early. */
+  onData?: (chunk: Buffer, source: "stdout" | "stderr") => void | boolean;
 }
 
 export interface RunResult {
@@ -129,6 +129,8 @@ export function spawnRemote(
     let bytes = 0;
     let overflow = false;
     let aborted = false;
+    let stopped = false;
+    let streamError: { error: unknown } | undefined;
     let timer: NodeJS.Timeout | undefined;
     let killTimer: NodeJS.Timeout | undefined;
 
@@ -160,13 +162,27 @@ export function spawnRemote(
         destination.push(data);
       }
     };
+    const stream = (data: Buffer, source: "stdout" | "stderr") => {
+      if (stopped || streamError || aborted || timedOut) return;
+      try {
+        if (opts.onData?.(data, source) === false) {
+          stopped = true;
+          if (timer) clearTimeout(timer);
+          kill();
+        }
+      } catch (error) {
+        streamError = { error };
+        kill();
+      }
+    };
     child.stdout?.on("data", (data: Buffer) => {
-      if (opts.onData) opts.onData(data);
+      if (opts.onData) stream(data, "stdout");
       else collect(stdout, data);
     });
     child.stderr?.on("data", (data: Buffer) => {
+      if (stopped) return;
       collect(stderr, data);
-      opts.onData?.(data);
+      stream(data, "stderr");
     });
 
     if (opts.stdin !== undefined) {
@@ -189,12 +205,16 @@ export function spawnRemote(
     });
     child.on("close", (code) => {
       cleanup();
+      if (streamError) {
+        reject(streamError.error);
+        return;
+      }
       if (overflow) {
         reject(new TransportError("SSH output exceeded the buffer limit."));
         return;
       }
       resolve({
-        code,
+        code: stopped ? 0 : code,
         stdout: Buffer.concat(stdout),
         stderr: Buffer.concat(stderr),
         timedOut,
@@ -204,17 +224,17 @@ export function spawnRemote(
   });
 }
 
-function controlCommand(remote: string, controlPath: string, command: "check" | "exit"): Promise<boolean> {
+function controlCommand(remote: string, controlPath: string, command: "check" | "exit"): Promise<boolean | undefined> {
   return new Promise((resolve) => {
     const child = spawn("ssh", ["-O", command, ...sshBaseArgs(controlPath), "--", remote], { stdio: "ignore" });
     const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
     child.on("error", () => {
       clearTimeout(timer);
-      resolve(false);
+      resolve(undefined);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve(code === 0);
+      resolve(code === null ? undefined : code === 0);
     });
   });
 }
@@ -298,14 +318,19 @@ export class SshConnection {
   /** Kills in-flight children and drops the ControlMaster socket. Idempotent. */
   close(): Promise<void> {
     this.closed = true;
-    return this.closing ??= this.closeResources();
+    return this.closing ??= this.closeResources().finally(() => { this.closing = undefined; });
   }
 
   private async closeResources(): Promise<void> {
     for (const child of this.children) child.kill("SIGTERM");
-    if (this.controlPath) await controlCommand(this.remote, this.controlPath, "exit");
+    const exited = this.controlPath && await controlCommand(this.remote, this.controlPath, "exit");
     for (const child of this.children) child.kill("SIGKILL");
+    if (this.controlPath && !exited && await controlCommand(this.remote, this.controlPath, "check") !== false) {
+      throw new TransportError("Could not stop SSH master for " + this.remote + " (control socket: " + this.controlPath + ").");
+    }
     if (this.controlDirectory) rmSync(this.controlDirectory, { recursive: true, force: true });
+    this.controlPath = undefined;
+    this.controlDirectory = undefined;
   }
 }
 

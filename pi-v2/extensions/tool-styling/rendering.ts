@@ -1,5 +1,6 @@
 import type { Theme, ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { type Component, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { sanitizeTerminalText } from "../shared/terminal-text.ts";
 
 type RenderContext = Parameters<NonNullable<ToolRenderers["renderResult"]>>[3];
 
@@ -35,7 +36,7 @@ export function pathArg(args: unknown): string {
 
 export function stringArg(args: unknown, key: string): string {
   const value = record(args)[key];
-  return typeof value === "string" ? value : "";
+  return typeof value === "string" ? sanitizeTerminalText(value) : "";
 }
 
 export function skillName(path: string): string | undefined {
@@ -88,7 +89,7 @@ export function resultComponent({
     + (parts.length ? theme.fg("muted", ` · ${parts.filter(Boolean).join(" · ")}`) : "");
   const body = shown.map((line) => failed ? theme.fg("error", line)
     : isDiff ? diffColor(theme, line) : theme.fg(expanded ? "toolOutput" : "dim", line));
-  const notices = warnings.map((warning) => theme.fg("warning", warning));
+  const notices = warnings.map((warning) => theme.fg("warning", sanitizeTerminalText(warning)));
   if (!expanded && !isDiff) return linesComponent([statusLine, ...body, ...notices], context.outputPad);
 
   const guide = theme.fg(color, "│");

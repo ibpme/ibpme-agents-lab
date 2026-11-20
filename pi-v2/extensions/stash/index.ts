@@ -32,11 +32,11 @@ export default function stashExtension(pi: ExtensionAPI): void {
   });
   pi.on("agent_settled", (_event, ctx) => {
     if (ctx.mode !== "tui" || !submitted || stash === undefined) return;
+    submitted = false;
     // Never overwrite a draft the user started while the intervening prompt ran.
     if (ctx.ui.getEditorText().length) return;
     ctx.ui.setEditorText(stash);
     stash = undefined;
-    submitted = false;
   });
   function reset(): void {
     stash = undefined;

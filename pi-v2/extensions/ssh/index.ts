@@ -11,12 +11,19 @@ export default function ssh(pi: ExtensionAPI): void {
   let connection: SshConnection | undefined;
   let attempt: AbortController | undefined;
   const pending = new Set<Promise<void>>();
+  const retiring = new Set<SshConnection>();
+
+  async function close(old: SshConnection) {
+    retiring.add(old);
+    await old.close();
+    retiring.delete(old);
+  }
 
   registerSshTools(pi, () => connection, async (lost, ctx) => {
     if (connection !== lost) return;
     connection = undefined;
     updateStatus(ctx);
-    await lost.close();
+    await close(lost);
   });
 
   function updateStatus(ctx: ExtensionContext) {
@@ -34,19 +41,19 @@ export default function ssh(pi: ExtensionAPI): void {
     attempt = current;
     const work = (async () => {
       try {
-        const next = await connectSsh(target, terminalAuthentication(ctx, current.signal), current.signal);
+        const next = await connectSsh(target, close, terminalAuthentication(ctx, current.signal), current.signal);
         if (current.signal.aborted) {
-          await next.close();
+          await close(next);
           return;
         }
         const previous = connection;
         connection = next;
         updateStatus(ctx);
         ctx.ui.notify("SSH connected: " + destination(next), "info");
-        await previous?.close();
+        if (previous) await close(previous);
       } catch (error) {
-        if (current.signal.aborted || error instanceof RemoteAbortError) return;
-        const message = "SSH connection failed: " + (error instanceof Error ? error.message : String(error));
+        if (error instanceof RemoteAbortError) return;
+        const message = "SSH: " + (error instanceof Error ? error.message : String(error));
         ctx.ui.notify(message, "error");
       } finally {
         if (attempt === current) attempt = undefined;
@@ -61,7 +68,7 @@ export default function ssh(pi: ExtensionAPI): void {
     description: "Connect the deferred _remote tools to user@host[:/path], or use off to disconnect",
     getArgumentCompletions(prefix) {
       const hosts = listSshConfigHosts().map((host) => ({ value: host, label: host, description: "from ~/.ssh/config" }));
-      if (connection) hosts.unshift({ value: "off", label: "off", description: "disconnect" });
+      if (connection || retiring.size) hosts.unshift({ value: "off", label: "off", description: "disconnect" });
       return hosts.filter(({ value }) => value.startsWith(prefix));
     },
     async handler(args, ctx) {
@@ -71,8 +78,10 @@ export default function ssh(pi: ExtensionAPI): void {
       const previous = connection;
       connection = undefined;
       updateStatus(ctx);
-      await previous?.close();
-      ctx.ui.notify(previous ? "SSH disconnected." : "SSH is disconnected.", "info");
+      if (previous) retiring.add(previous);
+      const disconnected = retiring.size > 0;
+      await Promise.all([...retiring].map(close));
+      ctx.ui.notify(disconnected ? "SSH disconnected." : "SSH is disconnected.", "info");
     },
   });
 
@@ -106,6 +115,11 @@ export default function ssh(pi: ExtensionAPI): void {
     const previous = connection;
     connection = undefined;
     if (ctx.mode === "tui") ctx.ui.setStatus("ssh", undefined);
-    await Promise.allSettled([previous?.close(), ...pending]);
+    if (previous) retiring.add(previous);
+    await Promise.allSettled(pending);
+    const results = await Promise.allSettled([...retiring].map(close));
+    for (const result of results) {
+      if (result.status === "rejected") ctx.ui.notify(String(result.reason), "error");
+    }
   });
 }

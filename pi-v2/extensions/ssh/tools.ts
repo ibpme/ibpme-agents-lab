@@ -59,14 +59,9 @@ export function registerSshTools(pi: ExtensionAPI, getConnection: () => SshConne
 
   register(createReadToolDefinition(cwd), true, async (ops, id, input, signal, update, ctx) =>
     ops.read(await ops.pathFor(input.path)).execute(id, input, signal, update, ctx));
-  register(createWriteToolDefinition(cwd), false, async (ops, id, input, signal, update, ctx) => {
-    const path = await ops.pathFor(input.path);
-    return ops.write(path).execute(id, { ...input, path }, signal, update, ctx);
-  });
-  register(createEditToolDefinition(cwd), false, async (ops, id, input, signal, update, ctx) => {
-    const path = await ops.pathFor(input.path);
-    return ops.edit(path).execute(id, { ...input, path }, signal, update, ctx);
-  });
+  register(createWriteToolDefinition(cwd), false, (ops, _id, input) => ops.write(input.path, input.content));
+  register({ ...createEditToolDefinition(cwd), renderCall: undefined, renderShell: undefined }, false,
+    (ops, _id, input) => ops.edit(input));
   register(createBashToolDefinition(cwd), false, (ops, ...args) => ops.bash.execute(...args));
   register(createLsToolDefinition(cwd), true, async (ops, id, input, signal, update, ctx) =>
     ops.ls(await ops.pathFor(input.path || ".")).execute(id, input, signal, update, ctx));

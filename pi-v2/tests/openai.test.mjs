@@ -167,6 +167,17 @@ test("fast persists the requested tier and hides the badge on other providers", 
   assert.equal(request(), undefined);
 });
 
+test("fast publishes plain RPC status and clears it on shutdown", async () => {
+  const h = setupFast();
+  h.ctx.mode = "rpc";
+  delete h.ctx.ui.theme;
+  h.fire("session_start");
+  await h.run("on");
+  assert.equal(h.statuses.get("openai-fast"), "fast");
+  h.fire("session_shutdown");
+  assert.equal(h.statuses.get("openai-fast"), undefined);
+});
+
 test("the native Responses stream sends priority for an alias and records the alias identity", async () => {
   const alias = accountProvider("work");
   const model = alias.getModels()[0];

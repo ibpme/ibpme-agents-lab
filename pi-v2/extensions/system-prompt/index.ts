@@ -15,7 +15,7 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
     description: "View the current system prompt or the configured append prompt",
     getArgumentCompletions: (prefix) => "append".startsWith(prefix) ? [{ value: "append", label: "append" }] : null,
     handler: async (args, ctx) => {
-      if (!ctx.hasUI) return;
+      if (!ctx.hasUI && ctx.mode !== "print") return;
       const append = args.trim() === "append";
       const content = append ? ctx.getSystemPromptOptions().appendSystemPrompt : ctx.getSystemPrompt();
       if (!content) {

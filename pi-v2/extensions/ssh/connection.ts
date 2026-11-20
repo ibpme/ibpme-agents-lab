@@ -6,7 +6,8 @@ import { parseSshTarget, shq, SshConnection, TransportError } from "./transport.
 import type { AuthenticateInteractively } from "./auth.ts";
 
 /** Opens a connection. Without an explicit path, the remote cwd is the login directory. */
-export async function connectSsh(arg: string, interactive?: AuthenticateInteractively, signal?: AbortSignal): Promise<SshConnection> {
+export async function connectSsh(arg: string, close: (connection: SshConnection) => Promise<void>,
+  interactive?: AuthenticateInteractively, signal?: AbortSignal): Promise<SshConnection> {
   const { remote, remoteCwd } = parseSshTarget(arg);
   const connection = new SshConnection(remote, remoteCwd ?? "");
   try {
@@ -16,7 +17,7 @@ export async function connectSsh(arg: string, interactive?: AuthenticateInteract
     if (!isAbsolute(connection.remoteCwd)) throw new TransportError("SSH did not report an absolute working directory.");
     return connection;
   } catch (error) {
-    await connection.close();
+    await close(connection);
     throw error;
   }
 }

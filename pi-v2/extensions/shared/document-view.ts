@@ -20,6 +20,10 @@ export async function showDocument(
   document: ViewerDocument,
   openLocal: OpenDocument,
 ): Promise<void> {
+  if (ctx.mode === "print") {
+    console.log(`\n=== ${document.title} ===\n\n${document.content}\n`);
+    return;
+  }
   if (ctx.mode === "rpc") {
     const title = document.detail ? `${document.title} · ${document.detail}` : document.title;
     await ctx.ui.editor(title, document.content);

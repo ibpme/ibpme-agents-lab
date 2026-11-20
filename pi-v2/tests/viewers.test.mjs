@@ -9,6 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { loadedSkillPaths } from "../extensions/loaded-skills/state.ts";
+import { documentViewport } from "../extensions/shared/document-viewport.ts";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const viewers = ["readmd", "system-prompt", "loaded-skills"];
@@ -115,15 +116,50 @@ test("Pi reload switches all three commands between their own viewers and the op
     }
   }
 
-  session.extensionRunner.setUIContext(uiContext, "rpc");
+  statuses.clear();
+  session.extensionRunner.setUIContext({ ...uiContext, theme: undefined }, "rpc");
+  await session.extensionRunner.emit({ type: "session_start" });
+  assert.equal(statuses.get("loaded-skills"), "skills: example");
   await session.prompt("/system-prompt");
   await session.prompt("/readmd");
+  await session.prompt("/loaded-skills");
   assert.equal(views.length, 0);
   assert.match(dialogs[0].title, /^System Prompt/);
   assert.equal(dialogs[0].prefill, session.systemPrompt);
   assert.match(dialogs[1].prefill, /Paragraph 30\./);
   assert.doesNotMatch(dialogs[1].prefill, /reasoning/);
+  assert.match(dialogs[2].prefill, /example: ~2 tokens/);
+  await session.extensionRunner.emit({ type: "session_shutdown" });
+  assert.equal(statuses.get("loaded-skills"), undefined);
+  assert.ok(statuses.has("loaded-skills"));
+
+  session.extensionRunner.setUIContext(undefined, "print");
+  const output = t.mock.method(console, "log", () => {});
+  for (const command of commands) await session.prompt(command);
+  assert.deepEqual(output.mock.calls.map(({ arguments: [text] }) => text.trim().split("\n")[0]), [
+    "=== Last Assistant Response ===", "=== Append System Prompt ===", "=== Loaded Skills ===",
+  ]);
+  assert.match(output.mock.calls[0].arguments[0], /Paragraph 30\./);
+  assert.match(output.mock.calls[1].arguments[0], /Example addendum text\./);
+  assert.match(output.mock.calls[2].arguments[0], /example: ~2 tokens/);
+  assert.equal(dialogs.length, 3);
   assert.deepEqual(failures, []);
+});
+
+test("document viewport supports legacy line, half-page, and quit keys", () => {
+  let closed = false;
+  const tui = { terminal: { rows: 18 }, requestRender() {} };
+  const theme = { fg: (_color, text) => text, bold: (text) => text };
+  const body = { render: () => Array.from({ length: 30 }, (_, index) => String(index)), invalidate() {} };
+  const viewport = documentViewport(tui, theme, () => { closed = true; }, body, "Title", () => "");
+  assert.equal(viewport.render(80)[1], "0");
+  for (const [key, first] of [["l", "1"], ["\x04", "6"], ["\x1b[6~", "11"], ["h", "10"],
+    ["\x1b[5~", "5"], ["\x15", "0"]]) {
+    viewport.handleInput(key);
+    assert.equal(viewport.render(80)[1], first);
+  }
+  viewport.handleInput("Q");
+  assert.equal(closed, true);
 });
 
 test("loaded skill history counts successful reads and slash invocations on the supplied branch", () => {

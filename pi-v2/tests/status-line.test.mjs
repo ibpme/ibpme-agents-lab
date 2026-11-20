@@ -247,6 +247,23 @@ test("malformed configuration warns and falls back without modifying files", asy
 	await h.fire("session_shutdown");
 });
 
+test("disabling or shutting down during a reload cancels the pending footer install", async (t) => {
+	const h = await setup(t, { layout: { footer: [{ left: ["cwd"] }] } });
+	await h.fire("session_start");
+	const disabledReload = h.command("reload");
+	await h.command();
+	await disabledReload;
+	assert.equal(h.footer, undefined);
+	assert.equal(h.subscriptions, 0);
+
+	const shutdownReload = h.command("reload");
+	await h.fire("session_shutdown");
+	await shutdownReload;
+	assert.equal(h.footer, undefined);
+	assert.equal(h.subscriptions, 0);
+	assert.deepEqual(h.notifications.map(({ message }) => message), ["Default footer restored"]);
+});
+
 for (const mode of ["rpc", "json", "print"]) {
 	test(`${mode} never installs terminal UI or writes output`, async (t) => {
 		const h = await setup(t, { mode });

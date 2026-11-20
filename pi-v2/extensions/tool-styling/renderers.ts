@@ -8,6 +8,7 @@ import type {
   ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
 import { linesComponent, lineSummary, outputLines, pathArg, record, resultComponent, skillName, stringArg } from "./rendering.ts";
+import { sanitizeTerminalText } from "../shared/terminal-text.ts";
 
 type Details = Partial<BashToolDetails & EditToolDetails & FindToolDetails & GrepToolDetails & LsToolDetails & ReadToolDetails>;
 type Result = Parameters<NonNullable<ToolRenderers["renderResult"]>>[0];
@@ -45,7 +46,7 @@ export const readRenderer: ToolRenderers = {
     const extra = [args.offset != null ? `offset=${args.offset}` : "", args.limit != null ? `limit=${args.limit}` : ""].filter(Boolean);
     const text = theme.fg("toolTitle", theme.bold(skill ? "✦ skill" : "▸ read")) + " "
       + (skill ? theme.fg("mdLink", skill) + theme.fg("dim", ` ${path}`) : theme.fg("accent", path))
-      + (extra.length ? theme.fg("dim", ` (${extra.join(", ")})`) : "");
+      + (extra.length ? theme.fg("dim", ` (${sanitizeTerminalText(extra.join(", "))})`) : "");
     return linesComponent([text], context.outputPad, true);
   },
   renderResult(result, options, theme, context) {
@@ -91,7 +92,7 @@ export const editRenderer: ToolRenderers = {
   renderResult(result, options, theme, context) {
     const diff = detailsOf(result).diff;
     const hasDiff = !context.isError && typeof diff === "string";
-    const lines = outputLines(hasDiff ? diff : textOf(result));
+    const lines = outputLines(hasDiff ? sanitizeTerminalText(diff) : textOf(result));
     const extras: string[] = [];
     if (hasDiff) {
       const additions = lines.filter((line) => line.startsWith("+") && !line.startsWith("+++")).length;
@@ -122,7 +123,7 @@ function searchRenderer(name: SearchTool, previewLimit: number): ToolRenderers {
       if (args.literal) extra.push("literal");
       if (args.context != null) extra.push(`context=${args.context}`);
       const text = theme.fg("toolTitle", theme.bold(name === "ls" ? "▸ ls" : `⌕ ${name}`)) + " " + pattern
-        + theme.fg("accent", path) + (extra.length ? theme.fg("dim", ` (${extra.join(", ")})`) : "");
+        + theme.fg("accent", path) + (extra.length ? theme.fg("dim", ` (${sanitizeTerminalText(extra.join(", "))})`) : "");
       return linesComponent([text], context.outputPad, true);
     },
     renderResult(result, options, theme, context) {
@@ -147,7 +148,7 @@ export const bashRenderer: ToolRenderers = {
   renderCall(rawArgs, theme, context) {
     const args = record(rawArgs);
     const text = theme.fg("toolTitle", theme.bold("$ bash")) + " " + theme.fg("accent", stringArg(args, "command"))
-      + (args.timeout != null ? theme.fg("dim", ` (timeout ${args.timeout}s)`) : "");
+      + (args.timeout != null ? theme.fg("dim", sanitizeTerminalText(` (timeout ${args.timeout}s)`)) : "");
     return linesComponent([text], context.outputPad, true);
   },
   renderResult(result, options, theme, context) {

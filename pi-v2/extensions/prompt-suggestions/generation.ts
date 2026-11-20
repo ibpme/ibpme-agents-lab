@@ -12,16 +12,23 @@ When the latest answer resolves the task and no concrete follow-up is apparent, 
 Do not invent work, approve destructive actions, or write the assistant's reply.
 Output one short plain-text message (up to 240 characters) or exactly ${NO_SUGGESTION}.`;
 
-function clip(text: string): string {
-  if (text.length <= MAX_MESSAGE_CHARS) return text;
+function clip(text: string, limit = MAX_MESSAGE_CHARS): string {
+  if (text.length <= limit) return text;
   const marker = " […] ";
-  const head = Math.floor(MAX_MESSAGE_CHARS * 0.7);
-  return text.slice(0, head) + marker + text.slice(-(MAX_MESSAGE_CHARS - head - marker.length));
+  const head = Math.floor(limit * 0.7);
+  return text.slice(0, head) + marker + text.slice(-(limit - head - marker.length));
 }
 
 function textOf(content: string | readonly { type: string; text?: string }[]): string {
   if (typeof content === "string") return content.trim();
   return content.flatMap((part) => part.type === "text" && part.text ? [part.text] : []).join("\n").trim();
+}
+
+function transcriptLine(role: "user" | "assistant", text: string): string {
+  const line = JSON.stringify({ role, text: clip(text) });
+  // JSON can encode one character as six. Leave room for both conversation participants.
+  return line.length < MAX_TRANSCRIPT_CHARS / 2 ? line
+    : JSON.stringify({ role, text: clip(text, 990) });
 }
 
 export function buildTranscript(ctx: ExtensionContext): string | undefined {
@@ -30,23 +37,39 @@ export function buildTranscript(ctx: ExtensionContext): string | undefined {
   if (!last || last.message.role !== "assistant" ||
       last.message.stopReason !== "stop" || !textOf(last.message.content)) return undefined;
 
+  let userIndex = entries.length - 1;
+  let userLine: string | undefined;
+  for (; userIndex >= 0; userIndex--) {
+    const entry = entries[userIndex];
+    if (entry.type !== "message" || entry.message.role !== "user") continue;
+    const text = textOf(entry.message.content);
+    if (!text) continue;
+    userLine = transcriptLine("user", text);
+    break;
+  }
+  if (userLine === undefined) return undefined;
   const lines: string[] = [];
-  let remaining = MAX_TRANSCRIPT_CHARS;
-  let hasUser = false;
+  let remaining = MAX_TRANSCRIPT_CHARS - userLine.length - 1;
   for (let index = entries.length - 1; index >= 0; index--) {
+    if (index === userIndex) {
+      lines.push(userLine);
+      continue;
+    }
     const entry = entries[index];
     if (entry.type !== "message") continue;
     const message = entry.message;
     if (message.role !== "user" && message.role !== "assistant") continue;
     const text = textOf(message.content);
     if (!text) continue;
-    const line = JSON.stringify({ role: message.role, text: clip(text) });
-    if (line.length + 1 > remaining) break;
+    const line = transcriptLine(message.role, text);
+    if (line.length + 1 > remaining) {
+      if (index < userIndex) break;
+      continue;
+    }
     remaining -= line.length + 1;
     lines.push(line);
-    hasUser ||= message.role === "user";
   }
-  return hasUser ? lines.reverse().join("\n") : undefined;
+  return lines.reverse().join("\n");
 }
 
 export function parseSuggestion(raw: string | null): string | undefined {

@@ -9,9 +9,9 @@ export function supportsFast(model: ExtensionContext["model"]): boolean {
 export default function (pi: ExtensionAPI) {
   let enabled = false;
   const updateStatus = (ctx: ExtensionContext) => {
-    if (ctx.mode === "tui") {
-      ctx.ui.setStatus(FAST_KEY, enabled && supportsFast(ctx.model) ? ctx.ui.theme.fg("warning", "fast") : undefined);
-    }
+    if (ctx.mode !== "tui" && ctx.mode !== "rpc") return;
+    const label = enabled && supportsFast(ctx.model) ? "fast" : undefined;
+    ctx.ui.setStatus(FAST_KEY, label && ctx.mode === "tui" ? ctx.ui.theme.fg("warning", label) : label);
   };
 
   pi.registerCommand("fast", {
@@ -59,6 +59,6 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on("model_select", (_event, ctx) => updateStatus(ctx));
   pi.on("session_shutdown", (_event, ctx) => {
-    if (ctx.mode === "tui") ctx.ui.setStatus(FAST_KEY, undefined);
+    if (ctx.mode === "tui" || ctx.mode === "rpc") ctx.ui.setStatus(FAST_KEY, undefined);
   });
 }

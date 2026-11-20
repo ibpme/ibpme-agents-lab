@@ -1,10 +1,17 @@
 import { posix } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import {
-  createBashToolDefinition, createEditToolDefinition, createFindToolDefinition,
-  createLsToolDefinition, createReadToolDefinition, createWriteToolDefinition,
-  truncateHead, type AgentToolResult, type GrepToolDetails, type GrepToolInput,
+  createBashToolDefinition, createFindToolDefinition, createLsToolDefinition, createReadToolDefinition,
+  DEFAULT_MAX_BYTES, truncateHead, type AgentToolResult, type EditToolDetails, type EditToolInput,
+  type GrepToolDetails, type GrepToolInput,
 } from "@earendil-works/pi-coding-agent";
-import { ConnectionLostError, RemoteCommandError, shq, type RunOptions, type SshConnection } from "./transport.ts";
+import { ConnectionLostError, RemoteAbortError, RemoteCommandError, shq, type RunOptions, type SshConnection } from "./transport.ts";
+
+const mutationQueues = new WeakMap<SshConnection, Map<string, Promise<unknown>>>();
+
+// Pi 1.5.2 exposes the tool factory publicly, but its reusable edit helpers are internal.
+const editHelpersUrl = new URL("core/tools/edit-diff.js", import.meta.resolve("@earendil-works/pi-coding-agent"));
+type EditHelpers = typeof import("../../node_modules/@earendil-works/pi-coding-agent/dist/core/tools/edit-diff.js");
 
 export function remoteTools(connection: SshConnection, signal: AbortSignal | undefined, markLost: () => Promise<void>) {
   const cwd = connection.remoteCwd;
@@ -38,13 +45,79 @@ export function remoteTools(connection: SshConnection, signal: AbortSignal | und
       " ]; then printf file; else printf missing; fi")).toString();
   };
   const readFile = (path: string) => exec(command("cat", "--", path));
-  const writeFile = async (path: string, content: string) => { await exec("cat > " + shq(path), content); };
   const access = async (path: string) => { await exec(command("test", "-r", path)); };
+  const writeFile = async (path: string, content: string) => {
+    await exec([
+      "target=" + shq(path),
+      'if [ -L "$target" ] || { [ -e "$target" ] && { [ ! -f "$target" ] || [ ! -w "$target" ]; }; }; then',
+      '  printf "%s\\n" "Target is not a writable regular file: $target" >&2; exit 1',
+      "fi",
+      "tmp=$(mktemp -- " + shq(posix.join(posix.dirname(path), ".pi-ssh.XXXXXXXXXX")) + ") || exit",
+      `trap 'rm -f -- "$tmp"' EXIT`,
+      "trap 'exit 1' HUP INT TERM",
+      'cat > "$tmp" || exit',
+      'size=$(wc -c < "$tmp") || exit',
+      'if [ "$size" -ne ' + Buffer.byteLength(content) + ' ]; then',
+      '  printf "%s\\n" "Incomplete SSH write: received $size bytes" >&2; exit 1',
+      "fi",
+      'if [ -e "$target" ]; then',
+      '  chmod --reference="$target" -- "$tmp" || exit',
+      "else",
+      '  mask=$(umask) && chmod "$(printf "%o" "$((0666 & ~mask))")" -- "$tmp" || exit',
+      "fi",
+      'mv -fT -- "$tmp" "$target"',
+    ].join("\n"), content);
+  };
 
-  async function search(script: string, executable: string, noMatches = false) {
+  async function mutate<T>(inputPath: string, operation: (path: string) => Promise<T>): Promise<T> {
+    const resolved = await exec(command("realpath", "-mz", "--", await pathFor(inputPath)));
+    const path = resolved.toString().slice(0, -1);
+    if (!posix.isAbsolute(path) || path.includes("\0") || !resolved.equals(Buffer.from(path + "\0"))) {
+      throw new Error("SSH did not report an absolute UTF-8 file path.");
+    }
+    let queue = mutationQueues.get(connection);
+    if (!queue) mutationQueues.set(connection, queue = new Map());
+    const work = (queue.get(path) ?? Promise.resolve()).catch(() => {}).then(() => {
+      if (signal?.aborted) throw new RemoteAbortError();
+      return operation(path);
+    });
+    queue.set(path, work);
+    try {
+      return await work;
+    } finally {
+      if (queue.get(path) === work) queue.delete(path);
+    }
+  }
+
+  const write = (inputPath: string, content: string): Promise<AgentToolResult<undefined>> => mutate(inputPath, async (path) => {
+    await exec(command("mkdir", "-p", "--", posix.dirname(path)));
+    await writeFile(path, content);
+    return { content: [{ type: "text", text: "Successfully wrote to " + inputPath }], details: undefined };
+  });
+
+  const edit = ({ path: inputPath, edits }: EditToolInput): Promise<AgentToolResult<EditToolDetails>> => {
+    if (!Array.isArray(edits) || !edits.length) {
+      throw new Error("Edit tool input is invalid. edits must contain at least one replacement.");
+    }
+    return mutate(inputPath, async (path) => {
+      await access(path);
+      const raw = (await readFile(path)).toString();
+      const { normalizeToLF, applyEditsToNormalizedContent, applyReplacementsToOriginal, generateEditDiff }:
+        EditHelpers = await import(editHelpersUrl.href);
+      const bom = raw.startsWith("\uFEFF") ? "\uFEFF" : "";
+      const content = raw.slice(bom.length);
+      const normalized = normalizeToLF(content);
+      const { baseContent, newContent, replacements } = applyEditsToNormalizedContent(normalized, edits, inputPath);
+      const details = generateEditDiff(inputPath, baseContent, newContent, replacements);
+      await writeFile(path, bom + (content === normalized ? newContent : applyReplacementsToOriginal(content, replacements)));
+      return { content: [{ type: "text", text: `Successfully replaced ${edits.length} block(s) in ${inputPath}.` }], details };
+    });
+  };
+
+  async function search(script: string, executable: string) {
     const result = await run(script);
     if (result.code === 127) throw new Error("Install " + executable + " on the SSH host to use this tool.");
-    if (result.code === 0 || (noMatches && result.code === 1)) return result.stdout.toString();
+    if (result.code === 0) return result.stdout.toString();
     throw new RemoteCommandError(result.code, result.stderr.toString());
   }
 
@@ -53,33 +126,72 @@ export function remoteTools(connection: SshConnection, signal: AbortSignal | und
     const kind = await stat(root);
     if (kind === "missing") throw new Error("Path not found: " + root);
     const limit = Math.max(1, Math.min(10_000, Math.floor(input.limit ?? 100)));
-    const args = ["rg", "--no-config", "--json", "--hidden", "--max-count", String(limit + 1)];
+    const args = ["rg", "--no-config", "--json", "--hidden", "--line-buffered"];
     if (input.glob) args.push("--glob", input.glob.replace(/^(!?)(?:\.\/)+/, "$1"));
     if (input.literal) args.push("--fixed-strings");
     if (input.ignoreCase) args.push("--ignore-case");
     const context = Math.max(0, Math.min(1000, Math.floor(input.context ?? 0)));
     if (context) args.push("--context", String(context));
     args.push("--", input.pattern, kind === "dir" ? "." : root);
-    const output = await search(kind === "dir" ? runIn(root, command(...args)) : command(...args), "ripgrep (rg)", true);
+    const decoder = new StringDecoder("utf8");
+    let pending = "";
     let matches = 0;
     let linesTruncated = false;
+    let outputBytes = 0;
+    let outputLines = 0;
+    let lastFile = "";
+    let trailingEnd = 0;
     const lines: string[] = [];
-    for (const row of output.split("\n")) {
-      if (!row) continue;
+    function consume(row: string) {
+      if (!row) return;
       const { type, data } = JSON.parse(row);
-      if (type !== "match" && type !== "context") continue;
-      if (type === "match" && ++matches > limit) break;
+      if (type === "end" && matches === limit) return false;
+      if (type !== "match" && type !== "context") return;
       const file = data.path.text ?? Buffer.from(data.path.bytes, "base64").toString();
+      const lineNumber: number = data.line_number;
+      const isMatch = type === "match" && matches < limit;
+      if (matches === limit && (file !== lastFile || lineNumber > trailingEnd)) return false;
+      if (isMatch && ++matches === limit) {
+        lastFile = file;
+        trailingEnd = lineNumber + context;
+      }
       const line: string = (data.lines.text ?? Buffer.from(data.lines.bytes, "base64").toString()).replace(/\r?\n$/, "");
-      const separator = type === "match" ? ":" : "-";
       const label = kind === "dir" ? file.replace(/^\.\//, "") : posix.basename(file);
       linesTruncated ||= line.length > 500;
-      lines.push([label, data.line_number, line.length > 500 ? line.slice(0, 500) + "…" : line].join(separator));
+      const formatted = [label, lineNumber, line.length > 500 ? line.slice(0, 500) + "…" : line].join(isMatch ? ":" : "-");
+      if (outputBytes - 1 <= DEFAULT_MAX_BYTES) lines.push(formatted);
+      outputBytes += Buffer.byteLength(formatted) + 1;
+      outputLines++;
+      if (matches === limit && lineNumber === trailingEnd) return false;
     }
+    const script = "exec " + command(...args);
+    const result = await run(kind === "dir" ? runIn(root, script) : script, {
+      onData(chunk, source) {
+        if (source === "stderr") return;
+        const rows = decoder.write(chunk).split("\n");
+        if (rows.length === 1) {
+          pending += rows[0];
+          return;
+        }
+        rows[0] = pending + rows[0];
+        pending = rows.pop() ?? "";
+        for (const row of rows) {
+          if (consume(row) === false) {
+            pending = "";
+            return false;
+          }
+        }
+      },
+    });
+    if (result.code === 127) throw new Error("Install ripgrep (rg) on the SSH host to use this tool.");
+    if (result.code !== 0 && result.code !== 1) throw new RemoteCommandError(result.code, result.stderr.toString());
+    if (pending) consume(pending + decoder.end());
     const truncation = truncateHead(lines.join("\n"), { maxLines: Number.MAX_SAFE_INTEGER });
+    truncation.totalBytes = Math.max(0, outputBytes - 1);
+    truncation.totalLines = outputLines;
     const details: GrepToolDetails = {};
     const notices: string[] = [];
-    if (matches > limit) {
+    if (matches === limit) {
       details.matchLimitReached = limit;
       notices.push("[" + limit + " matches limit reached]");
     }
@@ -106,14 +218,8 @@ export function remoteTools(connection: SshConnection, signal: AbortSignal | und
         return ["image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"].includes(mime) ? mime : null;
       },
     } }),
-    write: (path: string) => createWriteToolDefinition(cwd, { operations: {
-      writeFile: (_path, content) => writeFile(path, content),
-      mkdir: async () => { await exec(command("mkdir", "-p", "--", posix.dirname(path))); },
-    } }),
-    edit: (path: string) => createEditToolDefinition(cwd, { operations: {
-      access: () => access(path), readFile: () => readFile(path),
-      writeFile: (_path, content) => writeFile(path, content),
-    } }),
+    write,
+    edit,
     bash: createBashToolDefinition(cwd, { exposeSessionEnvironment: false, operations: {
       async exec(script, _cwd, { onData, timeout }) {
         const result = await run(runIn(cwd, "exec " + command("bash", "-c", script)),

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { mkdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, sep } from "node:path";
 import type { KeyId } from "@earendil-works/pi-tui";
 
 function readObject(path: string): Record<string, unknown> {
@@ -39,6 +39,18 @@ export function readSettings(path: string, env = process.env) {
 
 export function writeEnabled(path: string, enabled: boolean): void {
   const values = { ...readObject(path), enabled };
+  // Follow dangling links too, so the first write creates the target.
+  while (true) {
+    let target: string;
+    try {
+      target = readlinkSync(path);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EINVAL" && code !== "ENOENT") throw error;
+      break;
+    }
+    path = isAbsolute(target) ? target : realpathSync.native(dirname(path)) + sep + target;
+  }
   mkdirSync(dirname(path), { recursive: true });
   const temporary = `${path}.${randomUUID()}.tmp`;
   try {

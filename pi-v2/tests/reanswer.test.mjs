@@ -74,6 +74,32 @@ const choose = /^Which questionnaire/;
 const review = /^Review and edit previous answers/;
 const submit = /Continue with revised answers/;
 
+test("the /reanswer TUI preserves pasted newlines in a single-choice write-in", async () => {
+  const h = setup();
+  h.assistant(toolCall("scope", scope));
+  h.result("scope", scope);
+  h.ctx.mode = "tui";
+  let form;
+  h.ctx.ui.custom = (factory) => new Promise((resolve) => {
+    form = factory({ terminal: { rows: 24 }, requestRender() {} },
+      { fg: (_color, text) => text, bold: (text) => text }, {}, resolve);
+  });
+  const result = h.runWithArgs("1");
+  await new Promise(setImmediate);
+  form.handleInput("1");
+  await new Promise(setImmediate);
+  for (let i = 0; i < scope[0].options.length; i++) form.handleInput("\x1b[B");
+  form.handleInput("\r");
+  await new Promise(setImmediate);
+  assert.match(form.render(80).join("\n"), /Shift\+Enter new line/);
+  form.handleInput("\x1b[200~first line\nsecond line\x1b[201~");
+  form.handleInput("\r");
+  await new Promise(setImmediate);
+  form.handleInput("\t");
+  await result;
+  assert.equal(h.sent[0].message.details[0].result.answers[0].values[0].value, "first line\nsecond line");
+});
+
 test("repeated revisions start from current answers and retain sibling results and revisions", async () => {
   const h = setup();
   h.append({ role: "user", content: "Ask about the work." });

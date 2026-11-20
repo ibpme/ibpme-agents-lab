@@ -6,19 +6,23 @@ import { defaultLayout, renderLayout, type StatusLayout } from "./layout.ts";
 
 export default function statusLine(pi: ExtensionAPI): void {
   let enabled = true;
+  let installGeneration = 0;
   let invalidateUsage: (() => void) | undefined;
   let requestRender: (() => void) | undefined;
 
-  async function install(ctx: ExtensionContext): Promise<void> {
-    if (ctx.mode !== "tui") return;
+  async function install(ctx: ExtensionContext): Promise<boolean> {
+    if (ctx.mode !== "tui") return false;
+    const generation = ++installGeneration;
     let layout: StatusLayout = defaultLayout;
     const paths = [join(getAgentDir(), "statusline.json")];
     if (ctx.isProjectTrusted()) paths.push(join(ctx.cwd, ".pi", "statusline.json"));
     try {
       layout = await loadLayout(paths);
     } catch (error) {
+      if (generation !== installGeneration) return false;
       ctx.ui.notify(`${error instanceof Error ? error.message : String(error)}; using default status layout`, "warning");
     }
+    if (generation !== installGeneration) return false;
     ctx.ui.setFooter((tui, theme, footerData) => {
       const segments = createDefaultSegments(ctx, pi, theme, footerData);
       const repaint = () => tui.requestRender();
@@ -35,9 +39,11 @@ export default function statusLine(pi: ExtensionAPI): void {
         },
       };
     });
+    return true;
   }
 
   function uninstall(ctx: ExtensionContext): void {
+    installGeneration++;
     if (ctx.mode !== "tui") return;
     ctx.ui.setFooter(undefined);
     requestRender = undefined;
@@ -65,12 +71,14 @@ export default function statusLine(pi: ExtensionAPI): void {
       }
       if (action === "reload") {
         enabled = true;
-        await install(ctx);
-        ctx.ui.notify("Status layout reloaded", "info");
+        if (await install(ctx)) ctx.ui.notify("Status layout reloaded", "info");
       } else {
         enabled = !enabled;
-        if (enabled) await install(ctx);
-        else uninstall(ctx);
+        if (enabled) {
+          if (!(await install(ctx))) return;
+        } else {
+          uninstall(ctx);
+        }
         ctx.ui.notify(enabled ? "Modular footer enabled" : "Default footer restored", "info");
       }
     },

@@ -1,6 +1,6 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { Input, matchesKey, truncateToWidth, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
-import { displayLine } from "./model.ts";
+import { Editor, matchesKey, truncateToWidth, wrapTextWithAnsi, type Component, type TUI } from "@earendil-works/pi-tui";
+import { displayLine, displayText } from "./model.ts";
 
 type QuestionUI = ExtensionContext["ui"];
 type Panel = Component & { dispose?(): void };
@@ -63,8 +63,17 @@ export function inputQuestion(
   ui: QuestionUI, heading: QuestionHeading, { previous, next, initial, signal, cancelHint = "Esc cancel" }: InputOptions,
 ): Promise<{ text: string; back?: true } | undefined> {
   return showQuestionPanel(ui, heading, signal, (tui, theme, finish) => {
-    const input = new Input({ placeholder: "Type your answer", placeholderStyle: (text) => theme.fg("dim", text) });
-    input.setValue(initial ?? "");
+    const input = new Editor(tui, {
+      borderColor: (text) => theme.fg("border", text),
+      selectList: {
+        selectedPrefix: (text) => theme.fg("accent", text),
+        selectedText: (text) => theme.fg("accent", text),
+        description: (text) => theme.fg("muted", text),
+        scrollInfo: (text) => theme.fg("dim", text),
+        noMatch: (text) => theme.fg("warning", text),
+      },
+    }, { paddingX: 2 });
+    input.setText(displayText(initial ?? ""));
     let invalid = false;
     input.onSubmit = (text) => {
       if (displayLine(text)) finish({ text });
@@ -72,6 +81,7 @@ export function inputQuestion(
     };
 
     return {
+      capturesViewportInput: true,
       get focused() { return input.focused; },
       set focused(value) { input.focused = value; },
       render(width) {
@@ -81,16 +91,17 @@ export function inputQuestion(
           ...(invalid ? [theme.fg("warning", truncateToWidth("Enter a non-blank answer", width))] : []),
         ], [
           next ? "Enter / Tab continue" : "Enter confirm",
+          "Shift+Enter new line",
           previous ? "Shift+Tab / Esc previous" : cancelHint,
         ]);
       },
       handleInput(data) {
         if (previous && (matchesKey(data, "shift+tab") || matchesKey(data, "escape"))) {
-          finish({ text: input.getValue(), back: true });
+          finish({ text: input.getExpandedText(), back: true });
         } else if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) {
           finish();
         } else if (next && matchesKey(data, "tab")) {
-          input.onSubmit?.(input.getValue());
+          input.onSubmit?.(input.getExpandedText());
         } else {
           invalid = false;
           input.handleInput(data);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -163,6 +163,29 @@ test("configuration preserves legacy Ollama files and never saves environment ov
   assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), {
     ollamaUrl: "http://localhost:11434/", model: "configured", extra: true, enabled: true,
   });
+  const target = join(dir, "settings.json");
+  renameSync(path, target);
+  symlinkSync("settings.json", path);
+  writeEnabled(path, false);
+  assert.equal(readlinkSync(path), "settings.json");
+  assert.deepEqual(JSON.parse(readFileSync(target, "utf8")), {
+    ollamaUrl: "http://localhost:11434/", model: "configured", extra: true, enabled: false,
+  });
+  rmSync(target);
+  writeEnabled(path, true);
+  assert.equal(readlinkSync(path), "settings.json");
+  assert.deepEqual(JSON.parse(readFileSync(target, "utf8")), { enabled: true });
+});
+
+test("transcript reserves space for the latest user message across long assistant output", () => {
+  const entries = [user("Latest request"), ...Array.from({ length: 8 }, () => assistant("x".repeat(3_000))),
+    assistant("Final answer")];
+  const ctx = { sessionManager: { buildContextEntries: () => entries } };
+  const transcript = buildTranscript(ctx);
+  assert.ok(transcript.length <= 12_000);
+  const messages = transcript.split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(messages[0], { role: "user", text: "Latest request" });
+  assert.deepEqual(messages.at(-1), { role: "assistant", text: "Final answer" });
 });
 
 test("transcript keeps recent text and drops tool data, and suggestions reject command and control output", () => {

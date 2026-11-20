@@ -70,6 +70,11 @@ test("automatic restore never overwrites a new draft and leaves the stash recove
 	h.draft = "new draft";
 	await h.fire("agent_settled");
 	assert.equal(h.draft, "new draft");
+	h.draft = "";
+	await h.fire("input", { source: "extension" });
+	await h.fire("agent_settled");
+	assert.equal(h.draft, "");
+	h.draft = "new draft";
 	await h.toggle();
 	assert.equal(h.draft, "saved");
 	await h.fire("agent_settled");

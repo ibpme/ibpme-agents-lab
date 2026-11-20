@@ -16,15 +16,17 @@ const openLocal: OpenDocument = async (ctx, document) => {
 
 export default function loadedSkillsExtension(pi: ExtensionAPI) {
   function update(ctx: ExtensionContext, pending?: SessionMessageEntry["message"]) {
-    if (ctx.mode !== "tui") return;
-    const names = [...loadedSkillPaths(ctx.sessionManager.getBranch(), pending).keys()].map(skillLabel);
-    ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg("dim", "skills: ") + ctx.ui.theme.fg("muted", names.join(", ") || "none"));
+    if (ctx.mode !== "tui" && ctx.mode !== "rpc") return;
+    const names = [...loadedSkillPaths(ctx.sessionManager.getBranch(), pending).keys()].map(skillLabel).join(", ") || "none";
+    ctx.ui.setStatus(STATUS_KEY, ctx.mode === "tui"
+      ? ctx.ui.theme.fg("dim", "skills: ") + ctx.ui.theme.fg("muted", names)
+      : `skills: ${names}`);
   }
 
   pi.registerCommand("loaded-skills", {
     description: "Show loaded skills and approximate token counts",
     handler: async (_args, ctx) => {
-      if (!ctx.hasUI) return;
+      if (!ctx.hasUI && ctx.mode !== "print") return;
       const content = await skillReport(loadedSkillPaths(ctx.sessionManager.getBranch()), ctx.cwd);
       await showDocument(pi.events, ctx, { title: "Loaded Skills", content, format: "text" }, openLocal);
     },
@@ -40,6 +42,6 @@ export default function loadedSkillsExtension(pi: ExtensionAPI) {
     }
   });
   pi.on("session_shutdown", (_event, ctx) => {
-    if (ctx.mode === "tui") ctx.ui.setStatus(STATUS_KEY, undefined);
+    if (ctx.mode === "tui" || ctx.mode === "rpc") ctx.ui.setStatus(STATUS_KEY, undefined);
   });
 }

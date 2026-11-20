@@ -15,7 +15,7 @@ export default function readmdExtension(pi: ExtensionAPI) {
   pi.registerCommand("readmd", {
     description: "View the last assistant response as rendered Markdown",
     handler: async (_args, ctx) => {
-      if (!ctx.hasUI) return;
+      if (!ctx.hasUI && ctx.mode !== "print") return;
       const branch = ctx.sessionManager.getBranch();
       for (let index = branch.length - 1; index >= 0; index--) {
         const entry = branch[index];

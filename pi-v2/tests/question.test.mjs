@@ -138,7 +138,7 @@ test("the TUI single-choice picker shows radio markers and a separate focused de
   assert.equal((await result).details.answers[0].values[0].value, "tests");
 });
 
-test("the TUI moves back and forward by Tab while preserving written drafts", async () => {
+test("the TUI moves back and forward by Tab while preserving multiline pasted drafts", async () => {
   let form;
   const styles = [];
   const theme = {
@@ -159,7 +159,7 @@ test("the TUI moves back and forward by Tab while preserving written drafts", as
   assert.deepEqual(styles.filter(([, text]) => text === "Question 2 of 2"), [["text", "Question 2 of 2"]]);
   assert.deepEqual(styles.filter(([, text]) => text === note.prompt), [["bold", note.prompt], ["mdLink", note.prompt]]);
   assert.match(form.render(80).join("\n"), /Shift\+Tab \/ Esc previous/);
-  for (const letter of "draft") form.handleInput(letter);
+  form.handleInput("\x1b[200~draft\nsecond line\x1b[201~");
   form.handleInput("\x1b[Z");
   await new Promise(setImmediate);
   const earlier = form.render(80).join("\n");
@@ -167,20 +167,20 @@ test("the TUI moves back and forward by Tab while preserving written drafts", as
   assert.match(earlier, /Tab continue/);
   form.handleInput("\t");
   await new Promise(setImmediate);
-  assert.match(stripTerminalSequences(form.render(80).join("\n")), /draft/);
+  assert.match(stripTerminalSequences(form.render(80).join("\n")), /draft[^\n]*\n[^\n]*second line/);
   form.handleInput("\t");
   await new Promise(setImmediate);
   const review = form.render(80).join("\n");
   assert.match(review, /1\. What should change\? — Application/);
   assert.match(review, /2\. Any other detail\? — draft/);
-  assert.match(review, /draft\n\n  Submit answers/);
+  assert.match(review, /draft second line\n\n  Submit answers/);
   form.handleInput("2");
   await new Promise(setImmediate);
   assert.match(form.render(80).join("\n"), /Esc back to review/);
   form.handleInput("\x1b");
   await new Promise(setImmediate);
   form.handleInput("\t");
-  assert.equal((await result).details.answers[1].values[0].value, "draft");
+  assert.equal((await result).details.answers[1].values[0].value, "draft\nsecond line");
 });
 
 test("the TUI opens a multiline written answer in the checklist and saves, discards, or removes it in place", async () => {
